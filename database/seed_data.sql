@@ -13,7 +13,6 @@ INSERT INTO roles (role_id, role_name) VALUES
 -- ========================================================
 -- 2. LÀM LẠI BẢNG TEAMS (8 Đội chuẩn từ danh sách)
 -- ========================================================
-TRUNCATE TABLE teams;
 INSERT INTO teams (team_id, team_name, tag, logo_url) VALUES
 (1, 'Saigon Phantom', 'SGP', 'https://logo.com/sgp.png'),
 (2, 'One Star Esports', '1S', 'https://logo.com/1s.png'),
@@ -27,7 +26,6 @@ INSERT INTO teams (team_id, team_name, tag, logo_url) VALUES
 -- ========================================================
 -- 3. LÀM LẠI BẢNG USERS (Giữ ID Ban quản trị + Thêm 53 Player)
 -- ========================================================
-TRUNCATE TABLE users;
 INSERT INTO users (user_id, role_id, username, password_hash, real_name, email, avatar_url) VALUES
 -- --- STAFF (Giữ nguyên ID cũ) ---
 (1, 1, 'admin_super', '$2b$10$EpRnTzVlq...', 'Lường Tiến Dũng', 'admin@esports.vn', 'https://avatar.com/admin.png'),
@@ -111,7 +109,6 @@ INSERT INTO users (user_id, role_id, username, password_hash, real_name, email, 
 -- ========================================================
 -- 4. LÀM LẠI BẢNG TEAM_MEMBERSHIPS (Map 53 người chuẩn role)
 -- ========================================================
-TRUNCATE TABLE team_memberships;
 INSERT INTO team_memberships (membership_id, team_id, user_id, role_in_team, joined_date, left_date, status) VALUES
 -- SGP
 (1, 1, 4, 'SUPPORT', '2023-01-01', NULL, 'ACTIVE'),
@@ -180,7 +177,7 @@ INSERT INTO team_memberships (membership_id, team_id, user_id, role_in_team, joi
 (50, 8, 57, 'AD_CARRY', '2023-01-01', NULL, 'ACTIVE'),
 (51, 8, 58, 'SUPPORT', '2023-01-01', NULL, 'ACTIVE'),
 (52, 8, 59, 'SUB', '2023-01-01', NULL, 'ACTIVE'),
-(53, 8, 60, 'SUB', '2023-01-01', NULL, 'ACTIVE');
+(53, 8, 60, 'SUB', '2023-01-01', NULL, 'ACTIVE'),
 
 -- Cập nhật Quản lý (ID 12, 13)
 (54, 1, 12, 'MANAGER', '2019-01-01', NULL, 'ACTIVE'),
