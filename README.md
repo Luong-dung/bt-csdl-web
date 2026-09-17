@@ -56,3 +56,19 @@ git push origin feature/<ten-tinh-nang>
 - Nếu thấy có cập nhật ở file `requirements.txt` sau khi `git pull`:
   .\venv\Scripts\activate
   pip install -r requirements.txt
+
+---
+### 🔑 Tài khoản Test & Mật khẩu mặc định
+
+Tất cả tài khoản trong dữ liệu mẫu (`seed_data.sql`) đều sử dụng mật khẩu chung:
+- Mật khẩu: `123456`
+
+Reset toàn bộ mật khẩu tài khoản test về `123456`, chạy câu lệnh sau trong tab SQL của phpMyAdmin:
+
+```sql
+UPDATE users 
+SET password_hash = '$2b$12$K8K3t0mBvR6B8P7T5eQeSe0hZ6lZ7w5FzQxX8wQ7v1v4.Yk7wO8Gy';
+```
+
+
+  
