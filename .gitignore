@@ -1,0 +1,24 @@
+# Python / Virtual Environment
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment variables
+.env
+
+# Database logs / local dumps
+*.log
+*.sql.bak
+
+# Node (nếu sau làm frontend React/Vue)
+node_modules/
+dist/
+build/
+
+# IDE config
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
