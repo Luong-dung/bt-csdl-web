@@ -1,8 +1,7 @@
 import bcrypt
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 import jwt
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, HTTPException, status, Header
+from fastapi import HTTPException, status, Header
 import os
 
 SECRET_KEY = os.getenv("JWT_SECRET", "super_secret_esports_key")
@@ -22,17 +21,12 @@ def create_access_token(data: dict) -> str:
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-security = HTTPBearer()
-
-def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    token = credentials.credentials  
-    print(f"--> [DEBUG] Token nhận được: {token}", flush=True)
-
+def get_current_user(authorization: str = Header(...)):
     try:
+        token = authorization.split(" ")[1] if " " in authorization else authorization
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.PyJWTError as e:
-        print(f"--> [DEBUG] Lỗi giải mã: {e}", flush=True)
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token không hợp lệ hoặc đã hết hạn"

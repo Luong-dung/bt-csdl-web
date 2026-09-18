@@ -7,8 +7,9 @@ def login_user(data: UserLogin):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            sql = "SELECT user_id, username, password_hash, role_id FROM users WHERE username = %s"
-            role = "SELECT role_name FROM roles WHERE role_id = %s"
+            sql = "SELECT user_id, username, password_hash, roles.role_id, roles.role_name " \
+            "FROM users JOIN roles ON users.role_id = roles.role_id " \
+            "WHERE username = %s"
             cursor.execute(sql, (data.username,))
             user = cursor.fetchone()
 
@@ -18,14 +19,12 @@ def login_user(data: UserLogin):
                     detail="Sai tài khoản hoặc mật khẩu"
                 )
 
-            cursor.execute(role, (user["role_id"],))
-            role_name = cursor.fetchone()
 
-            token = create_access_token({"sub": str(user["user_id"]), "role": role_name["role_name"], "username": user["username"]})
+            token = create_access_token({"sub": str(user["user_id"]), "role": user["role_name"], "username": user["username"]})
             return {
                 "access_token": token,
                 "token_type": "bearer",
-                "role": role_name["role_name"],
+                "role": user["role_name"],
                 "username": user["username"]
             }
     finally:
@@ -35,14 +34,17 @@ def register_user(data: UserRegister):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT user_id FROM users WHERE username = %s OR email = %s", (data.username, data.email))
+            cursor.execute("SELECT 1 FROM users WHERE username = %s OR email = %s", (data.username, data.email))
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Username hoặc email đã tồn tại")
 
             hashed = hash_password(data.password)
-            sql = "INSERT INTO users (username, email, password_hash, role_id) VALUES (%s, %s, %s, 'VIEWER')"
+            sql = "INSERT INTO users (username, email, password_hash, role_id) VALUES (%s, %s, %s, (SELECT role_id FROM roles WHERE role_name = 'VIEWER'))"
             cursor.execute(sql, (data.username, data.email, hashed))
             conn.commit()
             return {"message": "Đăng ký thành công"}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

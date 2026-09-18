@@ -56,7 +56,6 @@ git push origin feature/<ten-tinh-nang>
 - Nếu thấy có cập nhật ở file `requirements.txt` sau khi `git pull`:
   .\venv\Scripts\activate
   pip install -r requirements.txt
-
 ---
 ### 🔑 Tài khoản Test & Mật khẩu mặc định
 
