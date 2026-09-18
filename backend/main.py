@@ -1,14 +1,16 @@
 from fastapi import FastAPI
 from config.database import get_db_connection
-
+from routes.auth import router as auth_router
 app = FastAPI(title="Esports Tournament API")
+
+app.include_router(auth_router)
 
 @app.get("/")
 def check_server():
     return {"status": "ok", "message": "Server backend dang chay ngon lanh!"}
 
 @app.get("/test-db") 
-def check_db():
+def check_db(): 
     try:
         conn = get_db_connection()
         with conn.cursor() as cursor:
