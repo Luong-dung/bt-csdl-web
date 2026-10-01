@@ -43,6 +43,22 @@ async function submitAuth() {
       localStorage.setItem("token", data.access_token);
       localStorage.setItem("role", data.role);
       localStorage.setItem("username", data.username || username);
+
+      // Nếu là TEAM_MANAGER, lấy team_id để lưu vào localStorage
+      if (data.role === "TEAM_MANAGER") {
+        try {
+          const teamRes = await fetch(`${API_TEAM}/get_teams`, {
+            headers: { "Authorization": `Bearer ${data.access_token}` }
+          });
+          const teams = await teamRes.json();
+          if (teams && teams.length > 0) {
+            localStorage.setItem("team_id", teams[0].team_id);
+          }
+        } catch (e) {
+          console.error("Lỗi lấy thông tin team_id:", e);
+        }
+      }
+
       renderState();
     }
   } catch (err) {
@@ -71,7 +87,10 @@ async function createTeam() {
     if (!res.ok) throw new Error(data.detail || "Tạo đội thất bại");
 
     alert("Tạo đội thành công! Chuyển sang khu vực Quản lý đội.");
-    localStorage.setItem("role", "MANAGER");
+    localStorage.setItem("role", "TEAM_MANAGER");
+    if (data.team_id) {
+      localStorage.setItem("team_id", data.team_id);
+    }
     window.location.href = "team.html";
   } catch (err) {
     alert("Lỗi: " + err.message);

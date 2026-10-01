@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Quản Lý Đội Tuyển</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #38bdf8;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 30px 20px; }
+    .container { max-width: 1000px; margin: 0 auto; }
+
+    /* Header tên team */
+    .header-bar { margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+    .team-meta { display: flex; align-items: baseline; gap: 12px; }
+    .team-name { font-size: 28px; font-weight: bold; color: var(--accent); }
+    .team-tag { background: #0284c7; color: #fff; padding: 3px 8px; border-radius: 4px; font-size: 14px; font-weight: bold; }
+    .team-id { color: var(--muted); font-size: 14px; }
+
+    /* Card & Inputs */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    input, select { background: #0b1120; border: 1px solid var(--border); color: #fff; padding: 7px 10px; border-radius: 4px; font-size: 13px; }
+    button { padding: 7px 14px; border-radius: 4px; border: none; font-weight: 600; cursor: pointer; font-size: 13px; }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
+    th { color: var(--muted); background: #0b1120; font-size: 12px; text-transform: uppercase; }
+
+    .badge { padding: 3px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .badge-MANAGER { background: #f59e0b; color: #000; }
+    .badge-PLAYER { background: #0284c7; color: #fff; }
+
+    /* Toast thông báo */
+    #msg-box { display: none; padding: 10px 15px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header hiển thị tên team ở đầu -->
+    <div class="header-bar">
+      <div class="team-meta">
+        <span class="team-name" id="t-name">Đang tải...</span>
+        <span class="team-tag" id="t-tag">--</span>
+        <span class="team-id" id="t-id"></span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="btn-secondary btn-sm" onclick="window.location.href='index.html'">Trang Chủ</button>
+        <button class="btn-danger btn-sm" onclick="handleOutManager()">Rút Khỏi Ghế Manager</button>
+        <button class="btn-secondary btn-sm" onclick="handleLogout()">Đăng Xuất</button>
+      </div>
+    </div>
+
+    <!-- Thông báo trạng thái thao tác -->
+    <div id="msg-box"></div>
+
+    <!-- Form Thêm Thành Viên -->
+    <div class="card">
+      <h3 style="font-size: 16px; margin-bottom: 12px;">Chiêu Mộ Tuyển Thủ Mới</h3>
+      <div style="display: flex; gap: 10px; align-items: center;">
+        <input type="text" id="new-username" placeholder="Nhập username tuyển thủ..." style="width: 160px;">
+        <select id="new-role">
+          <option value="DS_LANE">DS_LANE (Đường Tà Thần / TOP)</option>
+          <option value="MID">MID (Đường Giữa)</option>
+          <option value="JUNGLE">JUNGLE (Đi Rừng)</option>
+          <option value="AD_CARRY">AD_CARRY (Xạ Thủ)</option>
+          <option value="SUPPORT">SUPPORT (Trợ Thủ)</option>
+          <option value="SUB">SUB (Dự Bị)</option>
+          <option value="MANAGER">MANAGER (Bổ nhiệm Quản lý)</option>
+        </select>
+        <button class="btn-primary" onclick="handleAddMember()">Ký Hợp Đồng</button>
+      </div>
+    </div>
+
+    <!-- Bảng Danh Sách & Thao Tác -->
+    <div class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 16px;">Đội Hình Hiện Tại (<span id="t-total">0</span> thành viên)</h3>
+        <button class="btn-secondary btn-sm" onclick="loadTeamData()">Tải lại</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Tài khoản</th>
+            <th>Họ và Tên</th>
+            <th>Vị trí hiện tại</th>
+            <th>Đổi vai trò</th>
+            <th style="text-align: right;">Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="member-rows">
+          <tr><td colspan="6" style="text-align: center; color: var(--muted);">Đang nạp dữ liệu...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = "http://127.0.0.1:8000/api/v1/team";
+    const token = localStorage.getItem("token");
+
+    function getJwtPayload() {
+      if (!token) return null;
+      try {
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+        return JSON.parse(jsonPayload);
+      } catch (e) {
+        return null;
+      }
+    }
+    const currentPayload = getJwtPayload();
+    const currentUserId = currentPayload ? parseInt(currentPayload.sub) : null;
+
+    const authHeaders = () => ({
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    });
+
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function notify(text, isError = false) {
+      const box = document.getElementById("msg-box");
+      box.innerText = text;
+      box.style.display = "block";
+      box.style.background = isError ? "#450a0a" : "#064e3b";
+      box.style.color = isError ? "#f87171" : "#4ade80";
+      box.style.border = `1px solid ${isError ? "#ef4444" : "#10b981"}`;
+      setTimeout(() => { box.style.display = "none"; }, 3500);
+    }
+
+    function handleLogout() {
+      localStorage.clear();
+      window.location.href = "index.html";
+    }
+
+    // 1. Tải thông tin và danh sách thành viên
+    async function loadTeamData() {
+      if (!token) {
+        alert("Phiên đăng nhập đã hết hạn hoặc chưa đăng nhập!");
+        window.location.href = "index.html";
+        return;
+      }
+
+      let teamId = localStorage.getItem("team_id");
+      if (!teamId) {
+        try {
+          const res = await fetch(`${API_BASE}/get_teams`, { headers: authHeaders() });
+          const teams = await res.json();
+          if (teams && teams.length > 0) {
+            teamId = teams[0].team_id;
+            localStorage.setItem("team_id", teamId);
+          } else {
+            notify("Bạn chưa tham gia hoặc chưa quản lý đội tuyển nào!", true);
+            document.getElementById("t-name").innerText = "Chưa có đội tuyển";
+            return;
+          }
+        } catch (err) {
+          notify("Không lấy được danh sách đội: " + err.message, true);
+          return;
+        }
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/${teamId}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Không lấy được dữ liệu đội");
+
+        document.getElementById("t-name").innerText = data.team_name;
+        document.getElementById("t-tag").innerText = data.tag;
+        document.getElementById("t-id").innerText = `(#${data.team_id})`;
+        document.getElementById("t-total").innerText = data.total_members;
+
+        renderTable(data.members, teamId);
+      } catch (err) {
+        notify(err.message, true);
+      }
+    }
+
+    // 2. Render bảng danh sách
+    function renderTable(members, teamId) {
+      const tbody = document.getElementById("member-rows");
+      if (!members || members.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--muted);">Chưa có thành viên nào.</td></tr>`;
+        return;
+      }
+
+      const roles = ["DS_LANE", "TOP", "MID", "JUNGLE", "AD_CARRY", "SUPPORT", "SUB", "MANAGER"];
+
+      tbody.innerHTML = members.map(m => {
+        const isSelf = currentUserId && (m.user_id === currentUserId);
+        const nameBadge = isSelf ? ` <span style="color: #38bdf8; font-size: 11px;">(Bạn)</span>` : "";
+        const roleOptions = roles.map(r => `<option value="${r}" ${r === m.role_in_team ? "selected" : ""}>${r}</option>`).join("");
+
+        const terminateBtn = isSelf
+          ? `<span style="color: var(--muted); font-size: 12px; font-style: italic;">Quản lý hiện tại</span>`
+          : `<button class="btn-danger btn-sm" onclick="handleTerminate(${teamId}, ${m.user_id}, '${escapeHtml(m.username)}')">Thanh Lý</button>`;
+
+        return `
+          <tr>
+            <td>#${m.user_id}</td>
+            <td><b>${escapeHtml(m.username)}</b>${nameBadge}</td>
+            <td>${escapeHtml(m.real_name) || '--'}</td>
+            <td>
+              <span class="badge ${m.role_in_team === 'MANAGER' ? 'badge-MANAGER' : 'badge-PLAYER'}">
+                ${escapeHtml(m.role_in_team)}
+              </span>
+            </td>
+            <td>
+              <div style="display: flex; gap: 6px;">
+                <select id="role-${m.user_id}" style="padding: 2px 6px;">
+                  ${roleOptions}
+                </select>
+                <button class="btn-primary btn-sm" onclick="handleUpdateRole(${teamId}, ${m.user_id})">Lưu</button>
+              </div>
+            </td>
+            <td style="text-align: right;">
+              ${terminateBtn}
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // 3. Chức năng: Thêm thành viên
+    async function handleAddMember() {
+      const teamId = localStorage.getItem("team_id");
+      if (!teamId) return notify("Không tìm thấy team_id!", true);
+
+      const username = document.getElementById("new-username").value.trim();
+      const role = document.getElementById("new-role").value;
+      if (!username) return notify("Vui lòng nhập username!", true);
+
+      try {
+        const res = await fetch(`${API_BASE}/${teamId}/members`, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ username: username, role_in_team: role })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+
+        notify("Ký hợp đồng tuyển thủ thành công!");
+        document.getElementById("new-username").value = "";
+        loadTeamData();
+      } catch (err) {
+        notify("Lỗi: " + err.message, true);
+      }
+    }
+
+    // 4. Chức năng: Đổi vị trí
+    async function handleUpdateRole(teamId, targetUserId) {
+      const newRole = document.getElementById(`role-${targetUserId}`).value;
+
+      try {
+        const res = await fetch(`${API_BASE}/${teamId}/members/${targetUserId}`, {
+          method: "PUT",
+          headers: authHeaders(),
+          body: JSON.stringify({ role_in_team: newRole })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+
+        notify("Cập nhật vai trò thành công!");
+        loadTeamData();
+      } catch (err) {
+        notify("Lỗi: " + err.message, true);
+      }
+    }
+
+    // 5. Chức năng: Thanh lý thành viên
+    async function handleTerminate(teamId, targetUserId, username) {
+      if (!confirm(`Xác nhận thanh lý hợp đồng của ${username || 'User #' + targetUserId}?`)) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/${teamId}/members/${targetUserId}`, {
+          method: "DELETE",
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+
+        notify("Đã thanh lý hợp đồng tuyển thủ!");
+        loadTeamData();
+      } catch (err) {
+        notify("Lỗi: " + err.message, true);
+      }
+    }
+
+    // 6. Chức năng: Quản lý tự rút
+    async function handleOutManager() {
+      const teamId = localStorage.getItem("team_id");
+      if (!teamId) return notify("Không tìm thấy thông tin đội!", true);
+
+      if (!confirm("Bạn có chắc chắn muốn rời vị trí Manager của đội này không?")) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/${teamId}/manager/out`, {
+          method: "POST",
+          headers: authHeaders()
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail);
+
+        notify("Đã rời ghế quản lý thành công! Đang quay lại trang chủ...");
+        localStorage.removeItem("team_id");
+        localStorage.setItem("role", "VIEWER");
+        setTimeout(() => { window.location.href = "index.html"; }, 1500);
+      } catch (err) {
+        notify("Lỗi: " + err.message, true);
+      }
+    }
+
+    // Khởi chạy khi mở trang
+    loadTeamData();
+  </script>
+</body>
+</html>

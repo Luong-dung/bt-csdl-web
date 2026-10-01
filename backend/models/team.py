@@ -1,13 +1,18 @@
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
+
+TeamRole = Literal["MID", "DS_LANE", "TOP", "JUNGLE", "AD_CARRY", "SUPPORT", "SUB", "MANAGER", "PLAYER"]
+
+class TeamCreate(BaseModel):
+    team_name: str = Field(..., min_length=2, max_length=100)
+    tag: str = Field(..., min_length=2, max_length=10)
 
 class MemberAdd(BaseModel):
-    user_id: int
-    role_in_team: str  # ("PLAYER", "MANAGER", "SUB", "AD_CARRY", "SUPPORT", "MID", "DS_LANE", "JUNGLE")
+    username: str = Field(..., min_length=1, max_length=50)
+    role_in_team: TeamRole
+
 class MemberUpdate(BaseModel):
-    user_id: int
-    role_in_team: str  # ("PLAYER", "MANAGER", "SUB", "AD_CARRY", "SUPPORT", "MID", "DS_LANE", "JUNGLE")
-class MemberTerminate(BaseModel):
-    user_id: int
+    role_in_team: TeamRole
 
     
 

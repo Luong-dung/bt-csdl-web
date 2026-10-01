@@ -32,7 +32,7 @@ uvicorn main:app --reload
 - Mở XAMPP -> Start Apache & MySQL.
 - Mở terminal tại thư mục backend:
   cd backend
-  .\venv\Scripts\activate
+  .\.venv\Scripts\Activate.ps1
   uvicorn main:app --reload
 
 ---
