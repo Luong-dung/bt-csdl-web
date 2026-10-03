@@ -18,9 +18,10 @@ def Create_Team(data: TeamCreate, user_id: int):
                 raise HTTPException(status_code=400, detail="Bạn đang là thành viên hoạt động của một đội khác, không thể tạo đội mới")
 
             # 3. Tạo đội mới
-            sql_team = "INSERT INTO teams (team_name, tag) VALUES (%s, %s)"
+            sql_team = "INSERT INTO teams (team_name, tag) VALUES (%s, %s) RETURNING team_id"
             cursor.execute(sql_team, (data.team_name, data.tag))
-            team_id = cursor.lastrowid
+            team_row = cursor.fetchone()
+            team_id = team_row["team_id"]
 
             # 4. Gán user làm MANAGER trong bảng team_memberships
             today = date.today().isoformat()
@@ -63,7 +64,7 @@ def Get_Team(user_id: int):
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
-        
+
 def Get_Team_Detail(team_id: int):
     conn = get_db_connection()
     try:
@@ -82,12 +83,12 @@ def Get_Team_Detail(team_id: int):
 
             # 2. Lấy danh sách thành viên
             sql_members = """
-                SELECT 
-                    u.user_id, 
-                    u.username, 
-                    u.real_name, 
-                    u.email, 
-                    tm.role_in_team, 
+                SELECT
+                    u.user_id,
+                    u.username,
+                    u.real_name,
+                    u.email,
+                    tm.role_in_team,
                     tm.joined_date
                 FROM team_memberships tm
                 JOIN users u ON tm.user_id = u.user_id
@@ -145,12 +146,12 @@ def Add_Member(team_id: int, data: MemberAdd, current_user_id: int):
             cursor.execute("SELECT 1 FROM team_memberships WHERE user_id = %s AND status = 'ACTIVE'", (user_id,))
             if cursor.fetchone():
                 raise HTTPException(status_code=400, detail="Người này đang là thành viên ACTIVE của một đội khác")
-            
+
             # Bổ sung joined_date bắt buộc theo DDL
             today = date.today().isoformat()
             sql = "INSERT INTO team_memberships (user_id, team_id, role_in_team, joined_date, status) VALUES (%s, %s, %s, %s, 'ACTIVE')"
             cursor.execute(sql, (user_id, team_id, data.role_in_team, today))
-            
+
             # Cập nhật role_id trong bảng users
             if data.role_in_team == 'MANAGER':
                 sql_role = "UPDATE users SET role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER') WHERE user_id = %s"
@@ -158,8 +159,8 @@ def Add_Member(team_id: int, data: MemberAdd, current_user_id: int):
             else:
                 # Nâng VIEWER lên PLAYER, không hạ quyền ADMIN hay ORGANIZER
                 sql_role = """
-                    UPDATE users 
-                    SET role_id = (SELECT role_id FROM roles WHERE role_name = 'PLAYER') 
+                    UPDATE users
+                    SET role_id = (SELECT role_id FROM roles WHERE role_name = 'PLAYER')
                     WHERE user_id = %s AND role_id = (SELECT role_id FROM roles WHERE role_name = 'VIEWER')
                 """
                 cursor.execute(sql_role, (user_id,))
@@ -277,8 +278,8 @@ def Terminate_Member(team_id: int, user_id: int, current_user_id: int):
 
             # Chuyển role tài khoản về VIEWER nếu đang là PLAYER hoặc TEAM_MANAGER
             sql_role = """
-                UPDATE users 
-                SET role_id = (SELECT role_id FROM roles WHERE role_name = 'VIEWER') 
+                UPDATE users
+                SET role_id = (SELECT role_id FROM roles WHERE role_name = 'VIEWER')
                 WHERE user_id = %s AND role_id IN (SELECT role_id FROM roles WHERE role_name IN ('PLAYER', 'TEAM_MANAGER'))
             """
             cursor.execute(sql_role, (user_id,))
@@ -314,7 +315,7 @@ def Out_Manager(team_id: int, current_user_id: int):
 
             if total_managers <= 1:
                 raise HTTPException(
-                    status_code=400, 
+                    status_code=400,
                     detail="Bạn là Quản lý duy nhất. Phải bổ nhiệm thêm một Quản lý khác trước khi rời đội!"
                 )
 
@@ -323,8 +324,8 @@ def Out_Manager(team_id: int, current_user_id: int):
             cursor.execute(sql, (today, current_user_id, team_id))
 
             sql_role = """
-                UPDATE users 
-                SET role_id = (SELECT role_id FROM roles WHERE role_name = 'VIEWER') 
+                UPDATE users
+                SET role_id = (SELECT role_id FROM roles WHERE role_name = 'VIEWER')
                 WHERE user_id = %s AND role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER')
             """
             cursor.execute(sql_role, (current_user_id,))
