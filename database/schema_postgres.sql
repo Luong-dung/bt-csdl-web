@@ -53,6 +53,9 @@ CREATE TABLE team_memberships (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 );
 
+-- Mỗi người chỉ được ACTIVE ở tối đa 1 đội
+CREATE UNIQUE INDEX uq_one_active_team_per_user ON team_memberships (user_id) WHERE status = 'ACTIVE';
+
 -- 5. BẢNG GIẢI ĐẤU
 CREATE TABLE tournaments (
     tournament_id SERIAL PRIMARY KEY,

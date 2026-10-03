@@ -1,7 +1,22 @@
 from datetime import date
 from fastapi import HTTPException
+from psycopg2 import errors
 from config.database import get_db_connection
 from models.team import MemberAdd, MemberUpdate, TeamCreate
+
+# Chỉ nâng VIEWER/PLAYER lên TEAM_MANAGER, không hạ quyền ADMIN hay ORGANIZER
+SQL_PROMOTE_MANAGER = """
+    UPDATE users
+    SET role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER')
+    WHERE user_id = %s AND role_id IN (SELECT role_id FROM roles WHERE role_name IN ('VIEWER', 'PLAYER'))
+"""
+
+# Chỉ hạ TEAM_MANAGER về PLAYER, không đụng tới ADMIN hay ORGANIZER
+SQL_DEMOTE_TO_PLAYER = """
+    UPDATE users
+    SET role_id = (SELECT role_id FROM roles WHERE role_name = 'PLAYER')
+    WHERE user_id = %s AND role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER')
+"""
 
 def Create_Team(data: TeamCreate, user_id: int):
     conn = get_db_connection()
@@ -29,8 +44,7 @@ def Create_Team(data: TeamCreate, user_id: int):
             cursor.execute(sql_member, (team_id, user_id, today))
 
             # 5. Cập nhật role_id trong bảng users lên TEAM_MANAGER
-            sql_role = "UPDATE users SET role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER') WHERE user_id = %s"
-            cursor.execute(sql_role, (user_id,))
+            cursor.execute(SQL_PROMOTE_MANAGER, (user_id,))
 
         conn.commit()
         return {
@@ -41,6 +55,9 @@ def Create_Team(data: TeamCreate, user_id: int):
         }
     except HTTPException:
         raise
+    except errors.UniqueViolation:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail="Bạn đang là thành viên hoạt động của một đội khác, không thể tạo đội mới")
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -65,7 +82,7 @@ def Get_Team(user_id: int):
     finally:
         conn.close()
 
-def Get_Team_Detail(team_id: int):
+def Get_Team_Detail(team_id: int, current_user_id: int):
     conn = get_db_connection()
     try:
         with conn.cursor() as cursor:
@@ -112,6 +129,15 @@ def Get_Team_Detail(team_id: int):
                         "joined_date": str(r[5])
                     })
 
+            # Chỉ quản lý của đội mới được xem email thành viên
+            cursor.execute(
+                "SELECT 1 FROM team_memberships WHERE team_id = %s AND user_id = %s AND role_in_team = 'MANAGER' AND status = 'ACTIVE'",
+                (team_id, current_user_id)
+            )
+            if not cursor.fetchone():
+                for m in members:
+                    m.pop("email", None)
+
             team["members"] = members
             team["total_members"] = len(members)
             return team
@@ -154,8 +180,7 @@ def Add_Member(team_id: int, data: MemberAdd, current_user_id: int):
 
             # Cập nhật role_id trong bảng users
             if data.role_in_team == 'MANAGER':
-                sql_role = "UPDATE users SET role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER') WHERE user_id = %s"
-                cursor.execute(sql_role, (user_id,))
+                cursor.execute(SQL_PROMOTE_MANAGER, (user_id,))
             else:
                 # Nâng VIEWER lên PLAYER, không hạ quyền ADMIN hay ORGANIZER
                 sql_role = """
@@ -169,6 +194,9 @@ def Add_Member(team_id: int, data: MemberAdd, current_user_id: int):
         return {"message": "Thêm thành viên thành công"}
     except HTTPException:
         raise
+    except errors.UniqueViolation:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail="Người này đang là thành viên ACTIVE của một đội khác")
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))
@@ -217,11 +245,9 @@ def Update_Member(team_id: int, user_id: int, data: MemberUpdate, current_user_i
 
             # Đồng bộ role_id trong bảng users
             if data.role_in_team == 'MANAGER':
-                sql_role = "UPDATE users SET role_id = (SELECT role_id FROM roles WHERE role_name = 'TEAM_MANAGER') WHERE user_id = %s"
-                cursor.execute(sql_role, (user_id,))
-            elif old_role == 'MANAGER' and data.role_in_team != 'MANAGER':
-                sql_role = "UPDATE users SET role_id = (SELECT role_id FROM roles WHERE role_name = 'PLAYER') WHERE user_id = %s"
-                cursor.execute(sql_role, (user_id,))
+                cursor.execute(SQL_PROMOTE_MANAGER, (user_id,))
+            elif old_role == 'MANAGER':
+                cursor.execute(SQL_DEMOTE_TO_PLAYER, (user_id,))
 
         conn.commit()
         return {"message": "Cập nhật vị trí thành công"}

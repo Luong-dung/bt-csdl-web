@@ -43,6 +43,8 @@ def register_user(data: UserRegister):
             cursor.execute(sql, (data.username, data.email, hashed))
             conn.commit()
             return {"message": "Đăng ký thành công"}
+    except HTTPException:
+        raise
     except Exception as e:
         conn.rollback()
         raise HTTPException(status_code=500, detail=str(e))

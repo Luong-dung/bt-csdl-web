@@ -29,8 +29,9 @@ def get_teams(user: dict = Depends(get_current_user)):
     return Get_Team(user_id)
 
 @router.get("/{team_id}")
-def get_team_detail(team_id: int):
-    return Get_Team_Detail(team_id)
+def get_team_detail(team_id: int, user: dict = Depends(get_current_user)):
+    current_user_id = int(user.get("sub"))
+    return Get_Team_Detail(team_id, current_user_id)
 
 @router.post("/{team_id}/members")
 def add_member(team_id: int, data: MemberAdd, user: dict = Depends(get_current_user)):

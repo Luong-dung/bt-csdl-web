@@ -187,7 +187,7 @@
       }
 
       try {
-        const res = await fetch(`${API_BASE}/${teamId}`);
+        const res = await fetch(`${API_BASE}/${teamId}`, { headers: authHeaders() });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || "Không lấy được dữ liệu đội");
 
@@ -203,6 +203,7 @@
     }
 
     // 2. Render bảng danh sách
+    let memberNames = {};
     function renderTable(members, teamId) {
       const tbody = document.getElementById("member-rows");
       if (!members || members.length === 0) {
@@ -210,7 +211,8 @@
         return;
       }
 
-      const roles = ["DS_LANE", "TOP", "MID", "JUNGLE", "AD_CARRY", "SUPPORT", "SUB", "MANAGER"];
+      const roles = ["PLAYER", "DS_LANE", "TOP", "MID", "JUNGLE", "AD_CARRY", "SUPPORT", "SUB", "MANAGER"];
+      memberNames = Object.fromEntries(members.map(m => [m.user_id, m.username]));
 
       tbody.innerHTML = members.map(m => {
         const isSelf = currentUserId && (m.user_id === currentUserId);
@@ -219,7 +221,7 @@
 
         const terminateBtn = isSelf
           ? `<span style="color: var(--muted); font-size: 12px; font-style: italic;">Quản lý hiện tại</span>`
-          : `<button class="btn-danger btn-sm" onclick="handleTerminate(${teamId}, ${m.user_id}, '${escapeHtml(m.username)}')">Thanh Lý</button>`;
+          : `<button class="btn-danger btn-sm" onclick="handleTerminate(${teamId}, ${m.user_id})">Thanh Lý</button>`;
 
         return `
           <tr>
@@ -294,7 +296,8 @@
     }
 
     // 5. Chức năng: Thanh lý thành viên
-    async function handleTerminate(teamId, targetUserId, username) {
+    async function handleTerminate(teamId, targetUserId) {
+      const username = memberNames[targetUserId];
       if (!confirm(`Xác nhận thanh lý hợp đồng của ${username || 'User #' + targetUserId}?`)) return;
 
       try {
