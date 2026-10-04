@@ -6,14 +6,21 @@
 git clone <URL_REPO_GITHUB_CUA_BAN>
 cd esports-tournament-web
 
-**Bước 2: Cài đặt CSDL (XAMPP)**
-- Mở XAMPP Control Panel -> Bấm Start **Apache** và **MySQL**.
-- Mở trình duyệt vào `http://localhost/phpmyadmin/`.
-- Tạo cơ sở dữ liệu mới đặt tên đúng là: `esports_tournament`.
-- Chọn CSDL vừa tạo, bấm tab **Import**:
-  - Chọn file `database/schema.sql` -> Bấm **Import**.
-  - Chọn tiếp file `database/seed_data.sql` -> Bấm **Import**.
-- Kiểm tra `http://127.0.0.1:8000/test-db`
+**Bước 2: Cài đặt CSDL (PostgreSQL / MySQL)**
+- **Đối với PostgreSQL (Khuyến nghị):**
+  - Tạo database: `CREATE DATABASE esports_tournament;`
+  - Import schema & dữ liệu:
+    ```bash
+    psql -U postgres -d esports_tournament -f database/schema_postgres.sql
+    psql -U postgres -d esports_tournament -f database/seed_data.sql
+    psql -U postgres -d esports_tournament -f database/post_seed_postgres.sql
+    ```
+- **Đối với MySQL (XAMPP):**
+  - Mở XAMPP Control Panel -> Bấm Start **Apache** và **MySQL**.
+  - Mở trình duyệt vào `http://localhost/phpmyadmin/`.
+  - Tạo cơ sở dữ liệu mới đặt tên đúng là: `esports_tournament`.
+  - Chọn CSDL vừa tạo, import `database/schema.sql` và `database/seed_data.sql`.
+- Kiểm tra kết nối: `http://127.0.0.1:8000/test-db`
 
 **Bước 3: Thiết lập môi trường Python Backend**
 cd backend
@@ -32,7 +39,7 @@ uvicorn main:app --reload
 - Mở XAMPP -> Start Apache & MySQL.
 - Mở terminal tại thư mục backend:
   cd backend
-  .\venv\Scripts\activate
+  .\.venv\Scripts\Activate.ps1
   uvicorn main:app --reload
 
 ---
@@ -56,7 +63,6 @@ git push origin feature/<ten-tinh-nang>
 - Nếu thấy có cập nhật ở file `requirements.txt` sau khi `git pull`:
   .\venv\Scripts\activate
   pip install -r requirements.txt
-
 ---
 ### 🔑 Tài khoản Test & Mật khẩu mặc định
 
@@ -69,6 +75,3 @@ Reset toàn bộ mật khẩu tài khoản test về `123456`, chạy câu lện
 UPDATE users 
 SET password_hash = '$2b$12$K8K3t0mBvR6B8P7T5eQeSe0hZ6lZ7w5FzQxX8wQ7v1v4.Yk7wO8Gy';
 ```
-
-
-  

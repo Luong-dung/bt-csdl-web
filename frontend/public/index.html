@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Cổng Thông Tin eSports</title>
+  <style>
+    body { font-family: sans-serif; background: #0f172a; color: #fff; display: flex; justify-content: center; padding-top: 60px; }
+    .card { background: #1e293b; padding: 25px; border-radius: 8px; width: 360px; border: 1px solid #334155; }
+    input { width: 100%; padding: 10px; margin: 8px 0; border-radius: 4px; border: 1px solid #475569; background: #0b1120; color: #fff; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    .btn-main { background: #38bdf8; color: #000; }
+    .btn-green { background: #22c55e; color: #000; }
+    .btn-red { background: #ef4444; color: #fff; }
+    .hidden { display: none; }
+    .switch-link { color: #38bdf8; cursor: pointer; text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Form Đăng Nhập / Đăng Ký -->
+  <div class="card" id="box-auth">
+    <h2 id="auth-title">Đăng Nhập</h2>
+    <input type="text" id="auth-username" placeholder="Tài khoản">
+    <input type="email" id="auth-email" class="hidden" placeholder="Email (dành cho đăng ký)">
+    <input type="password" id="auth-password" placeholder="Mật khẩu">
+    <button class="btn-main" id="btn-auth-submit" onclick="submitAuth()">Đăng Nhập</button>
+    <p style="font-size: 13px; text-align: center; margin-top: 15px;">
+      <span class="switch-link" id="auth-switch-link" onclick="toggleAuth()">Chưa có tài khoản? Đăng ký ngay</span>
+    </p>
+  </div>
+
+  <!-- 2. Khu Vực Người Dùng VIEWER -->
+  <div class="card hidden" id="box-viewer">
+    <h3>Xin chào, <span id="user-name" style="color: #38bdf8;"></span></h3>
+    <p style="margin: 8px 0;">Vai trò: <b style="color: #facc15;">VIEWER</b></p>
+    
+    <div style="border-top: 1px solid #334155; margin-top: 15px; padding-top: 15px;">
+      <h4>Thành Lập Đội Tuyển</h4>
+      <input type="text" id="t-name" placeholder="Tên đội (VD: T1 Esports)">
+      <input type="text" id="t-tag" placeholder="Tag đội (VD: T1)">
+      <button class="btn-green" onclick="createTeam()">Tạo Đội Mới</button>
+    </div>
+
+    <button class="btn-red" style="margin-top: 20px;" onclick="logout()">Đăng Xuất</button>
+  </div>
+
+  <script src="../src/main.js"></script>
+</body>
+</html>

@@ -7,7 +7,7 @@ __pycache__/
 
 # Environment variables
 .env
-
+.venv
 # Database logs / local dumps
 *.log
 *.sql.bak
