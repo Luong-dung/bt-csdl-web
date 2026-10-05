@@ -12,7 +12,7 @@ Thư mục này chứa toàn bộ tài liệu kỹ thuật và quản lý của 
   - Nơi lưu trữ tài liệu quản lý theo từng tuần/Sprint. Mỗi tuần sẽ có một thư mục riêng để dễ theo dõi lịch sử.
   - 📂 **sprint-1/**
     - `plan.md`: Kế hoạch công việc chi tiết chia cho 4 người.
-    - `evaluation.md`: Bảng đánh giá thành viên cuối tuần của Tech Lead.
+    - `evaluation.md`: Bảng đánh giá thành viên cuối tuần.
   - 📂 **sprint-2/** ...
 
 - 📂 **api/** *(Dự kiến)*
