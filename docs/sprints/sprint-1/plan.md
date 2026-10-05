@@ -17,7 +17,7 @@
 
 ## 👥 2. Phân Công Chi Tiết Từng Thành Viên
 
-### 👑 Dũng: Tech Lead / Data & Identity
+### 👑 Dũng: Data & Identity
 *Trách nhiệm chính: Kiến trúc hệ thống, PostgreSQL, Alembic, Account/RBAC/Audit, chuẩn hóa FastAPI.*
 
 - [ ] **Họp Kick-off (Toàn đội - 90 phút):** Chủ trì chốt Glossary, thống nhất phạm vi MVP (1 game mẫu, 1 format giải, 1 luồng roster).
@@ -61,7 +61,7 @@
 
 ---
 
-### 🎨 T. Dương: Frontend Lead
+### 🎨 T. Dương: Frontend
 *Trách nhiệm chính: Chuyển đổi sang React + TypeScript, Design System, App Shell, Typed API Client.*
 
 - [ ] **Khởi tạo dự án React:**
