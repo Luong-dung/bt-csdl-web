@@ -1,36 +1,44 @@
 from fastapi import FastAPI
-from config.database import get_db_connection
+from fastapi.middleware.cors import CORSMiddleware
+from config.settings import get_settings
 from routes.auth import router as auth_router
 from routes.team import router as team_router
-from fastapi.middleware.cors import CORSMiddleware
+from routes.catalog import router as catalog_router
+from routes.tournaments import router as tournament_router
 
-app = FastAPI(title="Esports Tournament API")
+def create_app() -> FastAPI:
+    settings = get_settings()
+    
+    app = FastAPI(
+        title=settings.PROJECT_NAME,
+        version=settings.VERSION,
+    )
 
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
+    app.include_router(auth_router)
+    app.include_router(team_router)
+    app.include_router(catalog_router)
+    app.include_router(tournament_router)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    @app.get("/")
+    def check_server():
+        return {"status": "ok", "message": "Server backend dang chay ngon lanh!"}
 
-app.include_router(auth_router)
-app.include_router(team_router)
-@app.get("/")
-def check_server():
-    return {"status": "ok", "message": "Server backend dang chay ngon lanh!"}
+    @app.get("/health")
+    def health_check():
+        return {"status": "up"}
+        
+    @app.get("/ready")
+    def ready_check():
+        return {"status": "ready"}
+            
+    return app
 
-@app.get("/test-db") 
-def check_db(): 
-    try:
-        conn = get_db_connection()
-        with conn.cursor() as cursor:
-            # Query thử 1 bảng bất kỳ xem MySQL XAMPP có nhận không
-            cursor.execute("SELECT COUNT(*) AS total_users FROM users;")
-            result = cursor.fetchone()
-        conn.close()
-        return {"database": "connected", "data": result}
-    except Exception as e:
-        return {"database": "error", "detail": str(e)}
+app = create_app()

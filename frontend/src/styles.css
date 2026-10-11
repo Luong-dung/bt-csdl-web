@@ -1,0 +1,9 @@
+:root { font-family: Inter, system-ui, sans-serif; color: #e5e7eb; background: #090d1a; }
+* { box-sizing: border-box; } body { margin: 0; min-width: 320px; }
+.shell { max-width: 1080px; margin: auto; padding: 72px 24px; }
+header { max-width: 720px; } .eyebrow { color: #7dd3fc; letter-spacing: .16em; font-size: 12px; font-weight: 700; }
+h1 { font-size: clamp(38px, 7vw, 72px); line-height: 1.03; margin: 16px 0; } p { color: #94a3b8; line-height: 1.6; }
+.stats { display: flex; gap: 16px; margin: 56px 0 24px; flex-wrap: wrap; } .stats div { background: #111827; border: 1px solid #1e293b; border-radius: 14px; padding: 20px 28px; min-width: 150px; }
+.stats strong, .stats span { display: block; } .stats strong { font-size: 28px; color: #f8fafc; } .stats span { color: #64748b; font-size: 13px; margin-top: 4px; }
+.panel { background: #111827; border: 1px solid #1e293b; border-radius: 18px; padding: 24px; } .panel-title { display: flex; justify-content: space-between; align-items: center; } h2 { margin: 0; } .panel-title span { color: #7dd3fc; font-size: 13px; }
+.tournament-list article { display: flex; justify-content: space-between; align-items: center; padding: 18px 0; border-bottom: 1px solid #1e293b; } h3 { margin: 0 0 4px; } article p { margin: 0; font-size: 14px; } article b { color: #86efac; font-size: 12px; } .muted { margin-bottom: 0; } .error { color: #fca5a5; }
