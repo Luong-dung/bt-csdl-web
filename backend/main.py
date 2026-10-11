@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from routes.auth import router as auth_router
 from routes.team import router as team_router
-from config.database import get_db_connection
+from routes.catalog import router as catalog_router
+from routes.tournaments import router as tournament_router
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -15,7 +16,7 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=settings.CORS_ORIGINS,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -23,6 +24,8 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(team_router)
+    app.include_router(catalog_router)
+    app.include_router(tournament_router)
 
     @app.get("/")
     def check_server():
@@ -34,25 +37,7 @@ def create_app() -> FastAPI:
         
     @app.get("/ready")
     def ready_check():
-        # Check DB connection for readiness
-        try:
-            conn = get_db_connection()
-            conn.close()
-            return {"status": "ready"}
-        except Exception as e:
-            return {"status": "not ready", "detail": str(e)}
-
-    @app.get("/test-db") 
-    def check_db(): 
-        try:
-            conn = get_db_connection()
-            with conn.cursor() as cursor:
-                cursor.execute("SELECT COUNT(*) AS total_users FROM users;")
-                result = cursor.fetchone()
-            conn.close()
-            return {"database": "connected", "data": result}
-        except Exception as e:
-            return {"database": "error", "detail": str(e)}
+        return {"status": "ready"}
             
     return app
 

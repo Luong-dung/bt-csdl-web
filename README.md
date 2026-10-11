@@ -1,77 +1,64 @@
-# Cheat Sheet & Hướng dẫn quy trình dự án
+# Esports Tournament Management Platform
 
-### 1. Lần đầu tải dự án về máy mới (Chỉ làm 1 lần duy nhất)
+Nền tảng quản lý giải đấu esports đa game, được xây dựng theo hướng modular monolith để nhóm có thể phát triển độc lập từng module và review chéo qua Pull Request.
 
-**Bước 1: Tải mã nguồn về máy**
-git clone <URL_REPO_GITHUB_CUA_BAN>
-cd esports-tournament-web
+## Kiến trúc
 
-**Bước 2: Cài đặt CSDL (PostgreSQL / MySQL)**
-- **Đối với PostgreSQL (Khuyến nghị):**
-  - Tạo database: `CREATE DATABASE esports_tournament;`
-  - Import schema & dữ liệu:
-    ```bash
-    psql -U postgres -d esports_tournament -f database/schema_postgres.sql
-    psql -U postgres -d esports_tournament -f database/seed_data.sql
-    psql -U postgres -d esports_tournament -f database/post_seed_postgres.sql
-    ```
-- **Đối với MySQL (XAMPP):**
-  - Mở XAMPP Control Panel -> Bấm Start **Apache** và **MySQL**.
-  - Mở trình duyệt vào `http://localhost/phpmyadmin/`.
-  - Tạo cơ sở dữ liệu mới đặt tên đúng là: `esports_tournament`.
-  - Chọn CSDL vừa tạo, import `database/schema.sql` và `database/seed_data.sql`.
-- Kiểm tra kết nối: `http://127.0.0.1:8000/test-db`
+- **Backend:** Python, FastAPI, SQLAlchemy 2, Alembic, PostgreSQL.
+- **Frontend:** React, TypeScript, Vite.
+- **Identity:** JWT, mật khẩu băm Argon2, role assignment theo phạm vi và audit log.
+- **Domain:** publisher/game, competition area, organization/team, membership, tournament/stage/match, roster và standings.
 
-**Bước 3: Thiết lập môi trường Python Backend**
+## Chạy backend trên Windows
+
+```powershell
 cd backend
-copy .env.example .env
-python -m venv venv
-.\venv\Scripts\activate
+Copy-Item .env.example .env
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-**Bước 4: Kiểm tra chạy thử**
+alembic upgrade head
 uvicorn main:app --reload
-- Mở trình duyệt vào: `http://127.0.0.1:8000/docs` (thấy Swagger UI là xong setup).
+```
 
----
+API và Swagger: <http://127.0.0.1:8000/docs>. Health check: <http://127.0.0.1:8000/health>.
 
-### 2. Khởi động môi trường code (Hàng ngày)
-- Mở XAMPP -> Start Apache & MySQL.
-- Mở terminal tại thư mục backend:
-  cd backend
-  .\.venv\Scripts\Activate.ps1
-  uvicorn main:app --reload
-
----
-
-### 3. Đồng bộ code trước khi làm tính năng mới
-git checkout main
-git pull origin main
-git checkout -b feature/<ten-tinh-nang>
-
----
-
-### 4. Lưu và đẩy code lên sau khi hoàn thành
-git add .
-git commit -m "feat: mo ta ngan gon chuc nang vua code"
-git push origin feature/<ten-tinh-nang>
-- Vào GitHub bấm nút **Compare & pull request** để gửi yêu cầu gộp code vào `main`.
-
----
-
-### 5. Cập nhật khi có thành viên khác thêm thư viện mới
-- Nếu thấy có cập nhật ở file `requirements.txt` sau khi `git pull`:
-  .\venv\Scripts\activate
-  pip install -r requirements.txt
----
-### 🔑 Tài khoản Test & Mật khẩu mặc định
-
-Tất cả tài khoản trong dữ liệu mẫu (`seed_data.sql`) đều sử dụng mật khẩu chung:
-- Mật khẩu: `123456`
-
-Reset toàn bộ mật khẩu tài khoản test về `123456`, chạy câu lệnh sau trong tab SQL của phpMyAdmin:
+Tạo database PostgreSQL trước khi migrate:
 
 ```sql
-UPDATE users 
-SET password_hash = '$2b$12$K8K3t0mBvR6B8P7T5eQeSe0hZ6lZ7w5FzQxX8wQ7v1v4.Yk7wO8Gy';
+CREATE DATABASE esports_tournament;
 ```
+
+Nếu cần cài đặt nhanh không dùng Alembic, chạy [schema_postgres.sql](database/schema_postgres.sql), sau đó chạy seed tương ứng.
+
+> Project đã được reset theo schema mới. Nếu database đang dùng schema cũ, hãy tạo database mới hoặc xóa database cũ rồi chạy lại migration; không chạy API trên schema cũ vì tên/cấu trúc bảng đã thay đổi.
+
+```sql
+DROP DATABASE IF EXISTS esports_tournament;
+CREATE DATABASE esports_tournament;
+```
+
+Sau đó chạy lại `alembic upgrade head`. Dữ liệu mẫu sẽ được bổ sung cùng module seed khi nghiệp vụ tương ứng hoàn thiện.
+
+## Chạy frontend
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Frontend mặc định gọi `http://127.0.0.1:8000/api/v1`. Có thể đổi bằng biến `VITE_API_URL`.
+
+## Quy ước phát triển
+
+Mỗi thành viên làm trên nhánh `feature/<ten-tinh-nang>`, mở Pull Request vào `main` và review chéo. Migration phải được tạo bằng Alembic; không sửa migration đã chạy trên môi trường dùng chung.
+
+Phân công công việc, trạng thái, tiêu chí nghiệm thu và đánh giá theo tuần được quản lý tại [docs/TEAM_WORK_PLAN.md](docs/TEAM_WORK_PLAN.md).
+
+## Lộ trình 10 tuần
+
+1. Tuần 1–2: chuẩn hóa kiến trúc, identity, role và audit log.
+2. Tuần 3–4: catalog game/khu vực và quản lý tổ chức–đội.
+3. Tuần 5–7: đăng ký giải, roster, stage, match và standings.
+4. Tuần 8–10: frontend quản trị, kiểm thử, CI và staging.

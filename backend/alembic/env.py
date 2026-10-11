@@ -22,6 +22,9 @@ from config.settings import get_settings
 from config.database import Base
 # Import models here so Alembic can discover them
 from modules.identity.models import *
+from modules.catalog.models import *
+from modules.teams.models import *
+from modules.tournaments.models import *
 
 settings = get_settings()
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

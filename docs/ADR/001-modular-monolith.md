@@ -3,7 +3,7 @@
 - **Trạng thái (Status):** Đã chấp thuận (Accepted)
 - **Ngày quyết định (Date):** 05/10/2026
 - **Người tham gia quyết định (Deciders):** Nhóm phát triển nền tảng Esports (4 thành viên)
-- **Tài liệu liên quan (Context Docs):** `docs/KE_HOACH_TAI_TO_CHUC_NEN_TANG_ESPORTS.md`, `docs/KE_HOACH_CONG_VIEC_TUAN_1.md`
+- **Tài liệu liên quan (Context Docs):** `docs/PROJECT_SPECIFICATION.md`
 
 ---
 
@@ -39,9 +39,9 @@ Nhóm thống nhất đưa ra các quyết định kiến trúc và công nghệ
 ### 2.2. Cơ Sở Dữ Liệu: PostgreSQL (Single Source of Truth)
 - **Quyết định:** Sử dụng duy nhất **PostgreSQL** làm cơ sở dữ liệu lưu trữ chính.
 - **Quy chuẩn dữ liệu:**
-  - Khóa chính sử dụng `UUID` cho các thực thể công khai (public entities) để tránh đoán ID tuần tự trên URL/API.
-  - Lưu thời gian bằng `timestamptz` chuẩn UTC; múi giờ địa phương chỉ xử lý khi hiển thị hoặc theo khu vực thi đấu.
-  - Tận dụng `JSONB` cho các trường metadata mở rộng (luật thi đấu đặc thù của từng game).
+  - Schema hiện tại dùng khóa chính số nguyên để đơn giản hóa giai đoạn MVP; có thể chuyển sang UUID khi có yêu cầu public API.
+  - Lưu thời gian có timezone ở các bảng PostgreSQL; múi giờ địa phương chỉ xử lý khi hiển thị.
+  - Tận dụng JSON/JSONB cho metadata audit và luật thi đấu mở rộng.
 
 ### 2.3. Tầng Truy Cập Dữ Liệu & Migration: SQLAlchemy 2.x + Alembic
 - **Quyết định:** 
@@ -55,7 +55,7 @@ Nhóm thống nhất đưa ra các quyết định kiến trúc và công nghệ
 - **Lý do lựa chọn:**
   - Đảm bảo tính an toàn kiểu dữ liệu (End-to-End Type Safety) khi kết hợp cùng OpenAPI từ FastAPI.
   - Tập trung nguồn lực của đội ngũ vào một framework duy nhất; **chưa sử dụng Vue.js hay Micro-frontends** trong giai đoạn này để tránh lãng phí tài nguyên và phân tán thiết kế.
-  - Sử dụng một Design System thống nhất (Tailwind CSS + Shadcn UI).
+  - Sử dụng một Design System thống nhất; việc chọn thư viện UI sẽ được chốt khi hoàn thiện màn hình quản trị.
 
 ### 2.5. Môi Trường Phát Triển & Triển Khai (Deployment)
 - **Local Development:** Chạy môi trường Native trực tiếp trên máy (PostgreSQL local port 5432 + Python virtual environment `venv` + Vite dev server). Không bắt buộc dùng Docker để giảm tải tài nguyên máy và tăng tốc độ setup.

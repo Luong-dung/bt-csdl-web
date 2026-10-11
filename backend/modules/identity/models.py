@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from config.database import Base
@@ -40,9 +40,11 @@ class RoleAssignment(Base):
     assignment_id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
     role_id = Column(Integer, ForeignKey("roles.role_id", ondelete="CASCADE"), nullable=False)
-    scope = Column(String(100), nullable=True)  # e.g., 'TEAM_123', 'TOURNAMENT_456'
+    scope_type = Column(String(30), nullable=False, default="GLOBAL")
+    scope_id = Column(Integer, nullable=True)
     
     user = relationship("User", back_populates="assignments")
+    role = relationship("Role")
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"
@@ -51,7 +53,7 @@ class AuditLog(Base):
     user_id = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     action = Column(String(100), nullable=False)
     resource = Column(String(100), nullable=False)
-    details = Column(Text, nullable=True)
+    details = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     user = relationship("User", back_populates="audit_logs")

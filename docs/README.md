@@ -1,22 +1,12 @@
-# Hệ Thống Tài Liệu Dự Án (Documentation)
+# Tài liệu dự án
 
-Thư mục này chứa toàn bộ tài liệu kỹ thuật và quản lý của dự án **Esports Tournament Web**. Để tránh lộn xộn, các thành viên vui lòng tuân thủ cấu trúc lưu trữ sau:
+## Tài liệu chính
 
-## Cấu trúc thư mục
+- [Đặc tả đề tài và kế hoạch thực hiện](./PROJECT_SPECIFICATION.md)
+- [Kế hoạch chia việc và đánh giá theo tuần](./TEAM_WORK_PLAN.md)
+- [Công việc tuần hiện tại — 12/10 đến 18/10/2026](./weeks/2026-W42.md)
+- [ADR-001: Modular monolith](./ADR/001-modular-monolith.md)
 
-- 📂 **ADR/ (Architecture Decision Records)**
-  - Chứa các quyết định lớn về mặt kiến trúc, công nghệ (VD: Chọn Database gì, thiết kế theo mô hình nào). Các quyết định này là "luật" của dự án, mọi người phải tuân theo.
-  - *Ví dụ: `001-modular-monolith.md`*
+## Nguyên tắc cập nhật
 
-- 📂 **sprints/**
-  - Nơi lưu trữ tài liệu quản lý theo từng tuần/Sprint. Mỗi tuần sẽ có một thư mục riêng để dễ theo dõi lịch sử.
-  - 📂 **sprint-1/**
-    - `plan.md`: Kế hoạch công việc chi tiết chia cho 4 người.
-    - `evaluation.md`: Bảng đánh giá thành viên cuối tuần.
-  - 📂 **sprint-2/** ...
-
-- 📂 **api/** *(Dự kiến)*
-  - Nơi lưu trữ tài liệu đặc tả API (Swagger/OpenAPI config hoặc Markdown thủ công) để Frontend và Backend dễ dàng giao tiếp.
-
-- 📂 **setup/** *(Dự kiến)*
-  - Hướng dẫn cài đặt môi trường cho người mới (cài Python, Node.js, kéo Database...).
+Tài liệu phải phản ánh code đang có trong repository. Khi thay đổi API, mô hình dữ liệu, vai trò hoặc lộ trình, cập nhật `PROJECT_SPECIFICATION.md` trong cùng Pull Request. Nhóm trưởng cập nhật `TEAM_WORK_PLAN.md` sau mỗi buổi họp tuần.
