@@ -28,6 +28,7 @@ Mỗi tuần phải có đủ bốn phần:
 - Không đánh dấu `DONE` nếu chưa có test hoặc bằng chứng kiểm tra phù hợp.
 - Việc chưa hoàn thành phải được chuyển sang tuần sau, không xóa khỏi lịch sử.
 - Nhóm trưởng chịu trách nhiệm cập nhật phần đánh giá; người phụ trách cập nhật trạng thái và link PR.
+- Nếu task có dùng AI, ghi lại yêu cầu và bằng chứng kiểm tra trong [AI_WORK_LOG.md](./AI_WORK_LOG.md).
 
 ## Tuần đang thực hiện
 

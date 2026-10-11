@@ -56,6 +56,8 @@ Mỗi thành viên làm trên nhánh `feature/<ten-tinh-nang>`, mở Pull Reques
 
 Phân công công việc, trạng thái, tiêu chí nghiệm thu và đánh giá theo tuần được quản lý tại [docs/TEAM_WORK_PLAN.md](docs/TEAM_WORK_PLAN.md).
 
+Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng được lưu tại [docs/AI_WORK_LOG.md](docs/AI_WORK_LOG.md).
+
 ## Lộ trình 10 tuần
 
 1. Tuần 1–2: chuẩn hóa kiến trúc, identity, role và audit log.
