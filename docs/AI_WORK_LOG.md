@@ -28,6 +28,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
 | `AI-2026-W42-001` | `2026-10-11` | Reset platform | Tái cấu trúc project theo đặc tả nền tảng quản lý giải đấu Esports | Đã áp dụng và đưa lên PR | Backend, database, frontend, docs | Backend smoke test, Alembic check, frontend build | `VERIFIED` |
+| `AI-2026-W42-002` | `2026-10-11` | W42-01 / chưa mở PR | Bổ sung seed tối thiểu cho role, publisher, game và khu vực | Script seed trong một transaction, chạy lại không trùng và giữ dữ liệu hiện có | `backend/seed.py`, `backend/tests/test_seed.py`, README, tài liệu W42 | 3 pytest đạt; cả hai migration + seed trên schema PostgreSQL tạm rỗng đạt; seed lần 2 thêm 0 bản ghi; rollback schema tạm | `VERIFIED` |
 
 ### Nguyễn Quốc Doanh — `DOANH`
 
