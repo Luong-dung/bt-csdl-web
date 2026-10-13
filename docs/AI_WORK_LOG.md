@@ -34,7 +34,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  | `REQUESTED` |
+| `AI-2026-W42-003` | `2026-10-13` | W42-03 / chưa mở PR | Hoàn thiện API catalog: CRUD/list + validation cho publisher, game, competition area | Schema Pydantic, kiểm tra trùng/khóa ngoại/vòng lặp khu vực cha, chặn xóa bản ghi đang được dùng; ghi cần JWT | `backend/routes/catalog.py`, `backend/tests/test_catalog_api.py`, README, tài liệu W42 | `pytest -q`: 16 passed; cố ý gỡ kiểm tra vòng lặp và kiểm tra giải đấu thì test tương ứng fail | `VERIFIED` |
 
 ### Nguyễn Tùng Dương — `DUONG`
 

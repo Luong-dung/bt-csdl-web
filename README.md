@@ -58,6 +58,27 @@ Kiểm tra seed từ thư mục `backend`:
 python -m pytest tests/test_seed.py -q
 ```
 
+## API catalog — W42-03
+
+Prefix `/api/v1/catalog`. `GET` mở công khai; `POST`/`PATCH`/`DELETE` cần JWT (phân quyền theo role bổ sung ở W42-02).
+
+| Tài nguyên | Endpoint | Lọc danh sách |
+|---|---|---|
+| Nhà phát hành | `/publishers`, `/publishers/{id}` | — |
+| Game | `/games`, `/games/{id}` | `?publisher_id=` |
+| Khu vực | `/areas`, `/areas/{id}` | `?parent_id=` |
+
+- `slug` game dạng `league-of-legends`; `code` khu vực dạng `VN-HCM`. Trường lạ trong body bị từ chối.
+- Trùng tên/slug/mã trả `409`; nhà phát hành hoặc khu vực cha không tồn tại trả `422`.
+- Khu vực không được nhận chính nó hoặc khu vực con làm cha (`422`). `PATCH` với `parent_id: null` để tách khỏi khu vực cha.
+- Không xóa được nhà phát hành còn game, game đang được đội/giải đấu dùng, khu vực còn khu vực con hoặc đang được giải đấu dùng (`409`).
+
+Kiểm tra từ thư mục `backend`:
+
+```powershell
+python -m pytest tests/test_catalog_api.py -q
+```
+
 ## Chạy frontend
 
 ```powershell
