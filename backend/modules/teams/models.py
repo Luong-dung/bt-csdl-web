@@ -39,5 +39,8 @@ class TeamMembership(Base):
     user = relationship("User")
     __table_args__ = (
         UniqueConstraint("team_id", "user_id", "joined_date"),
-        Index("uq_one_active_team_per_user", "user_id", unique=True, postgresql_where=(status == "ACTIVE")),
+        Index(
+            "uq_one_active_team_per_user", "user_id", unique=True,
+            postgresql_where=(status == "ACTIVE"), sqlite_where=(status == "ACTIVE"),
+        ),
     )
