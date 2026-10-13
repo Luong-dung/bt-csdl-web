@@ -60,7 +60,7 @@ python -m pytest tests/test_seed.py -q
 
 ## API catalog — W42-03
 
-Prefix `/api/v1/catalog`. `GET` mở công khai; `POST`/`PATCH`/`DELETE` cần JWT (phân quyền theo role bổ sung ở W42-02).
+Prefix `/api/v1/catalog`. `GET` mở công khai; `POST`/`PATCH`/`DELETE` cần JWT và quyền `ADMIN` toàn hệ thống.
 
 | Tài nguyên | Endpoint | Lọc danh sách |
 |---|---|---|
@@ -103,3 +103,22 @@ Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng đượ
 2. Tuần 3–4: catalog game/khu vực và quản lý tổ chức–đội.
 3. Tuần 5–7: đăng ký giải, roster, stage, match và standings.
 4. Tuần 8–10: frontend quản trị, kiểm thử, CI và staging.
+
+## Phân quyền API — W42-02
+
+- Ghi catalog: `ADMIN` toàn hệ thống; tạo giải: `ADMIN` hoặc `ORGANIZER` toàn hệ thống.
+- Role của user và assignment `GLOBAL` với `scope_id=NULL` cấp quyền toàn hệ thống. Assignment theo tài nguyên chỉ áp dụng khi khớp chính xác loại và ID phạm vi.
+- Tạo đội: mọi user đã đăng nhập; người tạo trở thành `MANAGER` của đội mới.
+- Thêm thành viên: `ADMIN` toàn hệ thống, membership `MANAGER` đang `ACTIVE` chưa có ngày rời đội, hoặc assignment `TEAM_MANAGER` đúng `TEAM`/`ORGANIZATION` chứa đội. Role `TEAM_MANAGER` của user không tự cấp quyền trên mọi đội.
+- Thiếu JWT, JWT sai/hết hạn hoặc subject không hợp lệ: `401`; đăng nhập nhưng thiếu quyền: `403`. Các API đọc catalog, đội và giải vẫn công khai.
+- Helper `middleware.auth.has_role` hỗ trợ kiểm tra assignment theo giải cho các endpoint triển khai sau. Chưa có API cấp/thu hồi assignment; không thay schema.
+
+Chạy từ thư mục `backend`: `.\venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local.
+
+Kiểm tra quyền và catalog trên PostgreSQL cấu hình trong `backend/.env`:
+
+```powershell
+.\venv\Scripts\python.exe -m pytest tests/test_permissions.py tests/test_catalog_api.py --postgres -q
+```
+
+Mỗi test chạy hai migration và seed trong schema tạm riêng. Session của API dùng savepoint bên trong transaction ngoài; kết thúc test rollback toàn bộ và xác nhận schema tạm đã biến mất. Không ghi dữ liệu vào schema hiện có. Request chạy qua FastAPI TestClient; test quyền dùng JWT thật, test CRUD catalog dùng user ADMIN giả lập như bộ test SQLite.

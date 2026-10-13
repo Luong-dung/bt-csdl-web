@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -15,7 +16,10 @@ from seed import seed_reference_data
 
 
 @pytest.fixture
-def session_factory():
+def session_factory(request):
+    if request.config.getoption("--postgres"):
+        yield request.getfixturevalue("postgres_session_factory")
+        return
     engine = create_engine(
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
@@ -44,7 +48,7 @@ def make_client(session_factory, logged_in=True):
 
     app.dependency_overrides[get_db] = override_db
     if logged_in:
-        app.dependency_overrides[get_current_user] = lambda: object()
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(role=SimpleNamespace(role_name="ADMIN"), assignments=[])
     return TestClient(app)
 
 

@@ -29,6 +29,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 |---|---|---|---|---|---|---|---|
 | `AI-2026-W42-001` | `2026-10-11` | Reset platform | Tái cấu trúc project theo đặc tả nền tảng quản lý giải đấu Esports | Đã áp dụng và đưa lên PR | Backend, database, frontend, docs | Backend smoke test, Alembic check, frontend build | `VERIFIED` |
 | `AI-2026-W42-002` | `2026-10-11` | W42-01 / PR #10 | Bổ sung seed tối thiểu cho role, publisher, game và khu vực | Script seed trong một transaction, chạy lại không trùng và giữ dữ liệu hiện có | `backend/seed.py`, `backend/tests/test_seed.py`, README, tài liệu W42 | 3 pytest đạt; cả hai migration + seed trên schema PostgreSQL tạm rỗng đạt; seed lần 2 thêm 0 bản ghi; rollback schema tạm | `VERIFIED` |
+| `AI-2026-W42-004` | `2026-10-13` | W42-02 / chưa mở PR | Hoàn thiện kiểm tra role/scope, không commit; kiểm tra thêm PostgreSQL | Helper và kiểm tra quyền ghi catalog, tạo giải, quản lý đúng đội; xử lý subject JWT sai; fixture PostgreSQL tùy chọn `--postgres` | Middleware auth, routes, tests, README, tài liệu W42 | AI chạy SQLite: 58 test đạt; PostgreSQL: 55 test quyền/catalog đạt, 42 test quyền dùng JWT thật qua TestClient; hai migration + seed mỗi schema tạm, rollback và xác nhận schema biến mất. Chờ DOANH review | `APPLIED` |
 
 ### Nguyễn Quốc Doanh — `DOANH`
 
