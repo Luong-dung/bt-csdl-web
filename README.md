@@ -79,6 +79,31 @@ Kiểm tra từ thư mục `backend`:
 python -m pytest tests/test_catalog_api.py -q
 ```
 
+## API đội tuyển và thành viên — W42-04
+
+Prefix `/api/v1/teams`. Xem đội và thành viên mở công khai; thao tác ghi cần JWT.
+
+| Thao tác | Endpoint | Ai được làm |
+|---|---|---|
+| Danh sách / chi tiết đội | `GET /teams?game_id=`, `GET /teams/{id}` | Công khai |
+| Tạo đội | `POST /teams` | Người đăng nhập chưa thuộc đội nào; trở thành `MANAGER` |
+| Danh sách thành viên | `GET /teams/{id}/members?include_history=true` | Công khai |
+| Thêm thành viên | `POST /teams/{id}/members` | `MANAGER` của đội hoặc `ADMIN` |
+| Đổi vị trí | `PATCH /teams/{id}/members/{membership_id}` | `MANAGER` của đội hoặc `ADMIN` |
+| Kết thúc membership | `POST /teams/{id}/members/{membership_id}/end` | `MANAGER`/`ADMIN`, hoặc chính thành viên tự rời đội |
+
+- Vị trí trong đội: `MANAGER`, `COACH`, `PLAYER`, `SUBSTITUTE`. Tag đội chỉ gồm chữ/số, được lưu dạng in hoa.
+- Một tài khoản chỉ có một membership `ACTIVE` tại một thời điểm (`409`, kèm tên đội hiện tại).
+- Kết thúc membership chuyển trạng thái sang `ENDED` và ghi `left_date`, không xóa để giữ lịch sử chuyển nhượng. Người đã rời đội chỉ được thêm lại vào cùng đội từ ngày hôm sau.
+- Đội luôn phải còn ít nhất một `MANAGER` đang hoạt động (`409`).
+- Thêm, đổi vị trí, kết thúc thành viên đều được ghi vào `audit_logs`.
+
+Kiểm tra từ thư mục `backend`:
+
+```powershell
+python -m pytest tests/test_team_api.py -q
+```
+
 ## Chạy frontend
 
 ```powershell

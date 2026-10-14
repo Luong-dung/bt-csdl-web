@@ -199,3 +199,22 @@ def test_registration_cannot_request_admin_role(access, session_factory):
         user = db.scalar(select(User).where(User.username == "newviewer"))
         assert user.role.role_name == "VIEWER"
         assert user.assignments == []
+
+
+@pytest.mark.parametrize("kind", ["membership", "TEAM", "ORGANIZATION"])
+def test_manager_can_change_role_and_end_membership(access, session_factory, kind):
+    client, headers, users, teams, roles = access
+    with session_factory.begin() as db:
+        if kind == "membership":
+            db.add(TeamMembership(team_id=teams["Alpha"], user_id=users["manager"], role_in_team="MANAGER"))
+        else:
+            scope_id = teams["Alpha"] if kind == "TEAM" else db.scalar(select(Organization.organization_id))
+            db.add(RoleAssignment(user_id=users["manager"], role_id=roles["TEAM_MANAGER"], scope_type=kind, scope_id=scope_id))
+    base = f"/api/v1/teams/{teams['Alpha']}/members"
+    added = client.post(base, json={"username": "viewer"}, headers=headers("manager"))
+    assert added.status_code == 201
+    member = f"{base}/{added.json()['membership_id']}"
+    assert client.patch(member, json={"role_in_team": "COACH"}, headers=headers("referee")).status_code == 403
+    assert client.patch(member, json={"role_in_team": "COACH"}, headers=headers("manager")).status_code == 200
+    assert client.post(f"{member}/end", headers=headers("referee")).status_code == 403
+    assert client.post(f"{member}/end", headers=headers("manager")).status_code == 200
