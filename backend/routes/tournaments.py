@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from middleware.auth import get_current_user
+from middleware.auth import require_role
 from modules.identity.models import User
 from modules.tournaments.models import Tournament
 
@@ -31,7 +31,7 @@ def list_tournaments(db: Session = Depends(get_db)):
 @router.post("", status_code=status.HTTP_201_CREATED)
 def create_tournament(
     data: TournamentCreate,
-    _: User = Depends(get_current_user),
+    _: User = Depends(require_role("ADMIN", "ORGANIZER")),
     db: Session = Depends(get_db),
 ):
     if data.format not in {"SINGLE_ELIM", "DOUBLE_ELIM", "ROUND_ROBIN"}:

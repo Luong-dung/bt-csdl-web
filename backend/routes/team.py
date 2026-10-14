@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from middleware.auth import get_current_user
+from middleware.auth import get_current_user, require_team_manager
 from modules.identity.models import User
 from modules.teams.models import Team, TeamMembership
 
@@ -59,7 +59,7 @@ def get_team(team_id: int, db: Session = Depends(get_db)):
 @router.post(
     "/{team_id}/members",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_team_manager)],
 )
 def add_member(team_id: int, data: MemberCreate, db: Session = Depends(get_db)):
     team = db.get(Team, team_id)

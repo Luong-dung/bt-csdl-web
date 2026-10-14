@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from middleware.auth import get_current_user
+from middleware.auth import require_role
 from modules.catalog.models import CompetitionArea, Game, Publisher
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
@@ -147,7 +147,7 @@ def get_publisher(publisher_id: int, db: Session = Depends(get_db)):
     "/publishers",
     response_model=PublisherRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def create_publisher(data: PublisherCreate, db: Session = Depends(get_db)):
     ensure_unique(db, Publisher.name, data.name, message="Tên nhà phát hành đã tồn tại")
@@ -157,7 +157,7 @@ def create_publisher(data: PublisherCreate, db: Session = Depends(get_db)):
     return publisher
 
 
-@router.patch("/publishers/{publisher_id}", response_model=PublisherRead, dependencies=[Depends(get_current_user)])
+@router.patch("/publishers/{publisher_id}", response_model=PublisherRead, dependencies=[Depends(require_role("ADMIN"))])
 def update_publisher(publisher_id: int, data: PublisherUpdate, db: Session = Depends(get_db)):
     publisher = get_or_404(db, Publisher, publisher_id, "nhà phát hành")
     changes = data.model_dump(exclude_unset=True)
@@ -173,7 +173,7 @@ def update_publisher(publisher_id: int, data: PublisherUpdate, db: Session = Dep
 @router.delete(
     "/publishers/{publisher_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def delete_publisher(publisher_id: int, db: Session = Depends(get_db)):
     publisher = get_or_404(db, Publisher, publisher_id, "nhà phát hành")
@@ -203,7 +203,7 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     "/games",
     response_model=GameRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def create_game(data: GameCreate, db: Session = Depends(get_db)):
     ensure_publisher(db, data.publisher_id)
@@ -215,7 +215,7 @@ def create_game(data: GameCreate, db: Session = Depends(get_db)):
     return game
 
 
-@router.patch("/games/{game_id}", response_model=GameRead, dependencies=[Depends(get_current_user)])
+@router.patch("/games/{game_id}", response_model=GameRead, dependencies=[Depends(require_role("ADMIN"))])
 def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db)):
     game = get_or_404(db, Game, game_id, "game")
     changes = data.model_dump(exclude_unset=True)
@@ -234,7 +234,7 @@ def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db)):
 @router.delete(
     "/games/{game_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def delete_game(game_id: int, db: Session = Depends(get_db)):
     game = get_or_404(db, Game, game_id, "game")
@@ -265,7 +265,7 @@ def get_area(area_id: int, db: Session = Depends(get_db)):
     "/areas",
     response_model=AreaRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def create_area(data: AreaCreate, db: Session = Depends(get_db)):
     ensure_valid_parent(db, data.parent_id)
@@ -276,7 +276,7 @@ def create_area(data: AreaCreate, db: Session = Depends(get_db)):
     return area
 
 
-@router.patch("/areas/{area_id}", response_model=AreaRead, dependencies=[Depends(get_current_user)])
+@router.patch("/areas/{area_id}", response_model=AreaRead, dependencies=[Depends(require_role("ADMIN"))])
 def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db)):
     area = get_or_404(db, CompetitionArea, area_id, "khu vực")
     changes = data.model_dump(exclude_unset=True)
@@ -294,7 +294,7 @@ def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db)):
 @router.delete(
     "/areas/{area_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(require_role("ADMIN"))],
 )
 def delete_area(area_id: int, db: Session = Depends(get_db)):
     area = get_or_404(db, CompetitionArea, area_id, "khu vực")
