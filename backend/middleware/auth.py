@@ -50,15 +50,16 @@ def require_role(*role_names: str):
     return checker
 
 
-def require_team_manager(team_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
+def can_manage_team(db: Session, team_id: int, user: User) -> bool:
+    """ADMIN, an active MANAGER of the team, or TEAM_MANAGER assigned to the team or its organization."""
     from sqlalchemy import select
     from modules.teams.models import Team, TeamMembership
 
     if has_role(user, "ADMIN"):
-        return user
+        return True
     team = db.get(Team, team_id)
     if team is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đội tuyển")
+        return False
     membership = db.scalar(select(TeamMembership).where(
         TeamMembership.team_id == team_id,
         TeamMembership.user_id == user.user_id,
@@ -66,13 +67,17 @@ def require_team_manager(team_id: int, user: User = Depends(get_current_user), d
         TeamMembership.status == "ACTIVE",
         TeamMembership.left_date.is_(None),
     ))
-    assigned = any(
+    if membership is not None:
+        return True
+    return any(
         a.role.role_name == "TEAM_MANAGER" and (
             (a.scope_type == "TEAM" and a.scope_id == team_id)
             or (team.organization_id is not None and a.scope_type == "ORGANIZATION"
                 and a.scope_id == team.organization_id)
         ) for a in user.assignments
     )
-    if membership is None and not assigned:
-        raise HTTPException(status_code=403, detail="Bạn không có quyền quản lý đội này")
-    return user
+
+
+def ensure_team_manager(db: Session, team_id: int, user: User) -> None:
+    if not can_manage_team(db, team_id, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền quản lý đội này")
