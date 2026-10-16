@@ -33,6 +33,8 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 | `AI-2026-W42-007` | `2026-10-17` | PR #19 | Kiểm tra và xử lý điểm chưa nhất quán của PR cập nhật trạng thái W42 | Đối chiếu metadata và review GitHub: W42-02/05 giữ `REVIEW`, ghi việc cần hoàn tất và người phụ trách; W42-03 ghi nhận DUNG đã approve PR #12; W42-04/06 giữ `DONE` | `docs/weeks/2026-W42.md`, `docs/AI_WORK_LOG.md` | AI đối chiếu diff và review PR #12/#14/#17; chỉ sửa tài liệu, không chạy lại test/build và không xác nhận thay người review | `APPLIED` |
 
+| `AI-2026-W42-008` | `2026-10-17` | W42-02; follow-up PR #14 | Sửa fixture PostgreSQL còn ghi cứng hai migration | Chạy Alembic `upgrade head` bằng connection của schema tạm; version table nằm trong schema tạm; thêm test migration thứ ba | `backend/tests/conftest.py`, `backend/alembic/env.py`, `backend/tests/test_postgres_migrations.py` | AI chạy 71 test SQLite và 59 test PostgreSQL đạt; test mới xác nhận migration thứ ba được chạy, version đạt head; fixture xác nhận schema biến mất sau rollback. Chờ DOANH review | `APPLIED` |
+
 ### Nguyễn Quốc Doanh — `DOANH`
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
