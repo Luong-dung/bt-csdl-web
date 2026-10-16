@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
@@ -7,6 +7,12 @@ type AuthMode = "login" | "register";
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
 const TOKEN_KEY = "esports_access_token";
 
+class RequestError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
@@ -14,7 +20,7 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   const response = await fetch(`${API}${path}`, { ...options, headers });
   if (!response.ok) {
     const body = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new Error(body?.detail ?? "Yêu cầu không thành công");
+    throw new RequestError(body?.detail ?? "Yêu cầu không thành công", response.status);
   }
   return response.json() as Promise<T>;
 }
@@ -26,15 +32,36 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
+  const sessionVersion = useRef(0);
 
   useEffect(() => {
     if (!token) return;
-    request<User>("/auth/me", {}, token).then(setUser).catch(() => {
-      localStorage.removeItem(TOKEN_KEY);
-      setToken("");
-      setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
-    });
-  }, [token]);
+    const version = sessionVersion.current;
+    const controller = new AbortController();
+    let active = true;
+
+    request<User>("/auth/me", { signal: controller.signal }, token)
+      .then((currentUser) => {
+        if (active && sessionVersion.current === version) setUser(currentUser);
+      })
+      .catch((reason: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        if (reason instanceof RequestError && (reason.status === 401 || reason.status === 403)) {
+          localStorage.removeItem(TOKEN_KEY);
+          setToken("");
+          setUser(null);
+          setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+          return;
+        }
+        setError("Không thể kiểm tra phiên đăng nhập. Hãy thử lại.");
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [token, authCheckAttempt]);
 
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -73,6 +100,7 @@ export default function App() {
   };
 
   const logout = () => {
+    sessionVersion.current += 1;
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUser(null);
@@ -89,7 +117,13 @@ export default function App() {
       {user && <div className="account"><span>Xin chào, <strong>{user.username}</strong></span><button className="button secondary" onClick={logout}>Đăng xuất</button></div>}
     </header>
 
-    {(error || notice) && <p className={error ? "message error" : "message success"}>{error || notice}</p>}
+    {(error || notice) && <div className={error ? "message error" : "message success"}>
+      <p>{error || notice}</p>
+      {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
+        setError("");
+        setAuthCheckAttempt((attempt) => attempt + 1);
+      }}>Thử lại</button>}
+    </div>}
 
     <section className="auth-layout">
       <section className="panel auth-panel">
