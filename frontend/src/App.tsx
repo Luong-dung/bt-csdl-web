@@ -4,6 +4,8 @@ import "./styles.css";
 type User = { id: number; username: string; email?: string; role: string };
 type Game = { game_id: number; name: string; slug: string };
 type Team = { team_id: number; name: string; tag: string; game_id: number };
+type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
+type TeamDetail = Team & { members: TeamMember[] };
 type AuthMode = "login" | "register";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -37,6 +39,7 @@ export default function App() {
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
   const [games, setGames] = useState<Game[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const sessionVersion = useRef(0);
 
   const loadTeams = async () => {
@@ -134,6 +137,7 @@ export default function App() {
     setError("");
     setNotice("");
     setLoading(true);
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     try {
       await request<Team>("/teams", {
@@ -144,13 +148,23 @@ export default function App() {
           game_id: Number(form.get("game_id")),
         }),
       }, token);
-      event.currentTarget.reset();
+      formElement.reset();
       await loadTeams();
       setNotice("Tạo đội thành công. Bạn đã trở thành MANAGER của đội.");
     } catch (reason) {
       setError((reason as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const viewTeam = async (teamId: number) => {
+    setError("");
+    setNotice("");
+    try {
+      setSelectedTeam(await request<TeamDetail>(`/teams/${teamId}`));
+    } catch (reason) {
+      setError((reason as Error).message);
     }
   };
 
@@ -213,8 +227,14 @@ export default function App() {
       </form> : <p className="muted">Đăng nhập để tạo đội mới. Danh sách đội vẫn được xem công khai.</p>}
       {teams.length === 0 ? <p className="muted">Chưa có đội tuyển.</p> : <div className="team-list">{teams.map((team) => <article key={team.team_id}>
         <div><h3>{team.name}</h3><p>#{team.tag} · {games.find((game) => game.game_id === team.game_id)?.name ?? "Game"}</p></div>
-        <a href={`#team-${team.team_id}`}>Xem đội</a>
+        <button className="link-button" onClick={() => viewTeam(team.team_id)}>Xem đội</button>
       </article>)}</div>}
+      {selectedTeam && <div className="team-detail">
+        <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => setSelectedTeam(null)}>Đóng</button></div>
+        <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
+        <h4>Thành viên ({selectedTeam.members.length})</h4>
+        {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <ul>{selectedTeam.members.map((member) => <li key={member.membership_id}>{member.username} · {member.role} · {member.status}</li>)}</ul>}
+      </div>}
     </section>
   </main>;
 }
