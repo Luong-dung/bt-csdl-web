@@ -2,6 +2,10 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
+type Game = { game_id: number; name: string; slug: string };
+type Team = { team_id: number; name: string; tag: string; game_id: number };
+type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
+type TeamDetail = Team & { members: TeamMember[] };
 type AuthMode = "login" | "register";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -33,7 +37,27 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
+  const [games, setGames] = useState<Game[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const sessionVersion = useRef(0);
+
+  const loadTeams = async () => {
+    try {
+      const [loadedGames, loadedTeams] = await Promise.all([
+        request<Game[]>("/catalog/games"),
+        request<Team[]>("/teams"),
+      ]);
+      setGames(loadedGames);
+      setTeams(loadedTeams);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
+  useEffect(() => {
+    loadTeams();
+  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -107,12 +131,49 @@ export default function App() {
     setNotice("Bạn đã đăng xuất.");
   };
 
+  const createTeam = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+    setError("");
+    setNotice("");
+    setLoading(true);
+    const formElement = event.currentTarget;
+    const form = new FormData(event.currentTarget);
+    try {
+      await request<Team>("/teams", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.get("name"),
+          tag: form.get("tag"),
+          game_id: Number(form.get("game_id")),
+        }),
+      }, token);
+      formElement.reset();
+      await loadTeams();
+      setNotice("Tạo đội thành công. Bạn đã trở thành MANAGER của đội.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const viewTeam = async (teamId: number) => {
+    setError("");
+    setNotice("");
+    try {
+      setSelectedTeam(await request<TeamDetail>(`/teams/${teamId}`));
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
   return <main className="shell">
     <header className="hero">
       <div>
-        <span className="eyebrow">W42-05 · IDENTITY</span>
-        <h1>Đăng nhập vào nền tảng esports</h1>
-        <p>Đăng ký tài khoản, xác thực bằng API thật và duy trì phiên làm việc bằng JWT.</p>
+        <span className="eyebrow">W42-06 · TEAMS</span>
+        <h1>Danh sách và tạo đội</h1>
+        <p>Khám phá các đội tuyển và tạo đội mới bằng tài khoản đã xác thực.</p>
       </div>
       {user && <div className="account"><span>Xin chào, <strong>{user.username}</strong></span><button className="button secondary" onClick={logout}>Đăng xuất</button></div>}
     </header>
@@ -146,16 +207,34 @@ export default function App() {
         </form>}
       </section>
       <aside className="panel checklist">
-        <span className="eyebrow">PHẠM VI W42-05</span>
-        <h2>Luồng xác thực</h2>
+        <span className="eyebrow">PHẠM VI W42-06</span>
+        <h2>Luồng quản lý đội</h2>
         <ul>
-          <li>Đăng ký tài khoản mới qua <code>POST /auth/register</code></li>
-          <li>Đăng nhập qua <code>POST /auth/login</code></li>
-          <li>Lưu access token vào localStorage</li>
-          <li>Xác nhận phiên qua <code>GET /auth/me</code></li>
-          <li>Đăng xuất và xóa token khỏi trình duyệt</li>
+          <li>Tải game qua <code>GET /catalog/games</code></li>
+          <li>Tải đội qua <code>GET /teams</code></li>
+          <li>Tạo đội qua <code>POST /teams</code></li>
+          <li>Người tạo tự động là MANAGER</li>
         </ul>
       </aside>
+    </section>
+    <section className="panel teams-panel">
+      <div className="panel-title"><h2>Đội tuyển</h2><span>{teams.length} đội</span></div>
+      {user ? <form className="team-form" onSubmit={createTeam}>
+        <label>Tên đội<input name="name" placeholder="Phoenix Gaming" minLength={2} maxLength={100} required /></label>
+        <label>Tag<input name="tag" placeholder="PHX" minLength={2} maxLength={10} pattern="[A-Za-z0-9]+" required /></label>
+        <label>Game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
+        <button className="button" disabled={loading}>Tạo đội</button>
+      </form> : <p className="muted">Đăng nhập để tạo đội mới. Danh sách đội vẫn được xem công khai.</p>}
+      {teams.length === 0 ? <p className="muted">Chưa có đội tuyển.</p> : <div className="team-list">{teams.map((team) => <article key={team.team_id}>
+        <div><h3>{team.name}</h3><p>#{team.tag} · {games.find((game) => game.game_id === team.game_id)?.name ?? "Game"}</p></div>
+        <button className="link-button" onClick={() => viewTeam(team.team_id)}>Xem đội</button>
+      </article>)}</div>}
+      {selectedTeam && <div className="team-detail">
+        <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => setSelectedTeam(null)}>Đóng</button></div>
+        <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
+        <h4>Thành viên ({selectedTeam.members.length})</h4>
+        {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <ul>{selectedTeam.members.map((member) => <li key={member.membership_id}>{member.username} · {member.role} · {member.status}</li>)}</ul>}
+      </div>}
     </section>
   </main>;
 }
