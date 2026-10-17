@@ -4,7 +4,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 1. Quy tắc ghi nhật ký
 
-- Mỗi yêu cầu có một mã duy nhất, ví dụ `AI-2026-W42-001`.
+- Yêu cầu mới dùng mã `AI-YYYY-Www-NGUOI-NNN`, ví dụ `AI-2026-W42-DUONG-001`. `NGUOI` là mã thành viên ở các mục bên dưới (`DUNG`, `DOANH`, `DUONG`, `DUC`); `NNN` tăng riêng cho từng người trong từng tuần. Kiểm tra mã chưa tồn tại trước khi thêm. Giữ nguyên mã lịch sử để không làm hỏng tham chiếu cũ.
 - Người gửi yêu cầu phải tự ghi hoặc cập nhật bản ghi sau khi hoàn thành.
 - Ghi tóm tắt đúng ý định ban đầu; không cần sao chép dữ liệu bí mật, token hoặc mật khẩu vào tài liệu.
 - Nếu AI đề xuất code, người phụ trách phải đọc, chỉnh sửa nếu cần và chạy kiểm tra phù hợp.
@@ -48,7 +48,8 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  | `REQUESTED` |
+| `AI-2026-W42-DUONG-001` | `2026-10-16` | [W42-05 / PR #17](https://github.com/Luong-dung/bt-csdl-web/pull/17) | Tạo giao diện đăng ký/đăng nhập và lưu JWT bằng API thật | Thêm form đăng ký, đăng nhập, lưu access token trong `localStorage`, gọi `/auth/me`, hiển thị tài khoản và đăng xuất; chỉ xóa token khi `/auth/me` trả `401/403`, giữ token khi lỗi mạng/server và hủy phản hồi cũ sau đăng xuất | `frontend/src/App.tsx`, `frontend/src/styles.css` | TypeScript không có lỗi; `npm run build` thành công | `VERIFIED` |
+| `AI-2026-W42-DUONG-002` | `2026-10-17` | [W42-06 / PR #18](https://github.com/Luong-dung/bt-csdl-web/pull/18) | Tạo giao diện danh sách và tạo đội, sau đó xử lý góp ý review | Tải game và đội qua API; tạo đội có xác thực JWT; lưu form trước `await` để reset đúng; nút “Xem đội” gọi `/teams/{id}` và hiển thị chi tiết thành viên | `frontend/src/App.tsx`, `frontend/src/styles.css` | `npm run build` thành công; `backend/.venv/Scripts/python.exe -m pytest -q`: 71 passed, 1 warning; đã push commit `fb1924b` và cập nhật mô tả PR kèm bằng chứng | `VERIFIED` |
 
 ### Đồng Đức Dương — `DUC`
 
@@ -61,7 +62,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 Sử dụng mẫu này khi yêu cầu có ảnh hưởng lớn đến kiến trúc, database, API hoặc nhiều file:
 
 ```markdown
-### AI-YYYY-Www-NNN — Tên ngắn của yêu cầu
+### AI-YYYY-Www-NGUOI-NNN — Tên ngắn của yêu cầu
 
 - **Người thực hiện:** Tên thành viên (`MA`)
 - **Ngày gửi:** `YYYY-MM-DD`
