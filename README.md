@@ -104,6 +104,16 @@ Kiểm tra từ thư mục `backend`:
 python -m pytest tests/test_team_api.py -q
 ```
 
+## Smoke tests — W42-07
+
+Auth, catalog và teams API được kiểm tra bằng pytest/FastAPI TestClient trên SQLite in-memory; không cần PostgreSQL hoặc thông tin trong `.env`.
+
+Chạy toàn bộ backend test suite từ thư mục `backend`:
+
+```powershell
+python -m pytest -q
+```
+
 ## Chạy frontend
 
 ```powershell

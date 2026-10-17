@@ -56,6 +56,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
 | `AI-2026-W42-DUC-002` | `2026-10-17` | W42-08 / PR #22 | Chuẩn bị CI cho backend tests và frontend build trên nhánh riêng, tránh tạo lại workflow đã có | Xác nhận workflow CI đã được merge vào `main` qua PR #22; chỉ cập nhật bằng chứng và trạng thái nghiệm thu trong tài liệu, không tạo workflow trùng lặp | `docs/weeks/2026-W42.md`, `docs/AI_WORK_LOG.md` | GitHub Actions run #1 trên PR #22 và run #2 sau khi push vào `main` đều thành công; PR #22 đã merge. Chờ DUONG xác nhận review theo phân công | `APPLIED` |
+| `AI-2026-W42-DUC-001` | `2026-10-17` | W42-07 / PR #23 | Bổ sung smoke tests cho auth, catalog và teams mà không ảnh hưởng code của thành viên khác | Thêm TestClient smoke tests cho auth và luồng đội; tích hợp cùng test nghiệp vụ teams, quyền, catalog và seed từ `main`; cập nhật README và bằng chứng tuần | `backend/tests/test_auth_api.py`, `backend/tests/test_team_smoke_api.py`, `README.md`, `docs/weeks/2026-W42.md` | Sau khi fast-forward tới `main` (`4c6fcb8`), chạy từ `backend`: `python -m pytest -q` — 75 passed, 1 skipped (PostgreSQL-only), 1 deprecation warning; SQLite in-memory, không cần PostgreSQL hoặc `.env` | `VERIFIED` |
 
 ## 4. Mẫu bản ghi chi tiết
 
