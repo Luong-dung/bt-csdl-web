@@ -55,7 +55,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  | `REQUESTED` |
+| `AI-2026-W42-DUC-002` | `2026-10-17` | W42-08 / PR #22 | Chuẩn bị CI cho backend tests và frontend build trên nhánh riêng, tránh tạo lại workflow đã có | Xác nhận workflow CI đã được merge vào `main` qua PR #22; chỉ cập nhật bằng chứng và trạng thái nghiệm thu trong tài liệu, không tạo workflow trùng lặp | `docs/weeks/2026-W42.md`, `docs/AI_WORK_LOG.md` | GitHub Actions run #1 trên PR #22 và run #2 sau khi push vào `main` đều thành công; PR #22 đã merge. Chờ DUONG xác nhận review theo phân công | `APPLIED` |
 
 ## 4. Mẫu bản ghi chi tiết
 
