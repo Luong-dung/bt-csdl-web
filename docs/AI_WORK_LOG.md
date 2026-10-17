@@ -55,7 +55,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
 |---|---|---|---|---|---|---|---|
-|  |  |  |  |  |  |  | `REQUESTED` |
+| `AI-2026-W42-DUC-001` | `2026-10-17` | W42-07 | Bổ sung smoke tests cho auth, catalog và teams mà không ảnh hưởng code của thành viên khác | Thêm TestClient smoke tests cho auth và luồng đội; tích hợp cùng test nghiệp vụ teams, quyền, catalog và seed từ `main`; cập nhật README và bằng chứng tuần | `backend/tests/test_auth_api.py`, `backend/tests/test_team_smoke_api.py`, `README.md`, `docs/weeks/2026-W42.md` | Sau khi fast-forward tới `main` (`4c6fcb8`), chạy từ `backend`: `python -m pytest -q` — 75 passed, 1 skipped (PostgreSQL-only), 1 deprecation warning; SQLite in-memory, không cần PostgreSQL hoặc `.env` | `VERIFIED` |
 
 ## 4. Mẫu bản ghi chi tiết
 
