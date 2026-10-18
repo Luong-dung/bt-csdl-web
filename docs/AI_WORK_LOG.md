@@ -4,6 +4,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 1. Quy tắc ghi nhật ký
 
+- Chỉ ghi nội dung AI hỗ trợ viết/sửa code, migration, test, cấu hình build/CI và review kỹ thuật liên quan. Không ghi trao đổi riêng, chấm/điều chỉnh điểm, phân công hay lập kế hoạch nhóm vào nhật ký này.
 - Yêu cầu mới dùng mã `AI-YYYY-Www-NGUOI-NNN`, ví dụ `AI-2026-W42-DUONG-001`. `NGUOI` là mã thành viên ở các mục bên dưới (`DUNG`, `DOANH`, `DUONG`, `DUC`); `NNN` tăng riêng cho từng người trong từng tuần. Kiểm tra mã chưa tồn tại trước khi thêm. Giữ nguyên mã lịch sử để không làm hỏng tham chiếu cũ.
 - Người gửi yêu cầu phải tự ghi hoặc cập nhật bản ghi sau khi hoàn thành.
 - Ghi tóm tắt đúng ý định ban đầu; không cần sao chép dữ liệu bí mật, token hoặc mật khẩu vào tài liệu.
@@ -30,10 +31,6 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 | `AI-2026-W42-001` | `2026-10-11` | Reset platform | Tái cấu trúc project theo đặc tả nền tảng quản lý giải đấu Esports | Đã áp dụng và đưa lên PR | Backend, database, frontend, docs | Backend smoke test, Alembic check, frontend build | `VERIFIED` |
 | `AI-2026-W42-002` | `2026-10-11` | W42-01 / PR #10 | Bổ sung seed tối thiểu cho role, publisher, game và khu vực | Script seed trong một transaction, chạy lại không trùng và giữ dữ liệu hiện có | `backend/seed.py`, `backend/tests/test_seed.py`, README, tài liệu W42 | 3 pytest đạt; cả hai migration + seed trên schema PostgreSQL tạm rỗng đạt; seed lần 2 thêm 0 bản ghi; rollback schema tạm | `VERIFIED` |
 | `AI-2026-W42-004` | `2026-10-13` | W42-02 / chưa mở PR | Hoàn thiện kiểm tra role/scope, không commit; kiểm tra thêm PostgreSQL | Helper và kiểm tra quyền ghi catalog, tạo giải, quản lý đúng đội; xử lý subject JWT sai; fixture PostgreSQL tùy chọn `--postgres` | Middleware auth, routes, tests, README, tài liệu W42 | AI chạy SQLite: 58 test đạt; PostgreSQL: 55 test quyền/catalog đạt, 42 test quyền dùng JWT thật qua TestClient; hai migration + seed mỗi schema tạm, rollback và xác nhận schema biến mất. Chờ DOANH review | `APPLIED` |
-
-| `AI-2026-W42-007` | `2026-10-17` | PR #19 | Kiểm tra và xử lý điểm chưa nhất quán của PR cập nhật trạng thái W42 | Đối chiếu metadata và review GitHub: W42-02/05 giữ `REVIEW`, ghi việc cần hoàn tất và người phụ trách; W42-03 ghi nhận DUNG đã approve PR #12; W42-04/06 giữ `DONE` | `docs/weeks/2026-W42.md`, `docs/AI_WORK_LOG.md` | AI đối chiếu diff và review PR #12/#14/#17; chỉ sửa tài liệu, không chạy lại test/build và không xác nhận thay người review | `APPLIED` |
-
-| `AI-2026-W42-008` | `2026-10-17` | W42-02; follow-up PR #14 | Sửa fixture PostgreSQL còn ghi cứng hai migration | Chạy Alembic `upgrade head` bằng connection của schema tạm; version table nằm trong schema tạm; thêm test migration thứ ba | `backend/tests/conftest.py`, `backend/alembic/env.py`, `backend/tests/test_postgres_migrations.py` | AI chạy 71 test SQLite và 59 test PostgreSQL đạt; test mới xác nhận migration thứ ba được chạy, version đạt head; fixture xác nhận schema biến mất sau rollback. Chờ DOANH review | `APPLIED` |
 
 ### Nguyễn Quốc Doanh — `DOANH`
 

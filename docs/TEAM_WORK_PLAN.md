@@ -35,6 +35,28 @@ Mỗi tuần phải có đủ bốn phần:
 Kế hoạch chi tiết của tuần hiện tại được tách riêng để dễ cập nhật và giữ lịch sử:
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
+- [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): đã lập kế hoạch, bắt đầu từ 19/10; 8 task `TODO`.
+
+W42 là tuần đang kết thúc ngày 18/10. W43 là tuần kế tiếp đã chuẩn bị, chưa bắt đầu. “Tuần 2” trong file W43 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
+
+### Tiến độ đối chiếu W42 — 18/10/2026
+
+Đánh giá cuối tuần 1, điểm đề xuất từng thành viên và nhận xét quy trình được ghi tại [mục 5 của W42](./weeks/2026-W42.md#5-đánh-giá-cuối-tuần). Chưa ghi nhận buổi họp chốt điểm.
+
+Trạng thái đối chiếu GitHub ngày 18/10/2026 và [W42](./weeks/2026-W42.md): **8/8 DONE, 0 REVIEW**; cả 8 việc đã có code merge. W42-05 đã được Luong-dung approve trên PR #17 sau review. Các bảng trong lộ trình 10 tuần bên dưới mô tả phạm vi dự kiến; những dòng chưa đồng bộ phải đối chiếu W42 trước khi dùng để báo cáo tiến độ.
+
+| Phạm vi | Tiến độ W42 | Đầu ra thực tế |
+|---|---|---|
+| Seed | W42-01 `DONE` | Dữ liệu nền role, publisher, game và khu vực |
+| Phân quyền | W42-02 `DONE` | Helper role/scope và test; PR #21 sửa fixture đã approve, merge, CI đạt |
+| Catalog | W42-03 `DONE` | CRUD/list API; chưa có màn hình quản trị catalog |
+| Đội và membership | W42-04 `DONE` | API tạo đội, thêm/đổi/kết thúc thành viên; chưa có UI quản lý thành viên |
+| Auth UI | W42-05 `DONE` | Đăng ký, đăng nhập, đăng xuất và lưu JWT; PR #17 đã approve |
+| Team UI | W42-06 `DONE` | Danh sách, chi tiết và tạo đội |
+| Smoke tests | W42-07 `DONE` | PR #23 được Luong-dung approve và merge; CI đạt |
+| CI | W42-08 `DONE` | PR #24 được nomkjmchi approve và merge; CI đạt |
+
+Hoàn thành API không đồng nghĩa đã có giao diện thao tác. Luồng tạo/đăng ký giải, roster, lịch đấu, kết quả và standings vẫn thuộc phạm vi phát triển tiếp.
 
 ## 2. Ma trận phụ trách và review
 
@@ -78,9 +100,9 @@ Một đầu việc chỉ được nghiệm thu khi:
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
 | W02-01 | API đăng ký, đăng nhập, `/me` | `DUNG` | `DUC` | Auth API + test | `DONE` |
-| W02-02 | Màn hình đăng nhập/đăng ký và lưu session | `DUONG` | `DUNG` | Auth UI | `TODO` |
+| W02-02 | Màn hình đăng nhập/đăng ký và lưu session | `DUONG` | `DUNG` | Auth UI (W42-05) | `DONE` |
 | W02-03 | Thiết kế role, permission, role assignment | `DUNG` | `DOANH` | Migration + model | `DONE` |
-| W02-04 | Test token hết hạn, token sai và dữ liệu trùng | `DUC` | `DUNG` | Test report | `TODO` |
+| W02-04 | Test token hết hạn, token sai và dữ liệu trùng | `DUC` | `DUNG` | Test report (W42-02/W42-07) | `DONE` |
 
 **Nghiệm thu tuần:** đăng ký → đăng nhập → gọi endpoint bảo vệ thành công; lỗi xác thực trả đúng HTTP status.
 
@@ -90,10 +112,10 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W03-01 | CRUD publisher và game | `DOANH` | `DUNG` | Catalog API | `TODO` |
-| W03-02 | Country và competition area phân cấp | `DOANH` | `DUNG` | Model, migration, API | `TODO` |
-| W03-03 | Seed dữ liệu game/khu vực tối thiểu | `DUNG` | `DUC` | Seed script | `TODO` |
-| W03-04 | Kiểm thử ràng buộc unique và parent area | `DUC` | `DOANH` | API tests | `TODO` |
+| W03-01 | CRUD publisher và game | `DOANH` | `DUNG` | Catalog API (W42-03) | `DONE` |
+| W03-02 | Country và competition area phân cấp | `DOANH` | `DUNG` | API khu vực đã DONE trong W42-03; phần country chưa nghiệm thu riêng | `IN PROGRESS` |
+| W03-03 | Seed dữ liệu game/khu vực tối thiểu | `DUNG` | `DUC` | Seed script (W42-01) | `DONE` |
+| W03-04 | Kiểm thử ràng buộc unique và parent area | `DUC` | `DOANH` | API tests (W42-03) | `DONE` |
 
 **Nghiệm thu tuần:** tạo được game, gắn publisher và truy vấn được cây khu vực.
 
@@ -104,9 +126,9 @@ Một đầu việc chỉ được nghiệm thu khi:
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
 | W04-01 | CRUD organization/team | `DOANH` | `DUNG` | Teams API | `IN PROGRESS` |
-| W04-02 | Thêm, đổi vị trí, kết thúc membership | `DOANH` | `DUC` | Membership API | `TODO` |
+| W04-02 | Thêm, đổi vị trí, kết thúc membership | `DOANH` | `DUC` | Membership API (W42-04) | `DONE` |
 | W04-03 | Partial unique index membership ACTIVE | `DUNG` | `DOANH` | Migration + test | `DONE` |
-| W04-04 | Màn hình danh sách và chi tiết đội | `DUONG` | `DOANH` | Team UI | `TODO` |
+| W04-04 | Màn hình danh sách và chi tiết đội | `DUONG` | `DOANH` | Team UI (W42-06) | `DONE` |
 
 **Nghiệm thu tuần:** một tuyển thủ không thể active ở hai đội; membership cũ vẫn còn sau khi rời đội.
 
@@ -155,7 +177,7 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W08-01 | Middleware/checker cho role assignment | `DUNG` | `DOANH` | Scope authorization | `TODO` |
+| W08-01 | Middleware/checker cho role assignment | `DUNG` | `DOANH` | Scope authorization (W42-02) | `DONE` |
 | W08-02 | Giới hạn trọng tài theo tournament scope | `DUNG` | `DUC` | Permission tests | `TODO` |
 | W08-03 | Ghi audit cho đổi quyền và nhập điểm | `DUNG` | `DUC` | Audit service | `TODO` |
 | W08-04 | Hiển thị lỗi quyền trong frontend | `DUONG` | `DUNG` | Permission UX | `TODO` |
@@ -168,8 +190,8 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W09-01 | Viết integration test cho flow chính | `DUC` | `DUNG` | pytest suite | `TODO` |
-| W09-02 | GitHub Actions lint/typecheck/test/build | `DUC` | `DUONG` | CI workflow | `TODO` |
+| W09-01 | Viết integration test cho flow chính | `DUC` | `DUNG` | Auth/catalog/teams đã có test W42-07; còn các luồng giải đấu | `IN PROGRESS` |
+| W09-02 | GitHub Actions lint/typecheck/test/build | `DUC` | `DUONG` | Test/typecheck/build đã đạt W42-08; chưa có bước lint riêng | `IN PROGRESS` |
 | W09-03 | Seed dữ liệu demo đầy đủ | `DUNG` | `DOANH` | Seed + reset guide | `TODO` |
 | W09-04 | Hoàn thiện dashboard quản trị | `DUONG` | `DUC` | Admin UI | `TODO` |
 
