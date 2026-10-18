@@ -1,5 +1,7 @@
 # Esports Tournament Management Platform
 
+Hướng dẫn dữ liệu và tài khoản demo theo vai trò: [DEMO_DATA.md](docs/DEMO_DATA.md) (`seed_demo.py`, W43-01). Script demo chạy riêng với database được chỉ định; seed dữ liệu nền không thay đổi.
+
 Nền tảng quản lý giải đấu esports đa game, được xây dựng theo hướng modular monolith để nhóm có thể phát triển độc lập từng module và review chéo qua Pull Request.
 
 ## Kiến trúc
