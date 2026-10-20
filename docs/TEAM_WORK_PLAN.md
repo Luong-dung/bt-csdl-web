@@ -35,7 +35,7 @@ Mỗi tuần phải có đủ bốn phần:
 Kế hoạch chi tiết của tuần hiện tại được tách riêng để dễ cập nhật và giữ lịch sử:
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
-- [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): W43-01 làm sớm, xong ngày 18/10: `1 DONE`, `7 TODO`.
+- [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): W43-01 xong ngày 18/10, W43-02 đang review: `1 DONE`, `1 IN PROGRESS`, `6 TODO`.
 
 W42 là tuần đang kết thúc ngày 18/10. W43 là tuần kế tiếp đã chuẩn bị, W43-01 được triển khai sớm theo yêu cầu nhóm trưởng. “Tuần 2” trong file W43 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
