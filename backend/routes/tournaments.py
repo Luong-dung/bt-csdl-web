@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from core.audit import record_audit
 from middleware.auth import can_manage_tournament, get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
 from modules.identity.models import User
@@ -109,9 +110,14 @@ def get_managed_tournament(db: Session, tournament_id: int, user: User) -> Tourn
     return tournament
 
 
-def commit_tournament(db: Session, tournament: Tournament) -> Tournament:
+def commit_tournament(db: Session, tournament: Tournament, user: User, action: str,
+                      before: dict, after: dict) -> Tournament:
     # Fallback for a game/area deleted between the check and the write.
     try:
+        db.flush()
+        record_audit(db, user.user_id, action, "tournament", {
+            "tournament_id": tournament.tournament_id, "before": before, "after": after,
+        })
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -143,7 +149,8 @@ def create_tournament(
     ensure_references(db, data.game_id, data.area_id)
     tournament = Tournament(**data.model_dump(), created_by=user.user_id)
     db.add(tournament)
-    return commit_tournament(db, tournament)
+    return commit_tournament(db, tournament, user, "TOURNAMENT_CREATED", {},
+                             {**data.model_dump(mode="json"), "status": "UPCOMING", "created_by": user.user_id})
 
 
 @router.get("/{tournament_id}", response_model=TournamentRead)
@@ -173,9 +180,13 @@ def update_tournament(
     if end_date is not None and end_date < changes.get("start_date", tournament.start_date):
         raise HTTPException(status_code=422, detail="Ngày kết thúc không được trước ngày bắt đầu")
     ensure_references(db, changes.get("game_id"), changes.get("area_id"))
+    before = {}
     for field, value in changes.items():
+        previous = getattr(tournament, field)
+        before[field] = previous.isoformat() if isinstance(previous, date) else previous
         setattr(tournament, field, value)
-    return commit_tournament(db, tournament)
+    return commit_tournament(db, tournament, user, "TOURNAMENT_UPDATED", before,
+                             data.model_dump(mode="json", exclude_unset=True))
 
 
 @router.post("/{tournament_id}/status", response_model=TournamentRead)
@@ -189,5 +200,6 @@ def change_tournament_status(
     if data.status not in TRANSITIONS[tournament.status]:
         raise HTTPException(status_code=409,
                             detail=f"Không thể chuyển giải từ {tournament.status} sang {data.status}")
+    before = {"status": tournament.status}
     tournament.status = data.status
-    return commit_tournament(db, tournament)
+    return commit_tournament(db, tournament, user, "TOURNAMENT_STATUS_CHANGED", before, {"status": data.status})
