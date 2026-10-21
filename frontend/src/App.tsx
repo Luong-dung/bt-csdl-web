@@ -40,6 +40,7 @@ export default function App() {
   const [games, setGames] = useState<Game[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
+  const [memberLoading, setMemberLoading] = useState(false);
   const sessionVersion = useRef(0);
 
   const loadTeams = async () => {
@@ -168,6 +169,87 @@ export default function App() {
     }
   };
 
+  const refreshSelectedTeam = async () => {
+    if (!selectedTeam) return;
+    setSelectedTeam(await request<TeamDetail>(`/teams/${selectedTeam.team_id}`));
+  };
+
+  const addMember = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token || !selectedTeam) return;
+    setError("");
+    setNotice("");
+    setMemberLoading(true);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    try {
+      await request<TeamMember>(`/teams/${selectedTeam.team_id}/members`, {
+        method: "POST",
+        body: JSON.stringify({
+          username: form.get("username"),
+          role_in_team: form.get("role_in_team"),
+        }),
+      }, token);
+      formElement.reset();
+      await refreshSelectedTeam();
+      setNotice("Đã thêm thành viên vào đội.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
+  const updateMemberRole = async (membershipId: number, role: string) => {
+    if (!token || !selectedTeam) return;
+    setError("");
+    setNotice("");
+    setMemberLoading(true);
+    try {
+      await request<TeamMember>(`/teams/${selectedTeam.team_id}/members/${membershipId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ role_in_team: role }),
+      }, token);
+      await refreshSelectedTeam();
+      setNotice("Đã cập nhật vị trí thành viên.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
+  const endMembership = async (membership: TeamMember) => {
+    if (!token || !selectedTeam) return;
+    const action = membership.user_id === user?.id ? "rời đội" : "kết thúc membership của thành viên này";
+    if (!window.confirm(`Bạn có chắc muốn ${action}? Thao tác này không thể hoàn tác ngay.`)) return;
+    setError("");
+    setNotice("");
+    setMemberLoading(true);
+    try {
+      await request<TeamMember>(`/teams/${selectedTeam.team_id}/members/${membership.membership_id}/end`, {
+        method: "POST",
+      }, token);
+      await refreshSelectedTeam();
+      setNotice(membership.user_id === user?.id ? "Bạn đã rời đội." : "Đã kết thúc membership.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setMemberLoading(false);
+    }
+  };
+
+  const canManageSelectedTeam = Boolean(
+    user && (
+      user.role === "ADMIN"
+      || selectedTeam?.members.some(
+        (member) => member.user_id === user.id
+          && member.status === "ACTIVE"
+          && member.role === "MANAGER",
+      )
+    ),
+  );
+
   return <main className="shell">
     <header className="hero">
       <div>
@@ -232,8 +314,24 @@ export default function App() {
       {selectedTeam && <div className="team-detail">
         <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => setSelectedTeam(null)}>Đóng</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
-        <h4>Thành viên ({selectedTeam.members.length})</h4>
-        {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <ul>{selectedTeam.members.map((member) => <li key={member.membership_id}>{member.username} · {member.role} · {member.status}</li>)}</ul>}
+        {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
+          <label>Tên đăng nhập<input name="username" placeholder="username" maxLength={50} required /></label>
+          <label>Vị trí<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
+          <button className="button" disabled={memberLoading}>Thêm thành viên</button>
+        </form>}
+        <h4>Thành viên và lịch sử ({selectedTeam.members.length})</h4>
+        {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <div className="member-list">{selectedTeam.members.map((member) => <div className={`member-row ${member.status === "ENDED" ? "ended" : ""}`} key={member.membership_id}>
+          <div>
+            <strong>{member.username}</strong>
+            <p>{member.role} · {member.status === "ACTIVE" ? "Đang hoạt động" : "Đã rời đội"} · Tham gia {member.joined_date}{member.left_date ? ` · Rời đội ${member.left_date}` : ""}</p>
+          </div>
+          {user && <div className="member-actions">
+            {canManageSelectedTeam && member.status === "ACTIVE" && <select aria-label={`Vị trí của ${member.username}`} value={member.role} disabled={memberLoading} onChange={(event) => updateMemberRole(member.membership_id, event.target.value)}>
+              <option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option>
+            </select>}
+            {member.status === "ACTIVE" && (canManageSelectedTeam || member.user_id === user.id) && <button className="link-button danger-link" disabled={memberLoading} onClick={() => endMembership(member)}>{member.user_id === user.id ? "Rời đội" : "Kết thúc"}</button>}
+          </div>}
+        </div>)}</div>}
       </div>}
     </section>
   </main>;
