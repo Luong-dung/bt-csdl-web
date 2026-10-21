@@ -96,6 +96,12 @@ Backend dùng kiến trúc **modular monolith**. Các module dùng chung một �
 - Roster được snapshot theo từng giải để lịch sử không thay đổi khi tuyển thủ chuyển đội.
 - Ghi kết quả trận và cập nhật bảng xếp hạng trong cùng transaction.
 
+### Audit thao tác ghi giải đấu
+
+- Tạo, cập nhật và chuyển trạng thái giải ghi vào `audit_logs` với action tương ứng `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED`, `TOURNAMENT_STATUS_CHANGED`; resource là `tournament`, actor là `user_id` đang đăng nhập.
+- `details` chứa `tournament_id`, `before` và `after`. Cập nhật lưu các trường được gửi; chuyển trạng thái lưu trạng thái cũ/mới; tạo lưu dữ liệu đầu vào đã chuẩn hóa, trạng thái ban đầu và người tạo. Ngày được lưu dạng ISO.
+- Helper `core/audit.py` chỉ thêm log vào session. Dữ liệu giải và log commit cùng transaction; lỗi ghi một trong hai sẽ rollback, request bị từ chối không ghi log thành công. Dùng bảng hiện có, không cần migration mới.
+
 Schema triển khai nằm tại [database/schema_postgres.sql](../database/schema_postgres.sql); migration nằm tại [backend/alembic/versions/53bbc0801b4f_identity_module.py](../backend/alembic/versions/53bbc0801b4f_identity_module.py).
 
 ## 7. Chức năng chính
