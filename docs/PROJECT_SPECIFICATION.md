@@ -75,6 +75,19 @@ Backend dùng kiến trúc **modular monolith**. Các module dùng chung một �
 - `tournament_rosters`: snapshot đội hình tại thời điểm đăng ký.
 - `tournament_standings`: thứ hạng, số trận, thắng/thua, điểm và tiền thưởng.
 
+#### Vòng đời và quyền sửa giải đấu
+
+| Trạng thái | Được chuyển sang | Sửa thông tin (`PATCH`) |
+|---|---|---|
+| `UPCOMING` (mặc định) | `ONGOING`, `CANCELLED` | Mọi trường |
+| `ONGOING` | `COMPLETED`, `CANCELLED` | Chỉ `name`, `description`, `end_date` |
+| `COMPLETED` | — | Không, trả 409 |
+| `CANCELLED` | — | Không, trả 409 |
+
+- Chuyển trạng thái qua `POST /api/v1/tournaments/{tournament_id}/status`; `PATCH` không nhận `status`. Chuyển sai trạng thái hoặc sửa trường bị khóa trả 409.
+- Ngày bắt đầu không được ở quá khứ khi tạo giải hoặc khi đổi ngày bắt đầu; ngày kết thúc không trước ngày bắt đầu. Database có CHECK `ck_tournaments_status` và `ck_tournaments_dates`.
+- Quyền sửa và chuyển trạng thái: ADMIN; ORGANIZER đã tạo giải (`created_by`) và vẫn còn vai trò ORGANIZER; ORGANIZER được gán phạm vi `TOURNAMENT` của giải đó. Người khác trả 403, chưa đăng nhập trả 401. Giải cũ không có `created_by` chỉ ADMIN sửa được.
+
 ## 6. Kỹ thuật cơ sở dữ liệu
 
 - Khóa ngoại tự tham chiếu `matches.next_match_id` biểu diễn nhánh đấu loại trực tiếp.
@@ -102,7 +115,7 @@ Schema triển khai nằm tại [database/schema_postgres.sql](../database/schem
 | Identity | `/api/v1/auth/register`, `/api/v1/auth/login`, `/api/v1/auth/me` |
 | Teams | `/api/v1/teams`, `/api/v1/teams/{team_id}`, `/api/v1/teams/{team_id}/members` |
 | Catalog | `/api/v1/catalog/games`, `/api/v1/catalog/publishers`, `/api/v1/catalog/areas` |
-| Tournaments | `/api/v1/tournaments`, `/api/v1/tournaments/{tournament_id}` |
+| Tournaments | `/api/v1/tournaments`, `/api/v1/tournaments/{tournament_id}`, `/api/v1/tournaments/{tournament_id}/status` |
 | Vận hành | `/health`, `/ready`, `/docs` |
 
 ## 9. Tiến độ

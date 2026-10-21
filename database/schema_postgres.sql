@@ -90,8 +90,11 @@ CREATE TABLE tournaments (
     end_date DATE,
     status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
     description TEXT,
+    created_by INT REFERENCES users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CHECK (format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN'))
+    CHECK (format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')),
+    CONSTRAINT ck_tournaments_status CHECK (status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')),
+    CONSTRAINT ck_tournaments_dates CHECK (end_date IS NULL OR end_date >= start_date)
 );
 CREATE TABLE stages (
     stage_id SERIAL PRIMARY KEY,

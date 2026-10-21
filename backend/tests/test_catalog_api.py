@@ -48,7 +48,7 @@ def make_client(session_factory, logged_in=True):
 
     app.dependency_overrides[get_db] = override_db
     if logged_in:
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(role=SimpleNamespace(role_name="ADMIN"), assignments=[])
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id=None, role=SimpleNamespace(role_name="ADMIN"), assignments=[])
     return TestClient(app)
 
 
