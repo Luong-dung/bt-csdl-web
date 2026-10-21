@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import select
@@ -7,6 +7,7 @@ from core.security import create_access_token
 from middleware.auth import has_role
 from modules.identity.models import Role, RoleAssignment, User
 from modules.teams.models import Organization, Team, TeamMembership
+from modules.tournaments.models import Tournament
 from test_catalog_api import session_factory, make_client
 
 
@@ -82,7 +83,7 @@ def test_global_and_scoped_assignment(access, session_factory):
 
 def test_create_tournament_roles(access):
     client, headers, *_ = access
-    payload = {"name": "Tournament", "game_id": 1, "start_date": "2026-10-13"}
+    payload = {"name": "Tournament", "game_id": 1, "start_date": str(date.today() + timedelta(days=7))}
     assert client.post("/api/v1/tournaments", json=payload).status_code == 401
     for name in ["viewer", "manager", "referee"]:
         assert client.post("/api/v1/tournaments", json=payload, headers=headers(name)).status_code == 403
@@ -170,11 +171,88 @@ def test_scoped_organizer_cannot_create_new_tournament(access, session_factory):
     client, headers, users, _, roles = access
     with session_factory.begin() as db:
         db.add(RoleAssignment(user_id=users["viewer"], role_id=roles["ORGANIZER"], scope_type="TOURNAMENT", scope_id=1))
-    payload = {"name": "New tournament", "game_id": 1, "start_date": "2026-10-13"}
+    payload = {"name": "New tournament", "game_id": 1, "start_date": str(date.today() + timedelta(days=7))}
     assert client.post("/api/v1/tournaments", json=payload, headers=headers("viewer")).status_code == 403
     with session_factory.begin() as db:
         db.add(RoleAssignment(user_id=users["viewer"], role_id=roles["ORGANIZER"], scope_type="GLOBAL"))
     assert client.post("/api/v1/tournaments", json=payload, headers=headers("viewer")).status_code == 201
+
+
+def organizer_tournament(client, headers):
+    payload = {"name": "Organizer cup", "game_id": 1, "start_date": str(date.today() + timedelta(days=7))}
+    created = client.post("/api/v1/tournaments", json=payload, headers=headers("organizer"))
+    assert created.status_code == 201
+    return created.json()["tournament_id"]
+
+
+def tournament_writes(client, tournament_id, auth):
+    path = f"/api/v1/tournaments/{tournament_id}"
+    return (client.patch(path, json={"description": "Updated"}, headers=auth).status_code,
+            client.post(path + "/status", json={"status": "ONGOING"}, headers=auth).status_code)
+
+
+def test_tournament_records_creator(access):
+    client, headers, users, *_ = access
+    tournament_id = organizer_tournament(client, headers)
+    assert client.get(f"/api/v1/tournaments/{tournament_id}").json()["created_by"] == users["organizer"]
+
+
+def test_creator_organizer_can_manage_tournament(access):
+    client, headers, *_ = access
+    assert tournament_writes(client, organizer_tournament(client, headers), headers("organizer")) == (200, 200)
+
+
+def test_admin_can_manage_any_tournament(access):
+    client, headers, *_ = access
+    assert tournament_writes(client, organizer_tournament(client, headers), headers("admin")) == (200, 200)
+
+
+@pytest.mark.parametrize("name", ["viewer", "manager", "referee", "other_organizer"])
+def test_other_users_cannot_manage_tournament(access, session_factory, name):
+    client, headers, users, _, roles = access
+    if name == "other_organizer":
+        with session_factory.begin() as db:
+            user = User(username=name, email=f"{name}@example.com", password_hash="unused", role_id=roles["ORGANIZER"])
+            db.add(user)
+            db.flush()
+            users[name] = user.user_id
+    tournament_id = organizer_tournament(client, headers)
+    assert tournament_writes(client, tournament_id, {}) == (401, 401)
+    assert tournament_writes(client, tournament_id, headers(name)) == (403, 403)
+    assert client.get(f"/api/v1/tournaments/{tournament_id}").json()["status"] == "UPCOMING"
+
+
+def test_scoped_organizer_manages_only_assigned_tournament(access, session_factory):
+    client, headers, users, _, roles = access
+    assigned, other = organizer_tournament(client, headers), organizer_tournament(client, headers)
+    with session_factory.begin() as db:
+        db.add(RoleAssignment(user_id=users["viewer"], role_id=roles["ORGANIZER"], scope_type="TOURNAMENT",
+                              scope_id=assigned))
+    assert tournament_writes(client, assigned, headers("viewer")) == (200, 200)
+    assert tournament_writes(client, other, headers("viewer")) == (403, 403)
+
+
+def test_creator_without_organizer_role_loses_access(access, session_factory):
+    client, headers, users, _, roles = access
+    tournament_id = organizer_tournament(client, headers)
+    with session_factory.begin() as db:
+        db.get(User, users["organizer"]).role_id = roles["VIEWER"]
+    assert tournament_writes(client, tournament_id, headers("organizer")) == (403, 403)
+
+
+def test_tournament_without_creator_is_admin_only(access, session_factory):
+    client, headers, users, _, roles = access
+    tournament_id = organizer_tournament(client, headers)
+    with session_factory.begin() as db:
+        db.get(Tournament, tournament_id).created_by = None
+        db.add(RoleAssignment(user_id=users["viewer"], role_id=roles["ORGANIZER"], scope_type="TOURNAMENT",
+                              scope_id=tournament_id))
+    path = f"/api/v1/tournaments/{tournament_id}"
+    before = client.get(path).json()
+    for name in ["organizer", "viewer"]:
+        assert tournament_writes(client, tournament_id, headers(name)) == (403, 403)
+    assert client.get(path).json() == before
+    assert tournament_writes(client, tournament_id, headers("admin")) == (200, 200)
 
 
 def test_revocation_applies_to_existing_token(access, session_factory):

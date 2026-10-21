@@ -17,9 +17,14 @@ class Tournament(Base):
     end_date = Column(Date, nullable=True)
     status = Column(String(20), nullable=False, default="UPCOMING")
     description = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     stages = relationship("Stage", back_populates="tournament", cascade="all, delete-orphan")
-    __table_args__ = (CheckConstraint("format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')"),)
+    __table_args__ = (
+        CheckConstraint("format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')"),
+        CheckConstraint("status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')", name="ck_tournaments_status"),
+        CheckConstraint("end_date IS NULL OR end_date >= start_date", name="ck_tournaments_dates"),
+    )
 
 
 class Stage(Base):

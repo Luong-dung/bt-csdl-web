@@ -18,7 +18,7 @@ def test_postgres_fixture_runs_new_head(request, monkeypatch, tmp_path):
     (versions / "fixture_probe.py").write_text(
         'from alembic import op\n'
         'revision = "fixture_probe"\n'
-        'down_revision = "20261011_2000"\n'
+        'down_revision = "20261021_1200"\n'
         'branch_labels = None\n'
         'depends_on = None\n'
         'def upgrade():\n'
