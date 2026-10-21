@@ -54,7 +54,7 @@ jobs:
       - run: python seed.py
       - run: python seed.py
       - run: python -m pytest -q
-      - run: python -m pytest tests/test_postgres_migrations.py tests/test_permissions.py tests/test_catalog_api.py --postgres -q
+      - run: python -m pytest tests/test_postgres_migrations.py tests/test_permissions.py tests/test_catalog_api.py tests/test_tournament_api.py --postgres -q
 
   frontend:
     name: Frontend build
