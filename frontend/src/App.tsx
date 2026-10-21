@@ -2,7 +2,9 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
-type Game = { game_id: number; name: string; slug: string };
+type Game = { game_id: number; name: string; slug: string; publisher_id: number };
+type Publisher = { publisher_id: number; name: string };
+type Area = { area_id: number; name: string; code: string; parent_id: number | null };
 type Team = { team_id: number; name: string; tag: string; game_id: number };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
 type TeamDetail = Team & { members: TeamMember[] };
@@ -17,15 +19,24 @@ class RequestError extends Error {
   }
 }
 
+type ValidationError = { msg?: string };
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`${API}${path}`, { ...options, headers });
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new RequestError(body?.detail ?? "Yêu cầu không thành công", response.status);
+    const body = await response.json().catch(() => null) as { detail?: string | ValidationError[] } | null;
+    const detail = body?.detail;
+    const message = typeof detail === "string"
+      ? detail
+      : Array.isArray(detail)
+        ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+        : "Yêu cầu không thành công";
+    throw new RequestError(message, response.status);
   }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
@@ -38,9 +49,13 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
   const [games, setGames] = useState<Game[]>([]);
+  const [publishers, setPublishers] = useState<Publisher[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const [memberLoading, setMemberLoading] = useState(false);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogReloadError, setCatalogReloadError] = useState("");
   const sessionVersion = useRef(0);
 
   const loadTeams = async () => {
@@ -56,8 +71,23 @@ export default function App() {
     }
   };
 
+  const loadCatalog = async () => {
+    const [loadedPublishers, loadedGames, loadedAreas] = await Promise.all([
+      request<Publisher[]>("/catalog/publishers"),
+      request<Game[]>("/catalog/games"),
+      request<Area[]>("/catalog/areas"),
+    ]);
+    setPublishers(loadedPublishers);
+    setGames(loadedGames);
+    setAreas(loadedAreas);
+  };
+
   useEffect(() => {
     loadTeams();
+    loadCatalog().catch((reason) => {
+      setCatalogReloadError((reason as Error).message);
+      setError(`Không thể tải catalog: ${(reason as Error).message}`);
+    });
   }, []);
 
   useEffect(() => {
@@ -250,6 +280,118 @@ export default function App() {
     ),
   );
 
+  const catalogRequest = async (path: string, method: "POST" | "PATCH" | "DELETE", body?: object): Promise<boolean> => {
+    if (!token || user?.role !== "ADMIN") return false;
+    setError("");
+    setNotice("");
+    setCatalogLoading(true);
+    try {
+      await request(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) }, token);
+    } catch (reason) {
+      setError((reason as Error).message);
+      setCatalogLoading(false);
+      return false;
+    }
+    try {
+      await loadCatalog();
+      setCatalogReloadError("");
+      setNotice("Đã cập nhật catalog.");
+      return true;
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setCatalogReloadError(message);
+      setError(`Đã ghi thành công nhưng không thể tải lại danh sách: ${message}. Không gửi lại thao tác; hãy thử tải lại.`);
+      return false;
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const retryCatalogLoad = async () => {
+    setError("");
+    setNotice("");
+    setCatalogLoading(true);
+    try {
+      await loadCatalog();
+      setCatalogReloadError("");
+      setNotice("Đã tải lại catalog.");
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setCatalogReloadError(message);
+      setError(`Không thể tải lại catalog: ${message}`);
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const submitPublisher = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    if (await catalogRequest("/catalog/publishers", "POST", { name: form.get("name") })) formElement.reset();
+  };
+
+  const submitGame = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    if (await catalogRequest("/catalog/games", "POST", {
+      name: form.get("name"),
+      slug: form.get("slug"),
+      publisher_id: Number(form.get("publisher_id")),
+    })) formElement.reset();
+  };
+
+  const submitArea = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
+    const parent = form.get("parent_id");
+    if (await catalogRequest("/catalog/areas", "POST", {
+      name: form.get("name"),
+      code: form.get("code"),
+      parent_id: parent ? Number(parent) : null,
+    })) formElement.reset();
+  };
+
+  const editCatalogItem = async (kind: "publishers" | "games" | "areas", item: Publisher | Game | Area) => {
+    const name = window.prompt("Tên mới:", "name" in item ? item.name : "");
+    if (!name?.trim()) return;
+    if (kind === "publishers") {
+      await catalogRequest(`/catalog/publishers/${(item as Publisher).publisher_id}`, "PATCH", { name: name.trim() });
+    } else if (kind === "games") {
+      const game = item as Game;
+      const slug = window.prompt("Slug mới:", game.slug);
+      if (!slug?.trim()) return;
+      const publisherId = window.prompt(
+        `Publisher ID mới (${publishers.map((publisher) => `${publisher.publisher_id}: ${publisher.name}`).join(", ")}):`,
+        String(game.publisher_id),
+      );
+      if (!publisherId?.trim() || !Number.isInteger(Number(publisherId))) return;
+      await catalogRequest(`/catalog/games/${game.game_id}`, "PATCH", {
+        name: name.trim(), slug: slug.trim(), publisher_id: Number(publisherId),
+      });
+    } else {
+      const area = item as Area;
+      const code = window.prompt("Mã khu vực mới:", area.code);
+      if (!code?.trim()) return;
+      const parentId = window.prompt(
+        `Khu vực cha ID mới (để trống để bỏ cấp cha; ${areas.map((candidate) => `${candidate.area_id}: ${candidate.code}`).join(", ")}):`,
+        area.parent_id ? String(area.parent_id) : "",
+      );
+      if (parentId === null) return;
+      if (parentId && !Number.isInteger(Number(parentId))) return;
+      await catalogRequest(`/catalog/areas/${area.area_id}`, "PATCH", {
+        name: name.trim(), code: code.trim(), parent_id: parentId ? Number(parentId) : null,
+      });
+    }
+  };
+
+  const deleteCatalogItem = async (kind: "publishers" | "games" | "areas", id: number, label: string) => {
+    if (!window.confirm(`Bạn có chắc muốn xóa ${label}?`)) return;
+    await catalogRequest(`/catalog/${kind}/${id}`, "DELETE");
+  };
+
   return <main className="shell">
     <header className="hero">
       <div>
@@ -298,6 +440,42 @@ export default function App() {
           <li>Người tạo tự động là MANAGER</li>
         </ul>
       </aside>
+    </section>
+    <section className="panel catalog-panel">
+      <div className="panel-title"><h2>Quản trị catalog</h2><span>ADMIN</span></div>
+      {user?.role !== "ADMIN" && <p className="muted">Chỉ ADMIN được thêm, sửa hoặc xóa publisher, game và khu vực.</p>}
+      {user?.role === "ADMIN" && <>
+        <div className="catalog-forms">
+          <form onSubmit={submitPublisher}>
+            <h3>Publisher</h3>
+            <label>Tên publisher<input name="name" minLength={2} maxLength={120} required /></label>
+            <button className="button" disabled={catalogLoading}>Thêm publisher</button>
+          </form>
+          <form onSubmit={submitGame}>
+            <h3>Game</h3>
+            <label>Tên game<input name="name" maxLength={120} required /></label>
+            <label>Slug<input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxLength={120} required /></label>
+            <label>Publisher<select name="publisher_id" defaultValue="" required><option value="" disabled>Chọn publisher</option>{publishers.map((publisher) => <option key={publisher.publisher_id} value={publisher.publisher_id}>{publisher.name}</option>)}</select></label>
+            <button className="button" disabled={catalogLoading}>Thêm game</button>
+          </form>
+          <form onSubmit={submitArea}>
+            <h3>Khu vực</h3>
+            <label>Tên khu vực<input name="name" minLength={2} maxLength={120} required /></label>
+            <label>Mã<input name="code" minLength={2} pattern="[A-Z0-9]+(?:-[A-Z0-9]+)*" maxLength={30} required /></label>
+            <label>Khu vực cha<select name="parent_id" defaultValue=""><option value="">Không có</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.code} · {area.name}</option>)}</select></label>
+            <button className="button" disabled={catalogLoading}>Thêm khu vực</button>
+          </form>
+        </div>
+      </>}
+      {catalogReloadError && <div className="catalog-reload">
+        <p>Danh sách catalog có thể chưa phản ánh thao tác gần nhất.</p>
+        <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>
+      </div>}
+      <div className="catalog-lists">
+        <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span>}</p>)}</div>
+      </div>
     </section>
     <section className="panel teams-panel">
       <div className="panel-title"><h2>Đội tuyển</h2><span>{teams.length} đội</span></div>
