@@ -19,14 +19,22 @@ class RequestError extends Error {
   }
 }
 
+type ValidationError = { msg?: string };
+
 async function request<T>(path: string, options: RequestInit = {}, token?: string): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   const response = await fetch(`${API}${path}`, { ...options, headers });
   if (!response.ok) {
-    const body = await response.json().catch(() => null) as { detail?: string } | null;
-    throw new RequestError(body?.detail ?? "Yêu cầu không thành công", response.status);
+    const body = await response.json().catch(() => null) as { detail?: string | ValidationError[] } | null;
+    const detail = body?.detail;
+    const message = typeof detail === "string"
+      ? detail
+      : Array.isArray(detail)
+        ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+        : "Yêu cầu không thành công";
+    throw new RequestError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
@@ -272,8 +280,8 @@ export default function App() {
     ),
   );
 
-  const catalogRequest = async (path: string, method: "POST" | "PATCH" | "DELETE", body?: object) => {
-    if (!token || user?.role !== "ADMIN") return;
+  const catalogRequest = async (path: string, method: "POST" | "PATCH" | "DELETE", body?: object): Promise<boolean> => {
+    if (!token || user?.role !== "ADMIN") return false;
     setError("");
     setNotice("");
     setCatalogLoading(true);
@@ -281,8 +289,10 @@ export default function App() {
       await request(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) }, token);
       await loadCatalog();
       setNotice("Đã cập nhật catalog.");
+      return true;
     } catch (reason) {
       setError((reason as Error).message);
+      return false;
     } finally {
       setCatalogLoading(false);
     }
@@ -292,20 +302,18 @@ export default function App() {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    await catalogRequest("/catalog/publishers", "POST", { name: form.get("name") });
-    formElement.reset();
+    if (await catalogRequest("/catalog/publishers", "POST", { name: form.get("name") })) formElement.reset();
   };
 
   const submitGame = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    await catalogRequest("/catalog/games", "POST", {
+    if (await catalogRequest("/catalog/games", "POST", {
       name: form.get("name"),
       slug: form.get("slug"),
       publisher_id: Number(form.get("publisher_id")),
-    });
-    formElement.reset();
+    })) formElement.reset();
   };
 
   const submitArea = async (event: FormEvent<HTMLFormElement>) => {
@@ -313,12 +321,11 @@ export default function App() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     const parent = form.get("parent_id");
-    await catalogRequest("/catalog/areas", "POST", {
+    if (await catalogRequest("/catalog/areas", "POST", {
       name: form.get("name"),
       code: form.get("code"),
       parent_id: parent ? Number(parent) : null,
-    });
-    formElement.reset();
+    })) formElement.reset();
   };
 
   const editCatalogItem = async (kind: "publishers" | "games" | "areas", item: Publisher | Game | Area) => {
@@ -410,7 +417,8 @@ export default function App() {
     </section>
     <section className="panel catalog-panel">
       <div className="panel-title"><h2>Quản trị catalog</h2><span>ADMIN</span></div>
-      {user?.role !== "ADMIN" ? <p className="muted">Chỉ ADMIN được thêm, sửa hoặc xóa publisher, game và khu vực.</p> : <>
+      {user?.role !== "ADMIN" && <p className="muted">Chỉ ADMIN được thêm, sửa hoặc xóa publisher, game và khu vực.</p>}
+      {user?.role === "ADMIN" && <>
         <div className="catalog-forms">
           <form onSubmit={submitPublisher}>
             <h3>Publisher</h3>
@@ -427,17 +435,17 @@ export default function App() {
           <form onSubmit={submitArea}>
             <h3>Khu vực</h3>
             <label>Tên khu vực<input name="name" minLength={2} maxLength={120} required /></label>
-            <label>Mã<input name="code" pattern="[A-Z0-9]+(?:-[A-Z0-9]+)*" maxLength={30} required /></label>
+            <label>Mã<input name="code" minLength={2} pattern="[A-Z0-9]+(?:-[A-Z0-9]+)*" maxLength={30} required /></label>
             <label>Khu vực cha<select name="parent_id" defaultValue=""><option value="">Không có</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.code} · {area.name}</option>)}</select></label>
             <button className="button" disabled={catalogLoading}>Thêm khu vực</button>
           </form>
         </div>
-        <div className="catalog-lists">
-          <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span><span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span></p>)}</div>
-          <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span><span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span></p>)}</div>
-          <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span><span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span></p>)}</div>
-        </div>
       </>}
+      <div className="catalog-lists">
+        <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span>}</p>)}</div>
+      </div>
     </section>
     <section className="panel teams-panel">
       <div className="panel-title"><h2>Đội tuyển</h2><span>{teams.length} đội</span></div>
