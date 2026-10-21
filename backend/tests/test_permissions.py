@@ -241,11 +241,17 @@ def test_creator_without_organizer_role_loses_access(access, session_factory):
 
 
 def test_tournament_without_creator_is_admin_only(access, session_factory):
-    client, headers, *_ = access
+    client, headers, users, _, roles = access
     tournament_id = organizer_tournament(client, headers)
     with session_factory.begin() as db:
         db.get(Tournament, tournament_id).created_by = None
-    assert tournament_writes(client, tournament_id, headers("organizer")) == (403, 403)
+        db.add(RoleAssignment(user_id=users["viewer"], role_id=roles["ORGANIZER"], scope_type="TOURNAMENT",
+                              scope_id=tournament_id))
+    path = f"/api/v1/tournaments/{tournament_id}"
+    before = client.get(path).json()
+    for name in ["organizer", "viewer"]:
+        assert tournament_writes(client, tournament_id, headers(name)) == (403, 403)
+    assert client.get(path).json() == before
     assert tournament_writes(client, tournament_id, headers("admin")) == (200, 200)
 
 
