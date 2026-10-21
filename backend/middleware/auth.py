@@ -78,6 +78,23 @@ def can_manage_team(db: Session, team_id: int, user: User) -> bool:
     )
 
 
+def can_manage_tournament(tournament, user: User) -> bool:
+    """ADMIN, the ORGANIZER who created the tournament, or ORGANIZER assigned to it.
+
+    Tournaments without a recorded creator are ADMIN-only.
+    """
+    if has_role(user, "ADMIN"):
+        return True
+    if tournament.created_by is None:
+        return False
+    if tournament.created_by == user.user_id and has_role(user, "ORGANIZER"):
+        return True
+    return any(
+        a.role.role_name == "ORGANIZER" and a.scope_type == "TOURNAMENT" and a.scope_id == tournament.tournament_id
+        for a in user.assignments
+    )
+
+
 def ensure_team_manager(db: Session, team_id: int, user: User) -> None:
     if not can_manage_team(db, team_id, user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền quản lý đội này")
