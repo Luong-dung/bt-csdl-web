@@ -180,7 +180,8 @@ export default function App() {
     setError("");
     setNotice("");
     setMemberLoading(true);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await request<TeamMember>(`/teams/${selectedTeam.team_id}/members`, {
         method: "POST",
@@ -189,7 +190,7 @@ export default function App() {
           role_in_team: form.get("role_in_team"),
         }),
       }, token);
-      event.currentTarget.reset();
+      formElement.reset();
       await refreshSelectedTeam();
       setNotice("Đã thêm thành viên vào đội.");
     } catch (reason) {
@@ -220,6 +221,8 @@ export default function App() {
 
   const endMembership = async (membership: TeamMember) => {
     if (!token || !selectedTeam) return;
+    const action = membership.user_id === user?.id ? "rời đội" : "kết thúc membership của thành viên này";
+    if (!window.confirm(`Bạn có chắc muốn ${action}? Thao tác này không thể hoàn tác ngay.`)) return;
     setError("");
     setNotice("");
     setMemberLoading(true);
@@ -235,6 +238,17 @@ export default function App() {
       setMemberLoading(false);
     }
   };
+
+  const canManageSelectedTeam = Boolean(
+    user && (
+      user.role === "ADMIN"
+      || selectedTeam?.members.some(
+        (member) => member.user_id === user.id
+          && member.status === "ACTIVE"
+          && member.role === "MANAGER",
+      )
+    ),
+  );
 
   return <main className="shell">
     <header className="hero">
@@ -300,7 +314,7 @@ export default function App() {
       {selectedTeam && <div className="team-detail">
         <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => setSelectedTeam(null)}>Đóng</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
-        {user && <form className="member-form" onSubmit={addMember}>
+        {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
           <label>Tên đăng nhập<input name="username" placeholder="username" maxLength={50} required /></label>
           <label>Vị trí<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
           <button className="button" disabled={memberLoading}>Thêm thành viên</button>
@@ -309,13 +323,13 @@ export default function App() {
         {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <div className="member-list">{selectedTeam.members.map((member) => <div className={`member-row ${member.status === "ENDED" ? "ended" : ""}`} key={member.membership_id}>
           <div>
             <strong>{member.username}</strong>
-            <p>{member.status === "ACTIVE" ? "Đang hoạt động" : "Đã rời đội"} · Tham gia {member.joined_date}{member.left_date ? ` · Rời đội ${member.left_date}` : ""}</p>
+            <p>{member.role} · {member.status === "ACTIVE" ? "Đang hoạt động" : "Đã rời đội"} · Tham gia {member.joined_date}{member.left_date ? ` · Rời đội ${member.left_date}` : ""}</p>
           </div>
           {user && <div className="member-actions">
-            {member.status === "ACTIVE" && <select aria-label={`Vị trí của ${member.username}`} value={member.role} disabled={memberLoading} onChange={(event) => updateMemberRole(member.membership_id, event.target.value)}>
+            {canManageSelectedTeam && member.status === "ACTIVE" && <select aria-label={`Vị trí của ${member.username}`} value={member.role} disabled={memberLoading} onChange={(event) => updateMemberRole(member.membership_id, event.target.value)}>
               <option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option>
             </select>}
-            {member.status === "ACTIVE" && <button className="link-button danger-link" disabled={memberLoading} onClick={() => endMembership(member)}>{member.user_id === user.id ? "Rời đội" : "Kết thúc"}</button>}
+            {member.status === "ACTIVE" && (canManageSelectedTeam || member.user_id === user.id) && <button className="link-button danger-link" disabled={memberLoading} onClick={() => endMembership(member)}>{member.user_id === user.id ? "Rời đội" : "Kết thúc"}</button>}
           </div>}
         </div>)}</div>}
       </div>}
