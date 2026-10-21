@@ -55,6 +55,7 @@ export default function App() {
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const [memberLoading, setMemberLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogReloadError, setCatalogReloadError] = useState("");
   const sessionVersion = useRef(0);
 
   const loadTeams = async () => {
@@ -71,23 +72,22 @@ export default function App() {
   };
 
   const loadCatalog = async () => {
-    try {
-      const [loadedPublishers, loadedGames, loadedAreas] = await Promise.all([
-        request<Publisher[]>("/catalog/publishers"),
-        request<Game[]>("/catalog/games"),
-        request<Area[]>("/catalog/areas"),
-      ]);
-      setPublishers(loadedPublishers);
-      setGames(loadedGames);
-      setAreas(loadedAreas);
-    } catch (reason) {
-      setError((reason as Error).message);
-    }
+    const [loadedPublishers, loadedGames, loadedAreas] = await Promise.all([
+      request<Publisher[]>("/catalog/publishers"),
+      request<Game[]>("/catalog/games"),
+      request<Area[]>("/catalog/areas"),
+    ]);
+    setPublishers(loadedPublishers);
+    setGames(loadedGames);
+    setAreas(loadedAreas);
   };
 
   useEffect(() => {
     loadTeams();
-    loadCatalog();
+    loadCatalog().catch((reason) => {
+      setCatalogReloadError((reason as Error).message);
+      setError(`Không thể tải catalog: ${(reason as Error).message}`);
+    });
   }, []);
 
   useEffect(() => {
@@ -287,12 +287,38 @@ export default function App() {
     setCatalogLoading(true);
     try {
       await request(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) }, token);
+    } catch (reason) {
+      setError((reason as Error).message);
+      setCatalogLoading(false);
+      return false;
+    }
+    try {
       await loadCatalog();
+      setCatalogReloadError("");
       setNotice("Đã cập nhật catalog.");
       return true;
     } catch (reason) {
-      setError((reason as Error).message);
+      const message = (reason as Error).message;
+      setCatalogReloadError(message);
+      setError(`Đã ghi thành công nhưng không thể tải lại danh sách: ${message}. Không gửi lại thao tác; hãy thử tải lại.`);
       return false;
+    } finally {
+      setCatalogLoading(false);
+    }
+  };
+
+  const retryCatalogLoad = async () => {
+    setError("");
+    setNotice("");
+    setCatalogLoading(true);
+    try {
+      await loadCatalog();
+      setCatalogReloadError("");
+      setNotice("Đã tải lại catalog.");
+    } catch (reason) {
+      const message = (reason as Error).message;
+      setCatalogReloadError(message);
+      setError(`Không thể tải lại catalog: ${message}`);
     } finally {
       setCatalogLoading(false);
     }
@@ -441,6 +467,10 @@ export default function App() {
           </form>
         </div>
       </>}
+      {catalogReloadError && <div className="catalog-reload">
+        <p>Danh sách catalog có thể chưa phản ánh thao tác gần nhất.</p>
+        <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>
+      </div>}
       <div className="catalog-lists">
         <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
         <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
