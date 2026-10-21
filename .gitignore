@@ -17,6 +17,7 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+frontend/e2e-artifacts/
 
 # IDE config
 .vscode/
