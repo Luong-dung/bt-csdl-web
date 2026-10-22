@@ -116,6 +116,19 @@ Chạy toàn bộ backend test suite từ thư mục `backend`:
 python -m pytest -q
 ```
 
+## Tournament integration and regression tests — W43-08
+
+Backend suite ở trên tiếp tục bao gồm auth/catalog/teams smoke tests của W42-07. Để kiểm tra quyền giải đấu (401/403), validation, vòng đời, audit và rollback trên PostgreSQL, kích hoạt virtual environment backend và cấu hình `backend/.env` trỏ tới PostgreSQL dùng riêng cho test:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+python -m pytest tests/test_postgres_migrations.py tests/test_permissions.py tests/test_catalog_api.py tests/test_tournament_api.py tests/test_tournament_audit.py --postgres -q
+deactivate
+```
+
+Các test `--postgres` tạo schema riêng cho từng test, rollback và xác nhận schema được dọn sau đó. Chỉ kết nối database PostgreSQL dùng riêng cho development/test; không chạy trên database production hoặc dùng chung. GitHub Actions chạy cùng bộ PostgreSQL integration tests, backend suite, frontend build và Browser E2E.
+
 ## Chạy frontend
 
 ```powershell
@@ -166,12 +179,12 @@ Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng đượ
 - Thiếu JWT, JWT sai/hết hạn hoặc subject không hợp lệ: `401`; đăng nhập nhưng thiếu quyền: `403`. Các API đọc catalog, đội và giải vẫn công khai.
 - Helper `middleware.auth.has_role` hỗ trợ kiểm tra assignment theo giải cho các endpoint triển khai sau. Chưa có API cấp/thu hồi assignment; không thay schema.
 
-Chạy từ thư mục `backend`: `.\venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local.
+Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local.
 
 Kiểm tra quyền và catalog trên PostgreSQL cấu hình trong `backend/.env`:
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest tests/test_permissions.py tests/test_catalog_api.py --postgres -q
+.\.venv\Scripts\python.exe -m pytest tests/test_permissions.py tests/test_catalog_api.py --postgres -q
 ```
 
 Mỗi test chạy hai migration và seed trong schema tạm riêng. Session của API dùng savepoint bên trong transaction ngoài; kết thúc test rollback toàn bộ và xác nhận schema tạm đã biến mất. Không ghi dữ liệu vào schema hiện có. Request chạy qua FastAPI TestClient; test quyền dùng JWT thật, test CRUD catalog dùng user ADMIN giả lập như bộ test SQLite.

@@ -21,7 +21,7 @@ cd backend
 $demoCredential = Get-Credential -UserName 'demo' -Message 'Nhap mat khau chung cho tai khoan demo (8-128 ky tu)'
 $env:DEMO_PASSWORD = $demoCredential.GetNetworkCredential().Password
 try {
-    .\venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --migrate
+    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --migrate
     if ($LASTEXITCODE -ne 0) { throw 'Demo seed failed' }
 } finally {
     Remove-Item Env:DEMO_PASSWORD -ErrorAction SilentlyContinue
@@ -50,7 +50,7 @@ Trong terminal backend riêng, sau khi seed xong:
 
 ```powershell
 $env:DB_NAME = 'esports_tournament_demo'
-.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001
 # Sau khi dung server (Ctrl+C):
 Remove-Item Env:DB_NAME
 ```
@@ -67,7 +67,7 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 Remove-Item Env:VITE_API_URL
 ```
 
-Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. UI quản lý thành viên/catalog được giao W43-05/06; hiện có thể thử các thao tác đó qua Swagger.
+Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. Dùng `demo_manager` để mở đội `W43 Demo Team` và thử xem lịch sử, thêm thành viên `demo_free_player`, đổi vị trí hoặc kết thúc membership; dùng `demo_admin` để xem và CRUD publisher/game/khu vực. Dùng `demo_viewer` để xác nhận user thường không có thao tác ghi. Mật khẩu là mật khẩu test-only đã nhập lúc seed; không ghi vào source hoặc log. Các endpoint API vẫn có thể kiểm tra qua Swagger tại <http://127.0.0.1:8001/docs>.
 
 ## 5. Chạy lại và xử lý dữ liệu đã thay đổi
 
@@ -81,8 +81,8 @@ Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>,
 Từ thư mục `backend`:
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
-.\venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -q
 ```
 
 Mặc định dùng SQLite in-memory. `--postgres` dùng schema tạm và rollback theo fixture hiện có; không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.
