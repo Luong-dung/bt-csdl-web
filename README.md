@@ -133,10 +133,13 @@ Playwright tests chạy qua giao diện thật cho auth, tạo đội, quản l�
 Khi backend và frontend đang chạy trên các cổng mặc định:
 
 ```powershell
-cd frontend
+cd backend
+.\.venv\Scripts\Activate.ps1
+cd ..\frontend
 $env:E2E_DEMO_PASSWORD = Read-Host 'Test-only demo password'
 npm run test:e2e
 Remove-Item Env:E2E_DEMO_PASSWORD
+deactivate
 ```
 
 ## Quy ước phát triển

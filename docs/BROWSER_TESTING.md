@@ -51,12 +51,15 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 In a third terminal, use the same test-only password supplied to the seed command:
 
 ```powershell
-cd frontend
+cd backend
+.\.venv\Scripts\Activate.ps1
+cd ..\frontend
 $env:E2E_BROWSER_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe' # Optional when Chromium download is unavailable
 $env:E2E_DEMO_PASSWORD = Read-Host 'Test-only demo password'
 npm run test:e2e
 Remove-Item Env:E2E_DEMO_PASSWORD -ErrorAction SilentlyContinue
 Remove-Item Env:E2E_BROWSER_PATH -ErrorAction SilentlyContinue
+deactivate
 ```
 
 The suite creates uniquely named browser-test accounts, teams, and catalog records. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w43_e2e_test`; do not drop the database from `.env`.
