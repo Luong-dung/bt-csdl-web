@@ -71,3 +71,83 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+
+  browser-e2e:
+    name: Browser E2E (Playwright)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: esports_tournament
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d esports_tournament"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '5432'
+      DB_NAME: esports_tournament
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: ci-only-test-secret-not-for-deployment
+      DEMO_PASSWORD: browser-e2e-only-password
+      E2E_DB_NAME: esports_tournament_w43_e2e_test
+      E2E_DEMO_PASSWORD: browser-e2e-only-password
+      E2E_BASE_URL: http://127.0.0.1:5173
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            frontend/e2e/requirements.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: python -m pip install -r backend/requirements.txt -r frontend/e2e/requirements.txt
+      - run: python -m playwright install --with-deps chromium
+      - run: npm ci --prefix frontend
+      - name: Create isolated E2E database
+        run: |
+          python -c "import os, psycopg2; connection = psycopg2.connect(host=os.environ['DB_HOST'], port=os.environ['DB_PORT'], dbname='postgres', user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD']); connection.autocommit = True; connection.cursor().execute('CREATE DATABASE ' + os.environ['E2E_DB_NAME']); connection.close()"
+      - name: Migrate and seed demo accounts
+        working-directory: backend
+        run: python seed_demo.py --database "$E2E_DB_NAME" --migrate
+      - name: Run browser tests
+        shell: bash
+        run: |
+          mkdir -p frontend/e2e-artifacts
+          (cd backend && DB_NAME="$E2E_DB_NAME" python -m uvicorn main:app --host 127.0.0.1 --port 8000) > frontend/e2e-artifacts/backend.log 2>&1 &
+          BACKEND_PID=$!
+          (cd frontend && VITE_API_URL=http://127.0.0.1:8000/api/v1 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort) > frontend/e2e-artifacts/frontend.log 2>&1 &
+          FRONTEND_PID=$!
+          trap 'kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8000/health > /dev/null; then break; fi
+            sleep 2
+          done
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:8000/health
+          curl --fail --silent http://127.0.0.1:5173/ > /dev/null
+          cd frontend
+          npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-e2e-results
+          path: frontend/e2e-artifacts/
+          if-no-files-found: ignore
+          retention-days: 14

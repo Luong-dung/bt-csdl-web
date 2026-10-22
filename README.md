@@ -126,6 +126,22 @@ npm run dev
 
 Frontend mặc định gọi `http://127.0.0.1:8000/api/v1`. Có thể đổi bằng biến `VITE_API_URL`.
 
+## Browser E2E tests — W43-07
+
+Playwright tests chạy qua giao diện thật cho auth, tạo đội, quản lý membership và catalog. Chỉ chạy trên PostgreSQL test riêng; hướng dẫn cài đặt, chạy và xem screenshot/trace khi lỗi ở [docs/BROWSER_TESTING.md](docs/BROWSER_TESTING.md).
+
+Khi backend và frontend đang chạy trên các cổng mặc định:
+
+```powershell
+cd backend
+.\.venv\Scripts\Activate.ps1
+cd ..\frontend
+$env:E2E_DEMO_PASSWORD = Read-Host 'Test-only demo password'
+npm run test:e2e
+Remove-Item Env:E2E_DEMO_PASSWORD
+deactivate
+```
+
 ## Quy ước phát triển
 
 Mỗi thành viên làm trên nhánh `feature/<ten-tinh-nang>`, mở Pull Request vào `main` và review chéo. Migration phải được tạo bằng Alembic; không sửa migration đã chạy trên môi trường dùng chung.
