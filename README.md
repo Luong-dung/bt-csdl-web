@@ -123,11 +123,11 @@ Backend suite ở trên tiếp tục bao gồm auth/catalog/teams smoke tests c�
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-python -m pytest tests/test_postgres_migrations.py tests/test_permissions.py tests/test_catalog_api.py tests/test_tournament_api.py tests/test_tournament_audit.py --postgres -q
+python -m pytest --postgres -q
 deactivate
 ```
 
-Các test `--postgres` tạo schema riêng cho từng test, rollback và xác nhận schema được dọn sau đó. Chỉ kết nối database PostgreSQL dùng riêng cho development/test; không chạy trên database production hoặc dùng chung. GitHub Actions chạy cùng bộ PostgreSQL integration tests, backend suite, frontend build và Browser E2E.
+Lệnh này chạy toàn bộ backend suite với tùy chọn PostgreSQL, bao gồm migration, quyền, catalog, seed demo và giải đấu; các test dùng PostgreSQL tạo schema riêng, rollback và xác nhận schema được dọn sau đó. Dùng chính lệnh này cho CI để không phải duy trì danh sách file test riêng. Chỉ kết nối database PostgreSQL dùng riêng cho development/test; không chạy trên database production hoặc dùng chung. GitHub Actions cũng chạy backend suite thường, frontend build và Browser E2E.
 
 ## Chạy frontend
 
@@ -179,12 +179,4 @@ Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng đượ
 - Thiếu JWT, JWT sai/hết hạn hoặc subject không hợp lệ: `401`; đăng nhập nhưng thiếu quyền: `403`. Các API đọc catalog, đội và giải vẫn công khai.
 - Helper `middleware.auth.has_role` hỗ trợ kiểm tra assignment theo giải cho các endpoint triển khai sau. Chưa có API cấp/thu hồi assignment; không thay schema.
 
-Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local.
-
-Kiểm tra quyền và catalog trên PostgreSQL cấu hình trong `backend/.env`:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_permissions.py tests/test_catalog_api.py --postgres -q
-```
-
-Mỗi test chạy hai migration và seed trong schema tạm riêng. Session của API dùng savepoint bên trong transaction ngoài; kết thúc test rollback toàn bộ và xác nhận schema tạm đã biến mất. Không ghi dữ liệu vào schema hiện có. Request chạy qua FastAPI TestClient; test quyền dùng JWT thật, test CRUD catalog dùng user ADMIN giả lập như bộ test SQLite.
+Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local. Với PostgreSQL, dùng lệnh duy nhất ở mục [Tournament integration and regression tests — W43-08](#tournament-integration-and-regression-tests--w43-08); không duy trì thêm danh sách file test riêng.

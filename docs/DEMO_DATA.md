@@ -67,7 +67,25 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 Remove-Item Env:VITE_API_URL
 ```
 
-Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. Dùng `demo_manager` để mở đội `W43 Demo Team` và thử xem lịch sử, thêm thành viên `demo_free_player`, đổi vị trí hoặc kết thúc membership; dùng `demo_admin` để xem và CRUD publisher/game/khu vực. Dùng `demo_viewer` để xác nhận user thường không có thao tác ghi. Mật khẩu là mật khẩu test-only đã nhập lúc seed; không ghi vào source hoặc log. Các endpoint API vẫn có thể kiểm tra qua Swagger tại <http://127.0.0.1:8001/docs>.
+Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. Dùng `demo_manager` để mở đội `W43 Demo Team` và thử xem lịch sử, thêm thành viên `demo_free_player`, đổi vị trí hoặc kết thúc membership; dùng `demo_admin` để xem và CRUD publisher/game/khu vực. `demo_viewer` không có quyền quản trị catalog, giải đấu hoặc đội hiện có; tuy nhiên, user đã đăng nhập vẫn được tạo đội mới trên UI/API. Mật khẩu là mật khẩu test-only đã nhập lúc seed; không ghi vào source hoặc log. Các endpoint API vẫn có thể kiểm tra qua Swagger tại <http://127.0.0.1:8001/docs>.
+
+Để demo API giải đấu và audit trên database demo, gọi `POST /api/v1/auth/login` với JSON `{"username":"demo_organizer","password":"<MẬT_KHẨU_DEMO>"}`, rồi dán `access_token` vào nút Authorize của Swagger. Lấy ID game từ `GET /api/v1/catalog/games`, sau đó thực hiện lần lượt. Thay `<GAME_ID>` bằng ID số và `<NGÀY TƯƠNG LAI>` bằng ngày hợp lệ dạng `YYYY-MM-DD` trước khi gửi request:
+
+1. `POST /api/v1/tournaments` với `{"name":"W43 Demo Cup","game_id":<GAME_ID>,"format":"SINGLE_ELIM","start_date":"<NGÀY TƯƠNG LAI>"}`.
+2. Dùng `tournament_id` trả về để gọi `PATCH /api/v1/tournaments/{tournament_id}` với `{"name":"W43 Demo Cup Updated"}`.
+3. Gọi `POST /api/v1/tournaments/{tournament_id}/status` với `{"status":"ONGOING"}`.
+4. Trong PostgreSQL query tool, thay `<TOURNAMENT_ID>` bằng ID ở bước 1 và xác nhận ba dòng audit:
+
+```sql
+SELECT l.action, u.username, l.details, l.created_at
+FROM audit_logs AS l
+LEFT JOIN users AS u ON u.user_id = l.user_id
+WHERE l.resource = 'tournament'
+  AND l.details->>'tournament_id' = '<TOURNAMENT_ID>'
+ORDER BY l.log_id;
+```
+
+Kết quả mong đợi gồm `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED` và `TOURNAMENT_STATUS_CHANGED`, cùng actor `demo_organizer` và dữ liệu before/after. Luồng này chỉ ghi vào database demo đã cấu hình; không dùng database production.
 
 ## 5. Chạy lại và xử lý dữ liệu đã thay đổi
 
