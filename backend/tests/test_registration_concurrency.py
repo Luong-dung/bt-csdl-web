@@ -147,7 +147,7 @@ def test_unauthorized_writer_does_not_wait_for_tournament_lock(access, session_f
     assert registration_logs(session_factory) == []
 
 
-@pytest.mark.parametrize('revocation', ['assignment', 'account'])
+@pytest.mark.parametrize('revocation', ['assignment', 'scope', 'account'])
 def test_permission_revoked_while_waiting_is_checked_again(access, session_factory, pending, revocation):
     _, headers, users, _, roles = access
     tid, _ = pending
@@ -171,9 +171,12 @@ def test_permission_revoked_while_waiting_is_checked_again(access, session_facto
                 with session_factory.begin() as revoke_db:
                     if revocation == 'assignment':
                         revoke_db.execute(delete(RoleAssignment).where(RoleAssignment.user_id == users['viewer']))
+                    elif revocation == 'scope':
+                        assignment = revoke_db.scalar(select(RoleAssignment).where(RoleAssignment.user_id == users['viewer']))
+                        assignment.scope_id = tid + 1
                     else:
                         revoke_db.execute(delete(User).where(User.user_id == users['viewer']))
-            assert future.result(timeout=10) == (403 if revocation == 'assignment' else 401)
+            assert future.result(timeout=10) == (401 if revocation == 'account' else 403)
         finally:
             event.remove(engine, 'before_cursor_execute', notice_lock)
     assert registration_logs(session_factory) == []

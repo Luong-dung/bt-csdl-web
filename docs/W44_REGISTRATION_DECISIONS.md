@@ -40,3 +40,5 @@ Test PostgreSQL dùng schema tạm. Test cạnh tranh cần các connection đ�
 Test bổ sung sau review #41: chặn đổi game ở mọi trạng thái đơn, CANCELLED giữ lịch sử duyệt, lệch đồng hồ app, audit snapshot thực tế, writer sai quyền không chờ lock, thu hồi assignment/xóa tài khoản khi đang chờ, PATCH game cạnh tranh với duyệt và sửa constraint/index trên bảng create_all cũ.
 
 Kiểm tra lại sau review ngày 23/10/2026: backend 228 passed, 13 skipped; toàn bộ PostgreSQL marked suite 238 passed, 3 deselected. Các bài skip trong suite mặc định cần PostgreSQL thật. Một cảnh báo deprecation từ Starlette/AnyIO.
+
+Sau đó bổ sung trường hợp assignment đổi sang scope khác khi đang chờ: chạy riêng nhóm thu hồi/đổi scope/xóa tài khoản trên PostgreSQL đạt 3 passed. Phần code nghiệp vụ không thay đổi sau lượt hồi quy toàn bộ trên.
