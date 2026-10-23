@@ -14,6 +14,7 @@ Mọi request cần JWT. Quyền quản lý giải dùng `can_manage_tournament`
 - `POST /api/v1/tournaments/{id}/registrations/{registration_id}/decision`: body `{"status":"APPROVED"}` hoặc `{"status":"REJECTED","rejection_reason":"Không đủ điều kiện"}`. Lý do từ chối tùy chọn, nếu gửi phải có 1–500 ký tự sau trim; không nhận lý do cho APPROVED, không nhận trường lạ.
 - Response 200 gồm registration_id, tournament_id, team_id, status, submitted_by/submitted_at, reviewed_by/reviewed_at, rejection_reason, cancelled_by/cancelled_at. Actor đã bị xóa có thể null; lịch sử thời điểm vẫn giữ lại.
 - Chỉ quyết định đơn PENDING khi giải UPCOMING. APPROVED/REJECTED là cuối; gửi lại trả 409 và không ghi audit lần hai. APPROVED kiểm tra lại game đội khớp giải; REJECTED vẫn dùng được để xử lý đơn sai game.
+- Điều kiện UPCOMING dùng `core/tournament_policy.registrations_open`, cùng helper với capability trong PR #40 để hint và mutation không có hai định nghĩa riêng. Hai nhánh cung cấp module giống nhau và vẫn chạy độc lập.
 - 401: thiếu/sai JWT; 403: không có quyền quản lý giải; 404: giải/đơn không tồn tại hoặc đơn thuộc giải khác; 409: giải đóng, đơn đã xử lý, game không khớp khi duyệt hoặc xung đột ràng buộc; 422: payload/ID/query sai.
 
 ## Dữ liệu, migration và transaction
