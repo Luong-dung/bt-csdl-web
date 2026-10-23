@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
+from middleware.capabilities import PermissionCacheMiddleware
 from routes.capabilities import router as capability_router
 from routes.auth import router as auth_router
 from routes.team import router as team_router
@@ -23,9 +24,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(capability_router)
+    app.add_middleware(PermissionCacheMiddleware)
+
     app.include_router(auth_router)
     app.include_router(team_router)
+    app.include_router(capability_router)
     app.include_router(catalog_router)
     app.include_router(tournament_router)
 

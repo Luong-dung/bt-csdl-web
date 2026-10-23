@@ -1,14 +1,15 @@
 from datetime import date
-from typing import Literal
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from middleware.auth import ensure_team_manager, get_current_user
+from core.validation import DbId, INT_MAX, ResourceId
+from middleware.auth import ensure_team_manager, get_current_user, managed_teams_query
 from modules.catalog.models import Game
 from modules.identity.models import AuditLog, User
 from modules.teams.models import Team, TeamMembership
@@ -28,7 +29,7 @@ class TeamInput(BaseModel):
 class TeamCreate(TeamInput):
     name: str = Field(min_length=2, max_length=100)
     tag: str = Field(min_length=2, max_length=10, pattern=r"^[A-Za-z0-9]+$")
-    game_id: int = Field(gt=0)
+    game_id: DbId
 
 
 class MemberCreate(TeamInput):
@@ -129,7 +130,7 @@ def save_or_409(db: Session, message: str, commit: bool = True):
 
 
 @router.get("", response_model=list[TeamRead])
-def list_teams(game_id: int | None = None, db: Session = Depends(get_db)):
+def list_teams(game_id: Annotated[int | None, Query(gt=0, le=INT_MAX)] = None, db: Session = Depends(get_db)):
     query = select(Team).order_by(Team.name)
     if game_id is not None:
         query = query.where(Team.game_id == game_id)
@@ -156,8 +157,22 @@ def create_team(data: TeamCreate, user: User = Depends(get_current_user), db: Se
     return team
 
 
+@router.get("/managed", response_model=list[TeamRead])
+def managed_teams(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    game_id: Annotated[int | None, Query(gt=0, le=INT_MAX)] = None,
+    offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+):
+    query = managed_teams_query(user).order_by(Team.name, Team.team_id)
+    if game_id is not None:
+        query = query.where(Team.game_id == game_id)
+    return db.scalars(query.offset(offset).limit(limit)).all()
+
+
 @router.get("/{team_id}", response_model=TeamDetail)
-def get_team(team_id: int, db: Session = Depends(get_db)):
+def get_team(team_id: ResourceId, db: Session = Depends(get_db)):
     team = get_team_or_404(db, team_id)
     members = sorted(team.memberships, key=lambda m: (m.status != ACTIVE, m.joined_date, m.membership_id))
     return TeamDetail(
@@ -167,7 +182,7 @@ def get_team(team_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{team_id}/members", response_model=list[MemberRead])
-def list_members(team_id: int, include_history: bool = False, db: Session = Depends(get_db)):
+def list_members(team_id: ResourceId, include_history: bool = False, db: Session = Depends(get_db)):
     get_team_or_404(db, team_id)
     query = select(TeamMembership).where(TeamMembership.team_id == team_id)
     if not include_history:
@@ -177,7 +192,7 @@ def list_members(team_id: int, include_history: bool = False, db: Session = Depe
 
 
 @router.post("/{team_id}/members", response_model=MemberRead, status_code=status.HTTP_201_CREATED)
-def add_member(team_id: int, data: MemberCreate, user: User = Depends(get_current_user),
+def add_member(team_id: ResourceId, data: MemberCreate, user: User = Depends(get_current_user),
                db: Session = Depends(get_db)):
     get_team_or_404(db, team_id)
     ensure_team_manager(db, team_id, user)
@@ -202,7 +217,7 @@ def add_member(team_id: int, data: MemberCreate, user: User = Depends(get_curren
 
 
 @router.patch("/{team_id}/members/{membership_id}", response_model=MemberRead)
-def update_member_role(team_id: int, membership_id: int, data: MemberUpdate,
+def update_member_role(team_id: ResourceId, membership_id: ResourceId, data: MemberUpdate,
                        user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     get_team_or_404(db, team_id)
     ensure_team_manager(db, team_id, user)
@@ -220,7 +235,7 @@ def update_member_role(team_id: int, membership_id: int, data: MemberUpdate,
 
 
 @router.post("/{team_id}/members/{membership_id}/end", response_model=MemberRead)
-def end_membership(team_id: int, membership_id: int, user: User = Depends(get_current_user),
+def end_membership(team_id: ResourceId, membership_id: ResourceId, user: User = Depends(get_current_user),
                    db: Session = Depends(get_db)):
     """End a membership instead of deleting it, so transfer history is kept."""
     get_team_or_404(db, team_id)

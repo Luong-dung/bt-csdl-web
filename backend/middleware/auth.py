@@ -64,11 +64,14 @@ def managed_teams_query(user: User):
         TeamMembership.status == "ACTIVE",
         TeamMembership.left_date.is_(None),
     ).exists()
-    team_ids = [a.scope_id for a in user.assignments
-                if a.role.role_name == "TEAM_MANAGER" and a.scope_type == "TEAM" and a.scope_id is not None]
-    organization_ids = [a.scope_id for a in user.assignments
-                        if a.role.role_name == "TEAM_MANAGER" and a.scope_type == "ORGANIZATION"
-                        and a.scope_id is not None]
+    team_ids, organization_ids = set(), set()
+    for assignment in user.assignments:
+        if assignment.role.role_name != 'TEAM_MANAGER' or assignment.scope_id is None:
+            continue
+        if assignment.scope_type == 'TEAM':
+            team_ids.add(assignment.scope_id)
+        elif assignment.scope_type == 'ORGANIZATION':
+            organization_ids.add(assignment.scope_id)
     return select(Team).where(or_(
         membership,
         Team.team_id.in_(team_ids) if team_ids else false(),
@@ -79,6 +82,9 @@ def managed_teams_query(user: User):
 def can_manage_team(db: Session, team_id: int, user: User) -> bool:
     from modules.teams.models import Team
 
+    # Existence remains the caller's responsibility, as in the original checker.
+    if has_role(user, 'ADMIN'):
+        return True
     return db.scalar(managed_teams_query(user).where(Team.team_id == team_id)) is not None
 
 

@@ -1,8 +1,12 @@
 from datetime import date
 
 import pytest
-from sqlalchemy import delete, select
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import delete, event, select
 
+from config.database import get_db
+from middleware.auth import can_manage_team
 from modules.identity.models import RoleAssignment
 from modules.teams.models import Organization, TeamMembership
 from modules.tournaments.models import Tournament
@@ -161,3 +165,105 @@ def test_missing_and_invalid_resource(access, resource):
     client, headers, *_ = access
     for value, status in [('999999', 404), ('0', 422), ('2147483648', 422), ('abc', 422)]:
         assert client.get(f'/api/v1/{resource}/{value}/capabilities', headers=headers('viewer')).status_code == status
+
+
+@pytest.mark.parametrize('team_first', [True, False])
+def test_managed_route_survives_router_include_order(access, session_factory, team_first):
+    from routes.capabilities import router as capability_router
+    from routes.team import router as team_router
+    _, headers, _, teams, _ = access
+    app = FastAPI()
+    routers = [team_router, capability_router] if team_first else [capability_router, team_router]
+    for router in routers:
+        app.include_router(router)
+    def override_db():
+        with session_factory() as db:
+            yield db
+    app.dependency_overrides[get_db] = override_db
+    with TestClient(app) as client:
+        response = client.get('/api/v1/teams/managed', headers=headers('admin'))
+    assert response.status_code == 200
+    assert {row['team_id'] for row in response.json()} == set(teams.values())
+
+
+@pytest.mark.parametrize('url,auth,expected', [
+    ('/api/v1/auth/capabilities', None, 401),
+    ('/api/v1/teams/managed', None, 401),
+    ('/api/v1/teams/999999/capabilities', 'viewer', 404),
+    ('/api/v1/tournaments/999999/capabilities', 'viewer', 404),
+    ('/api/v1/teams/0/capabilities', 'viewer', 422),
+    ('/api/v1/tournaments/2147483648/capabilities', 'viewer', 422),
+    ('/api/v1/teams/managed?limit=0', 'viewer', 422),
+    ('/api/v1/auth/capabilities', 'viewer', 200),
+    ('/api/v1/teams/managed', 'admin', 200),
+])
+def test_no_store_on_success_and_handled_errors(access, url, auth, expected):
+    client, headers, *_ = access
+    response = client.get(url, headers=headers(auth) if auth else {})
+    assert response.status_code == expected
+    assert response.headers['cache-control'] == 'private, no-store'
+    assert 'cache-control' not in client.get('/api/v1/catalog/games').headers
+
+
+def test_no_store_on_invalid_token_and_redirect(access):
+    client, headers, *_ = access
+    bad = client.get('/api/v1/auth/capabilities', headers={'Authorization': 'Bearer invalid'})
+    assert bad.status_code == 401 and bad.headers['cache-control'] == 'private, no-store'
+    redirect = client.get('/api/v1/teams/managed/', headers=headers('admin'), follow_redirects=False)
+    assert redirect.status_code == 307 and redirect.headers['cache-control'] == 'private, no-store'
+
+
+@pytest.mark.parametrize('invalid', ['0', '-1', 'abc', '2147483648'])
+def test_shared_id_validation_on_team_reads_and_mutations(access, invalid):
+    client, headers, _, teams, _ = access
+    auth = headers('admin')
+    for method, url, payload in [
+        ('GET', f'/api/v1/teams/{invalid}', None),
+        ('GET', f'/api/v1/teams/{invalid}/capabilities', None),
+        ('GET', f'/api/v1/teams/{invalid}/members', None),
+        ('POST', f'/api/v1/teams/{invalid}/members', {'username': 'viewer'}),
+        ('PATCH', f'/api/v1/teams/{invalid}/members/1', {'role_in_team': 'PLAYER'}),
+        ('POST', f'/api/v1/teams/{invalid}/members/1/end', None),
+        ('PATCH', f"/api/v1/teams/{teams['Alpha']}/members/{invalid}", {'role_in_team': 'PLAYER'}),
+        ('POST', f"/api/v1/teams/{teams['Alpha']}/members/{invalid}/end", None),
+    ]:
+        response = client.request(method, url, headers=auth, json=payload)
+        assert response.status_code == 422, (method, url, response.text)
+
+
+def test_team_ids_keep_valid_missing_as_404_and_bound_game_ids(access):
+    client, headers, *_ = access
+    for suffix in ['', '/members', '/capabilities']:
+        assert client.get('/api/v1/teams/2147483647' + suffix, headers=headers('admin')).status_code == 404
+    assert client.get('/api/v1/teams?game_id=2147483648').status_code == 422
+    assert client.post('/api/v1/teams', headers=headers('admin'), json={
+        'name': 'Invalid game team', 'tag': 'BAD', 'game_id': 2147483648,
+    }).status_code == 422
+
+
+@pytest.mark.parametrize('name', ['admin', 'viewer'])
+def test_team_capability_uses_one_team_query(access, session_factory, name):
+    client, headers, _, teams, _ = access
+    statements = []
+    def track(connection, cursor, statement, parameters, context, executemany):
+        if 'FROM teams' in statement:
+            statements.append(statement)
+    engine = session_factory.kw['bind']
+    # PostgreSQL fixtures bind a Connection; SQLite fixtures bind an Engine.
+    target = engine.engine if hasattr(engine, 'engine') else engine
+    event.listen(target, 'before_cursor_execute', track)
+    try:
+        response = client.get(f"/api/v1/teams/{teams['Alpha']}/capabilities", headers=headers(name))
+        assert response.status_code == 200
+        assert response.json()['can_manage_members'] == (name == 'admin')
+        assert len(statements) == 1
+    finally:
+        event.remove(target, 'before_cursor_execute', track)
+
+
+def test_admin_checker_preserves_shortcut_and_routes_validate_existence(access, session_factory):
+    client, headers, users, *_ = access
+    with session_factory() as db:
+        from modules.identity.models import User
+        assert can_manage_team(db, 999999, db.get(User, users['admin']))
+    assert client.get('/api/v1/teams/999999', headers=headers('admin')).status_code == 404

@@ -1,26 +1,22 @@
 """Authenticated permission hints; mutations always recheck the same policies."""
 
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from core.tournament_policy import registrations_open
+from core.validation import ResourceId
 from middleware.auth import (
-    can_manage_team, can_manage_tournament, get_current_user, has_role, managed_teams_query,
+    can_manage_tournament, get_current_user, has_role, managed_teams_query,
 )
 from modules.identity.models import User
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
-from routes.team import TeamRead
-from routes.tournaments import INT_MAX, ONGOING_EDITABLE, TRANSITIONS, TournamentId, TournamentUpdate
+from routes.tournaments import ONGOING_EDITABLE, TRANSITIONS, TournamentUpdate
 
-def prevent_permission_caching(response: Response):
-    response.headers['Cache-Control'] = 'private, no-store'
-
-
-router = APIRouter(tags=["Capabilities"], dependencies=[Depends(prevent_permission_caching)])
+router = APIRouter(tags=["Capabilities"])
 
 
 class GlobalCapabilities(BaseModel):
@@ -52,36 +48,24 @@ def global_capabilities(user: User = Depends(get_current_user)):
     )
 
 
-# This router is included before /teams/{team_id}, so "managed" is not parsed as an ID.
-@router.get("/api/v1/teams/managed", response_model=list[TeamRead])
-def managed_teams(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-    game_id: Annotated[int | None, Query(gt=0, le=INT_MAX)] = None,
-    offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-):
-    query = managed_teams_query(user).order_by(Team.name, Team.team_id)
-    if game_id is not None:
-        query = query.where(Team.game_id == game_id)
-    return db.scalars(query.offset(offset).limit(limit)).all()
-
-
 @router.get("/api/v1/teams/{team_id}/capabilities", response_model=TeamCapabilities)
 def team_capabilities(
-    team_id: TournamentId,
+    team_id: ResourceId,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    if db.get(Team, team_id) is None:
+    managed_ids = managed_teams_query(user).with_only_columns(Team.team_id).correlate(None)
+    team = db.execute(select(Team.team_id, Team.team_id.in_(managed_ids).label('can_manage'))
+                      .where(Team.team_id == team_id)).one_or_none()
+    if team is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy đội tuyển")
-    allowed = can_manage_team(db, team_id, user)
+    allowed = team.can_manage
     return TeamCapabilities(team_id=team_id, can_manage_members=allowed, can_register_for_tournament=allowed)
 
 
 @router.get("/api/v1/tournaments/{tournament_id}/capabilities", response_model=TournamentCapabilities)
 def tournament_capabilities(
-    tournament_id: TournamentId,
+    tournament_id: ResourceId,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -98,7 +82,7 @@ def tournament_capabilities(
         can_manage=allowed,
         can_update=bool(fields),
         can_change_status=bool(transitions),
-        can_review_registrations=allowed and tournament.status == "UPCOMING",
+        can_review_registrations=allowed and registrations_open(tournament.status),
         editable_fields=fields,
         allowed_status_transitions=transitions,
     )
