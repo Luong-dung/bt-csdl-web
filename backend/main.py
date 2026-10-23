@@ -23,6 +23,8 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Pagination totals must be readable by the browser client.
+        expose_headers=["X-Total-Count"],
     )
 
     app.add_middleware(PermissionCacheMiddleware)
