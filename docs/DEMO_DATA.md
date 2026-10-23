@@ -21,7 +21,7 @@ cd backend
 $demoCredential = Get-Credential -UserName 'demo' -Message 'Nhap mat khau chung cho tai khoan demo (8-128 ky tu)'
 $env:DEMO_PASSWORD = $demoCredential.GetNetworkCredential().Password
 try {
-    .\venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --migrate
+    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --migrate
     if ($LASTEXITCODE -ne 0) { throw 'Demo seed failed' }
 } finally {
     Remove-Item Env:DEMO_PASSWORD -ErrorAction SilentlyContinue
@@ -50,7 +50,7 @@ Trong terminal backend riêng, sau khi seed xong:
 
 ```powershell
 $env:DB_NAME = 'esports_tournament_demo'
-.\venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8001
 # Sau khi dung server (Ctrl+C):
 Remove-Item Env:DB_NAME
 ```
@@ -67,7 +67,27 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 Remove-Item Env:VITE_API_URL
 ```
 
-Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. UI quản lý thành viên/catalog được giao W43-05/06; hiện có thể thử các thao tác đó qua Swagger.
+Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>, đăng xuất phiên cũ trước khi chuyển tài khoản/database. Dùng `demo_manager` để mở đội `W43 Demo Team` và thử xem lịch sử, thêm thành viên `demo_free_player`, đổi vị trí hoặc kết thúc membership; dùng `demo_admin` để xem và CRUD publisher/game/khu vực. `demo_viewer` không có quyền quản trị catalog, giải đấu hoặc đội hiện có; tuy nhiên, user đã đăng nhập vẫn được tạo đội mới trên UI/API. Mật khẩu là mật khẩu test-only đã nhập lúc seed; không ghi vào source hoặc log. Các endpoint API vẫn có thể kiểm tra qua Swagger tại <http://127.0.0.1:8001/docs>.
+
+Để demo API giải đấu và audit trên database demo, gọi `POST /api/v1/auth/login` với JSON `{"username":"demo_organizer","password":"<MẬT_KHẨU_DEMO>"}`, rồi dán `access_token` vào nút Authorize của Swagger. Lấy ID game từ `GET /api/v1/catalog/games`, sau đó thực hiện lần lượt. Thay `<GAME_ID>` bằng ID số và `<NGÀY TƯƠNG LAI>` bằng ngày hợp lệ dạng `YYYY-MM-DD` trước khi gửi request:
+
+1. `POST /api/v1/tournaments` với `{"name":"W43 Demo Cup","game_id":<GAME_ID>,"format":"SINGLE_ELIM","start_date":"<NGÀY TƯƠNG LAI>"}`.
+2. Dùng `tournament_id` trả về để gọi `PATCH /api/v1/tournaments/{tournament_id}` với `{"name":"W43 Demo Cup Updated"}`.
+3. Gọi `POST /api/v1/tournaments/{tournament_id}/status` với `{"status":"ONGOING"}`.
+4. Trong PostgreSQL query tool, thay `<TOURNAMENT_ID>` bằng ID ở bước 1 và xác nhận ba dòng audit:
+
+```sql
+SELECT l.action, u.username, l.details, l.created_at
+FROM audit_logs AS l
+LEFT JOIN users AS u ON u.user_id = l.user_id
+WHERE l.resource = 'tournament'
+  AND l.details->>'tournament_id' = '<TOURNAMENT_ID>'
+ORDER BY l.log_id;
+```
+
+Kết quả mong đợi gồm `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED` và `TOURNAMENT_STATUS_CHANGED`, cùng actor `demo_organizer` và dữ liệu before/after. Luồng này chỉ ghi vào database demo đã cấu hình; không dùng database production.
+
+`start_date` không được ở quá khứ; ngày hôm nay cũng hợp lệ. Endpoint chuyển trạng thái sang `ONGOING` hiện không kiểm tra `start_date`, nên theo API hiện tại giải có ngày bắt đầu trong tương lai vẫn có thể chuyển sang `ONGOING`.
 
 ## 5. Chạy lại và xử lý dữ liệu đã thay đổi
 
@@ -81,8 +101,8 @@ Dừng frontend cũ nếu đang chiếm port 5173. Mở <http://127.0.0.1:5173>,
 Từ thư mục `backend`:
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
-.\venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -m postgres -q
 ```
 
-Mặc định dùng SQLite in-memory. `--postgres` dùng schema tạm và rollback theo fixture hiện có; không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.
+Mặc định dùng SQLite in-memory. Để chạy PostgreSQL, đặt `TEST_DATABASE_URL` tới database test riêng như hướng dẫn tại README rồi dùng `--postgres -m postgres`; test dùng schema tạm và rollback, không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.

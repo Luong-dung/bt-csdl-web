@@ -1,33 +1,16 @@
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from config.database import Base, get_db
+from config.database import get_db
 from main import create_app
-from seed import seed_reference_data
 
 
 @pytest.fixture
-def client():
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-
-    @event.listens_for(engine, "connect")
-    def enable_foreign_keys(connection, _):
-        connection.execute("PRAGMA foreign_keys=ON")
-
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, autoflush=False)
-    with factory.begin() as db:
-        seed_reference_data(db)
-
+def client(base_session_factory):
     app = create_app()
 
     def override_db():
-        db = factory()
+        db = base_session_factory()
         try:
             yield db
         finally:
@@ -36,7 +19,9 @@ def client():
     app.dependency_overrides[get_db] = override_db
     with TestClient(app) as test_client:
         yield test_client
-    engine.dispose()
+
+
+pytestmark = pytest.mark.postgres
 
 
 def register_and_login(client, username):

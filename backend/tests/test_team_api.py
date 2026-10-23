@@ -3,42 +3,30 @@ from datetime import date, timedelta
 import pytest
 from fastapi import Header, HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event, select
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
 
-from config.database import Base, get_db
+from config.database import get_db
 from main import create_app
 from middleware.auth import get_current_user
 from modules.catalog.models import Game
 from modules.identity.models import AuditLog, Role, User
 from modules.teams.models import TeamMembership
-from seed import seed_reference_data
 
 USERS = {"alice": "PLAYER", "bob": "PLAYER", "carol": "PLAYER", "dave": "PLAYER", "root": "ADMIN"}
 
 
 @pytest.fixture
-def session_factory():
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-
-    @event.listens_for(engine, "connect")
-    def enable_foreign_keys(connection, _):
-        connection.execute("PRAGMA foreign_keys=ON")
-
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, autoflush=False)
+def session_factory(base_session_factory):
+    factory = base_session_factory
     with factory.begin() as db:
-        seed_reference_data(db)
-        db.flush()
         roles = {role.role_name: role.role_id for role in db.scalars(select(Role))}
         for username, role in USERS.items():
             db.add(User(username=username, email=f"{username}@example.com",
                         password_hash="x", role_id=roles[role]))
     yield factory
-    engine.dispose()
+
+
+pytestmark = pytest.mark.postgres
 
 
 @pytest.fixture
