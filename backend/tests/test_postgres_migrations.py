@@ -7,6 +7,8 @@ from sqlalchemy import text
 
 import conftest
 
+pytestmark = pytest.mark.postgres
+
 
 def test_postgres_fixture_runs_new_head(request, monkeypatch, tmp_path):
     if not request.config.getoption("--postgres"):

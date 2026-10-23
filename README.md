@@ -118,16 +118,18 @@ python -m pytest -q
 
 ## Tournament integration and regression tests — W43-08
 
-Backend suite ở trên tiếp tục bao gồm auth/catalog/teams smoke tests của W42-07. Để kiểm tra quyền giải đấu (401/403), validation, vòng đời, audit và rollback trên PostgreSQL, kích hoạt virtual environment backend và cấu hình `backend/.env` trỏ tới PostgreSQL dùng riêng cho test:
+Backend suite ở trên chạy trên SQLite in-memory. Để chạy các test được đánh dấu hỗ trợ PostgreSQL (auth, catalog, teams, demo seed, migrations và tournament), đặt `TEST_DATABASE_URL` tới PostgreSQL database dùng riêng cho test; biến này không đổi database của app đang cấu hình trong `backend/.env`:
 
 ```powershell
 cd backend
 .\.venv\Scripts\Activate.ps1
-python -m pytest --postgres -q
+$env:TEST_DATABASE_URL = 'postgresql+psycopg2://postgres:<password>@127.0.0.1:5432/esports_tournament_test'
+python -m pytest --postgres -m postgres -q
+Remove-Item Env:TEST_DATABASE_URL
 deactivate
 ```
 
-Lệnh này chạy toàn bộ backend suite với tùy chọn PostgreSQL, bao gồm migration, quyền, catalog, seed demo và giải đấu; các test dùng PostgreSQL tạo schema riêng, rollback và xác nhận schema được dọn sau đó. Dùng chính lệnh này cho CI để không phải duy trì danh sách file test riêng. Chỉ kết nối database PostgreSQL dùng riêng cho development/test; không chạy trên database production hoặc dùng chung. GitHub Actions cũng chạy backend suite thường, frontend build và Browser E2E.
+Nếu không đặt `TEST_DATABASE_URL`, fixture fallback về `DATABASE_URL` được tạo từ cấu hình trong `backend/.env`. Chỉ dùng PostgreSQL database dùng riêng cho development/test, không dùng production hoặc database dùng chung. Lệnh `--postgres -m postgres` chỉ chạy các test được đánh dấu hỗ trợ PostgreSQL nên không lặp lại toàn bộ test SQLite; test seed dữ liệu nền (`test_seed.py`) hiện vẫn SQLite-only. Mỗi PostgreSQL test chạy migration/seed trong schema riêng, mở savepoint cho các session API bên trong outer transaction và rollback toàn bộ schema khi kết thúc; điều này cho phép endpoint gọi `commit()` mà không lưu dữ liệu ngoài test. Catalog CRUD smoke tests dùng dependency ADMIN giả lập; test quyền riêng dùng JWT thật. GitHub Actions chạy chính lệnh trên cùng backend SQLite suite, frontend build và Browser E2E.
 
 ## Chạy frontend
 
@@ -179,4 +181,4 @@ Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng đượ
 - Thiếu JWT, JWT sai/hết hạn hoặc subject không hợp lệ: `401`; đăng nhập nhưng thiếu quyền: `403`. Các API đọc catalog, đội và giải vẫn công khai.
 - Helper `middleware.auth.has_role` hỗ trợ kiểm tra assignment theo giải cho các endpoint triển khai sau. Chưa có API cấp/thu hồi assignment; không thay schema.
 
-Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local. Với PostgreSQL, dùng lệnh duy nhất ở mục [Tournament integration and regression tests — W43-08](#tournament-integration-and-regression-tests--w43-08); không duy trì thêm danh sách file test riêng.
+Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local. Fixture PostgreSQL dùng outer transaction và `join_transaction_mode="create_savepoint"` để giữ các lệnh commit của API bên trong transaction test; khi test kết thúc, transaction rollback và schema riêng được xác nhận đã dọn. Catalog CRUD smoke tests dùng ADMIN dependency giả lập, còn quyền API được kiểm tra riêng bằng JWT thật. Lệnh PostgreSQL thống nhất được ghi tại mục [Tournament integration and regression tests — W43-08](#tournament-integration-and-regression-tests--w43-08).

@@ -17,6 +17,7 @@ from seed_demo import ACCOUNTS, TEAM_TAG, demo_database_url, seed_demo_data
 
 
 PASSWORD = "Demo-test-password-2026"
+pytestmark = pytest.mark.postgres
 
 
 @pytest.fixture

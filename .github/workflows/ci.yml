@@ -41,6 +41,7 @@ jobs:
       DB_NAME: esports_tournament
       DB_USER: postgres
       DB_PASSWORD: postgres
+      TEST_DATABASE_URL: postgresql+psycopg2://postgres:postgres@127.0.0.1:5432/esports_tournament
       JWT_SECRET: ci-only-test-secret-not-for-deployment
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +55,7 @@ jobs:
       - run: python seed.py
       - run: python seed.py
       - run: python -m pytest -q
-      - run: python -m pytest --postgres -q
+      - run: python -m pytest --postgres -m postgres -q
 
   frontend:
     name: Frontend build

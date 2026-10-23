@@ -7,6 +7,7 @@ from modules.tournaments.models import Tournament
 from test_catalog_api import client, ids, session_factory
 
 URL = "/api/v1/tournaments"
+pytestmark = pytest.mark.postgres
 
 
 def day(offset):

@@ -32,6 +32,9 @@ def access(session_factory):
     return client, headers, users, teams, roles
 
 
+pytestmark = pytest.mark.postgres
+
+
 WRITES = [
     (method, f"/api/v1/catalog/{resource}{suffix}", payload)
     for resource, payload in [("publishers", {"name": "New publisher"}),

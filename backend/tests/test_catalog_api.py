@@ -3,37 +3,19 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from config.database import Base, get_db
+from config.database import get_db
 from main import create_app
 from middleware.auth import get_current_user
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
-from seed import seed_reference_data
+
+pytestmark = pytest.mark.postgres
 
 
 @pytest.fixture
-def session_factory(request):
-    if request.config.getoption("--postgres"):
-        yield request.getfixturevalue("postgres_session_factory")
-        return
-    engine = create_engine(
-        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
-    )
-
-    @event.listens_for(engine, "connect")
-    def enable_foreign_keys(connection, _):
-        connection.execute("PRAGMA foreign_keys=ON")
-
-    Base.metadata.create_all(engine)
-    factory = sessionmaker(bind=engine, autoflush=False)
-    with factory.begin() as db:
-        seed_reference_data(db)
-    yield factory
-    engine.dispose()
+def session_factory(base_session_factory):
+    return base_session_factory
 
 
 def make_client(session_factory, logged_in=True):

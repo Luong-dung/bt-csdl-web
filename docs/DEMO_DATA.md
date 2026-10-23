@@ -87,6 +87,8 @@ ORDER BY l.log_id;
 
 Kết quả mong đợi gồm `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED` và `TOURNAMENT_STATUS_CHANGED`, cùng actor `demo_organizer` và dữ liệu before/after. Luồng này chỉ ghi vào database demo đã cấu hình; không dùng database production.
 
+`start_date` không được ở quá khứ; ngày hôm nay cũng hợp lệ. Endpoint chuyển trạng thái sang `ONGOING` hiện không kiểm tra `start_date`, nên theo API hiện tại giải có ngày bắt đầu trong tương lai vẫn có thể chuyển sang `ONGOING`.
+
 ## 5. Chạy lại và xử lý dữ liệu đã thay đổi
 
 - Chạy lại cùng lệnh trên dữ liệu demo chưa đổi sẽ thêm 0 bản ghi; không đổi ID hoặc mật khẩu của tài khoản đã có. Đổi DEMO_PASSWORD chỉ áp dụng cho tài khoản tạo mới.
@@ -100,7 +102,7 @@ Từ thư mục `backend`:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
-.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -m postgres -q
 ```
 
-Mặc định dùng SQLite in-memory. `--postgres` dùng schema tạm và rollback theo fixture hiện có; không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.
+Mặc định dùng SQLite in-memory. Để chạy PostgreSQL, đặt `TEST_DATABASE_URL` tới database test riêng như hướng dẫn tại README rồi dùng `--postgres -m postgres`; test dùng schema tạm và rollback, không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.

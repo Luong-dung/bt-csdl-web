@@ -10,6 +10,7 @@ from test_catalog_api import session_factory
 from test_permissions import access
 
 URL = "/api/v1/tournaments"
+pytestmark = pytest.mark.postgres
 
 
 def create(client, auth):
