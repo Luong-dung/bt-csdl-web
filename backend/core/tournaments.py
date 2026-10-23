@@ -29,9 +29,8 @@ def lock_tournament(db: Session, tournament_id: int) -> Tournament:
     return tournament
 
 
-def get_managed_tournament(db: Session, tournament_id: int, user: User) -> Tournament:
-    # Reject unauthorized callers before they can join the row-lock queue.
-    ensure_tournament_manager(get_tournament_or_404(db, tournament_id), user)
+def lock_tournament_as(db: Session, tournament_id: int, user: User) -> tuple[Tournament, User]:
+    """Lock the tournament, then reload the actor so callers recheck permissions after waiting."""
     tournament = lock_tournament(db, tournament_id)
     if isinstance(user, User):
         # A role/assignment or the tournament creator may change while waiting.
@@ -39,5 +38,12 @@ def get_managed_tournament(db: Session, tournament_id: int, user: User) -> Tourn
         if user is None:
             raise HTTPException(status_code=401, detail="Tài khoản không tồn tại", headers={"WWW-Authenticate": "Bearer"})
         db.expire(user, ['role', 'assignments'])
+    return tournament, user
+
+
+def get_managed_tournament(db: Session, tournament_id: int, user: User) -> Tournament:
+    # Reject unauthorized callers before they can join the row-lock queue.
+    ensure_tournament_manager(get_tournament_or_404(db, tournament_id), user)
+    tournament, user = lock_tournament_as(db, tournament_id, user)
     ensure_tournament_manager(tournament, user)
     return tournament
