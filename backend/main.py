@@ -7,6 +7,7 @@ from routes.auth import router as auth_router
 from routes.team import router as team_router
 from routes.catalog import router as catalog_router
 from routes.tournaments import router as tournament_router
+from routes.registrations import router as registration_router
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -31,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(capability_router)
     app.include_router(catalog_router)
     app.include_router(tournament_router)
+    app.include_router(registration_router)
 
     @app.get("/")
     def check_server():
