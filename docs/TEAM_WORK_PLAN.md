@@ -35,9 +35,11 @@ Mỗi tuần phải có đủ bốn phần:
 Kế hoạch chi tiết của tuần hiện tại được tách riêng để dễ cập nhật và giữ lịch sử:
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
-- [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): W43-01 xong ngày 18/10, W43-02/03 xong ngày 21/10, W43-04 đã triển khai và kiểm thử local, chờ review: `3 DONE`, `1 IN PROGRESS`, `4 TODO`.
+- [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): cập nhật 23/10/2026, `8/8 DONE`, `0 IN PROGRESS`, `0 TODO`; backend/PostgreSQL, frontend build và kiểm thử trình duyệt đạt. Chi tiết bằng chứng và giới hạn xác minh CI/review ghi trong W43.
 
-W42 là tuần đang kết thúc ngày 18/10. W43 là tuần kế tiếp đã chuẩn bị, W43-01 được triển khai sớm theo yêu cầu nhóm trưởng. “Tuần 2” trong file W43 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
+- [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): đã lập kế hoạch 8 task, `0/8 DONE`, `8 TODO`; tập trung UI giải đấu, quyền theo scope và đăng ký/duyệt đội tham gia giải.
+
+W42 đã hoàn thành. W43 là tuần hiện tại (19–25/10), đã chốt `8/8 DONE` ngày 23/10; W44 là kế hoạch tuần kế tiếp. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
 ### Tiến độ đối chiếu W42 — 18/10/2026
 
