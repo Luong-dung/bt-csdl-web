@@ -1,0 +1,43 @@
+# W44-01 — Quyền thao tác cho giao diện
+
+Các endpoint dưới đây cần JWT. Dữ liệu được tính từ checker backend cho từng request, trả `Cache-Control: private, no-store`; frontend tải lại khi đổi tài khoản/tài nguyên và sau thay đổi quyền. Đây là gợi ý hiển thị: mọi API ghi vẫn kiểm tra quyền và trạng thái hiện tại.
+
+Header được gắn bởi ASGI middleware cho phản hồi thành công, lỗi được xử lý (401/404/422) và redirect của các path capability/managed; không phụ thuộc dependency chạy thành công. Route `/teams/managed` nằm trong router đội trước `/{team_id}`, hoạt động với cả hai thứ tự include router.
+
+| Endpoint | Response |
+|---|---|
+| `GET /api/v1/auth/capabilities` | `can_manage_catalog`, `can_create_tournament` |
+| `GET /api/v1/teams/managed?game_id=&offset=0&limit=50` | Danh sách đội có quyền quản lý, cùng schema phần tử như `GET /teams`; tên tăng dần, ID phân định khi trùng tên |
+| `GET /api/v1/teams/{id}/capabilities` | `team_id`, `can_manage_members`, `can_register_for_tournament` |
+| `GET /api/v1/tournaments/{id}/capabilities` | `tournament_id`, `can_manage`, `can_update`, `can_change_status`, `can_review_registrations`, `editable_fields`, `allowed_status_transitions` |
+
+`limit` từ 1 đến 100; offset từ 0 đến 2147483647. Danh sách managed phân trang sau khi lọc quyền, có thể trả rỗng. Các ID và game filter phải là số nguyên dương trong phạm vi PostgreSQL INTEGER. Thiếu/sai JWT trả 401; tài nguyên không tồn tại trả 404; dữ liệu đường dẫn/query sai trả 422. User hợp lệ không có quyền nhận cờ false hoặc danh sách rỗng, không nhận thông tin assignment của người khác.
+
+Kiểu `DbId`/`ResourceId` ở `core/validation.py` dùng chung cho capability, giải đấu và các route đội/thành viên (kể cả game_id ở body/filter). ID 0, âm, không phải số hoặc vượt INTEGER trả 422; ID hợp lệ nhưng không tồn tại trả 404. Alias TournamentId được giữ để tương thích route đăng ký ở PR #41.
+
+## Quy tắc
+
+- Catalog: ADMIN trong role hoặc assignment GLOBAL hợp lệ. ADMIN theo scope tài nguyên không được quản trị catalog toàn hệ thống.
+- Tạo giải: ADMIN/ORGANIZER toàn cục; assignment ORGANIZER trên một giải không cấp quyền tạo giải mới.
+- Đội: ADMIN toàn cục, membership MANAGER ACTIVE chưa có ngày rời, hoặc TEAM_MANAGER được gán đúng TEAM/ORGANIZATION. Role TEAM_MANAGER hoặc assignment GLOBAL TEAM_MANAGER không tự cấp quyền quản lý mọi đội, giữ nguyên chính sách hiện có.
+- Giải: ADMIN toàn cục, người tạo có quyền ORGANIZER toàn cục, hoặc assignment ORGANIZER đúng TOURNAMENT. Giải không có người tạo chỉ ADMIN quản lý.
+- `can_manage` thể hiện quyền với tài nguyên. Các cờ update/change_status xét thêm vòng đời W43; giải COMPLETED/CANCELLED trả false cùng danh sách trường/trạng thái rỗng. ONGOING chỉ sửa name/description/end_date.
+- `can_review_registrations` cần quyền quản lý và UPCOMING. `can_register_for_tournament` trên đội chỉ thể hiện quyền đại diện đội; API đăng ký vẫn phải kiểm tra game, trạng thái giải và đơn trùng.
+- Chính sách đội được dùng chung trong `managed_teams_query` cho cả mutation checker, capability và bộ chọn đội; không sao chép logic role trong frontend.
+- Capability đội kiểm tra tồn tại và quyền trong cùng một SELECT. Checker ghi giữ nhánh ADMIN như trước; caller vẫn kiểm tra tài nguyên tồn tại trước mutation. Các assignment TEAM_MANAGER được phân loại trong một vòng lặp, khử ID trùng.
+- Điều kiện mở đăng ký dùng `core/tournament_policy.registrations_open`; PR #41 dùng cùng helper này ở API duyệt. Cờ đại diện đội không thay cho kiểm tra điều kiện đơn trong API đăng ký W44-03.
+
+W44-05 dùng các cờ này thay cho suy quyền từ `user.role` trên catalog/membership và UI giải mới. W44-01 không thay giao diện và không cung cấp API cấp/thu hồi assignment.
+
+## Kiểm tra
+
+Từ thư mục backend, dùng Python trong venv của dự án:
+
+```powershell
+python -m pytest -q
+python -m pytest tests/test_capabilities.py --postgres -q
+```
+
+Test dùng JWT thật và schema PostgreSQL tạm rollback; bao phủ role, GLOBAL/TEAM/ORGANIZATION/TOURNAMENT, quyền sai scope, membership hết hiệu lực, thu hồi quyền, đổi tài khoản, phân trang và đối chiếu capability với API ghi.
+
+Kiểm tra lại sau review ngày 23/10/2026: backend 234 passed, 1 skipped; toàn bộ PostgreSQL marked suite 232 passed, 3 deselected; 61 test capability chạy riêng đạt trên cả SQLite và PostgreSQL. Bao phủ cả thứ tự router, no-store trên lỗi/redirect, ID biên và kiểm tra query tồn tại/quyền đội trong một SELECT. Một cảnh báo deprecation từ Starlette/AnyIO.
