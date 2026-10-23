@@ -1,13 +1,14 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
 from middleware.auth import can_manage_tournament, get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
@@ -16,10 +17,8 @@ from modules.tournaments.models import Tournament
 
 router = APIRouter(prefix="/api/v1/tournaments", tags=["Tournaments"])
 
-# Ids outside the INTEGER range make PostgreSQL raise instead of returning no row.
-INT_MAX = 2147483647
-DbId = Annotated[int, Field(gt=0, le=INT_MAX)]
-TournamentId = Annotated[int, Path(gt=0, le=INT_MAX)]
+# Compatibility alias for registration routes; all resources share the same ID range.
+TournamentId = ResourceId
 TournamentFormat = Literal["SINGLE_ELIM", "DOUBLE_ELIM", "ROUND_ROBIN"]
 TournamentStatus = Literal["UPCOMING", "ONGOING", "COMPLETED", "CANCELLED"]
 

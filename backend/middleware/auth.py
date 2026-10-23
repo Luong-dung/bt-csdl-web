@@ -50,32 +50,42 @@ def require_role(*role_names: str):
     return checker
 
 
-def can_manage_team(db: Session, team_id: int, user: User) -> bool:
-    """ADMIN, an active MANAGER of the team, or TEAM_MANAGER assigned to the team or its organization."""
-    from sqlalchemy import select
+def managed_teams_query(user: User):
+    """One policy for team writes, capability reads and the managed-team picker."""
+    from sqlalchemy import false, or_, select
     from modules.teams.models import Team, TeamMembership
 
     if has_role(user, "ADMIN"):
-        return True
-    team = db.get(Team, team_id)
-    if team is None:
-        return False
-    membership = db.scalar(select(TeamMembership).where(
-        TeamMembership.team_id == team_id,
+        return select(Team)
+    membership = select(TeamMembership.membership_id).where(
+        TeamMembership.team_id == Team.team_id,
         TeamMembership.user_id == user.user_id,
         TeamMembership.role_in_team == "MANAGER",
         TeamMembership.status == "ACTIVE",
         TeamMembership.left_date.is_(None),
+    ).exists()
+    team_ids, organization_ids = set(), set()
+    for assignment in user.assignments:
+        if assignment.role.role_name != 'TEAM_MANAGER' or assignment.scope_id is None:
+            continue
+        if assignment.scope_type == 'TEAM':
+            team_ids.add(assignment.scope_id)
+        elif assignment.scope_type == 'ORGANIZATION':
+            organization_ids.add(assignment.scope_id)
+    return select(Team).where(or_(
+        membership,
+        Team.team_id.in_(team_ids) if team_ids else false(),
+        Team.organization_id.in_(organization_ids) if organization_ids else false(),
     ))
-    if membership is not None:
+
+
+def can_manage_team(db: Session, team_id: int, user: User) -> bool:
+    from modules.teams.models import Team
+
+    # Existence remains the caller's responsibility, as in the original checker.
+    if has_role(user, 'ADMIN'):
         return True
-    return any(
-        a.role.role_name == "TEAM_MANAGER" and (
-            (a.scope_type == "TEAM" and a.scope_id == team_id)
-            or (team.organization_id is not None and a.scope_type == "ORGANIZATION"
-                and a.scope_id == team.organization_id)
-        ) for a in user.assignments
-    )
+    return db.scalar(managed_teams_query(user).where(Team.team_id == team_id)) is not None
 
 
 def can_manage_tournament(tournament, user: User) -> bool:
