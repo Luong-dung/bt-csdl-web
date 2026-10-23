@@ -1,20 +1,22 @@
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
-from core.tournaments import get_managed_tournament
+from core.tournaments import get_managed_tournament, get_tournament_or_404
 from middleware.auth import get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
 from modules.identity.models import User
+from modules.teams.models import Team
 from modules.tournaments.models import Tournament, TournamentRegistration
+from routes.team import TeamRead
 
 router = APIRouter(prefix="/api/v1/tournaments", tags=["Tournaments"])
 
@@ -116,10 +118,23 @@ def commit_tournament(db: Session, tournament: Tournament, user: User, action: s
     return tournament
 
 
+TOTAL_COUNT_HEADER = "X-Total-Count"
+
+
+def paginate(db: Session, query, response: Response, offset: int, limit: int):
+    # The total ignores offset/limit so the UI can render page controls from one request.
+    response.headers[TOTAL_COUNT_HEADER] = str(db.scalar(select(func.count()).select_from(query.order_by(None).subquery())))
+    return db.scalars(query.offset(offset).limit(limit)).all()
+
+
 @router.get("", response_model=list[TournamentRead])
 def list_tournaments(
+    response: Response,
     game_id: Annotated[int | None, Query(gt=0, le=INT_MAX)] = None,
     area_id: Annotated[int | None, Query(gt=0, le=INT_MAX)] = None,
+    status: TournamentStatus | None = None,
+    offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
     db: Session = Depends(get_db),
 ):
     query = select(Tournament).order_by(Tournament.start_date.desc(), Tournament.tournament_id.desc())
@@ -127,7 +142,9 @@ def list_tournaments(
         query = query.where(Tournament.game_id == game_id)
     if area_id is not None:
         query = query.where(Tournament.area_id == area_id)
-    return db.scalars(query).all()
+    if status is not None:
+        query = query.where(Tournament.status == status)
+    return paginate(db, query, response, offset, limit)
 
 
 @router.post("", response_model=TournamentRead, status_code=status.HTTP_201_CREATED)
@@ -145,10 +162,24 @@ def create_tournament(
 
 @router.get("/{tournament_id}", response_model=TournamentRead)
 def get_tournament(tournament_id: TournamentId, db: Session = Depends(get_db)):
-    tournament = db.get(Tournament, tournament_id)
-    if tournament is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
-    return tournament
+    return get_tournament_or_404(db, tournament_id)
+
+
+@router.get("/{tournament_id}/teams", response_model=list[TeamRead])
+def list_approved_teams(
+    tournament_id: TournamentId,
+    response: Response,
+    offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    db: Session = Depends(get_db),
+):
+    """Public roster of accepted teams; registration details stay with the managers."""
+    get_tournament_or_404(db, tournament_id)
+    query = select(Team).join(TournamentRegistration, TournamentRegistration.team_id == Team.team_id).where(
+        TournamentRegistration.tournament_id == tournament_id,
+        TournamentRegistration.status == "APPROVED",
+    ).order_by(Team.name, Team.team_id)
+    return paginate(db, query, response, offset, limit)
 
 
 @router.patch("/{tournament_id}", response_model=TournamentRead)
