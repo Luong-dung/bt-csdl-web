@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
 from config.database import Base
@@ -24,6 +25,33 @@ class Tournament(Base):
         CheckConstraint("format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')"),
         CheckConstraint("status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')", name="ck_tournaments_status"),
         CheckConstraint("end_date IS NULL OR end_date >= start_date", name="ck_tournaments_dates"),
+    )
+
+
+class TournamentRegistration(Base):
+    __tablename__ = "tournament_registrations"
+
+    registration_id = Column(Integer, primary_key=True)
+    tournament_id = Column(Integer, ForeignKey("tournaments.tournament_id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.team_id", ondelete="RESTRICT"), nullable=False)
+    status = Column(String(20), nullable=False, server_default="PENDING")
+    submitted_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    submitted_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    reviewed_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    rejection_reason = Column(String(500), nullable=True)
+    cancelled_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    cancelled_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "team_id", name="uq_registration_tournament_team"),
+        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')", name="ck_registration_status"),
+        CheckConstraint(
+            "(status = 'PENDING' AND reviewed_at IS NULL AND cancelled_at IS NULL) OR "
+            "(status IN ('APPROVED', 'REJECTED') AND reviewed_at IS NOT NULL AND cancelled_at IS NULL) OR "
+            "(status = 'CANCELLED' AND reviewed_at IS NULL AND cancelled_at IS NOT NULL)",
+            name="ck_registration_timestamps",
+        ),
+        CheckConstraint("status = 'REJECTED' OR rejection_reason IS NULL", name="ck_registration_reason"),
     )
 
 

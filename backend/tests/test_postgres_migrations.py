@@ -3,6 +3,7 @@ from shutil import copytree
 
 import pytest
 from alembic.config import Config
+from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
 import conftest
@@ -10,17 +11,19 @@ import conftest
 pytestmark = pytest.mark.postgres
 
 
-def test_postgres_fixture_runs_new_head(request, monkeypatch, tmp_path):
+def test_postgres_fixture_runs_new_head(request, monkeypatch):
     if not request.config.getoption("--postgres"):
         pytest.skip("requires --postgres")
 
+    tmp_path = request.getfixturevalue("tmp_path")
     backend = Path(__file__).resolve().parents[1]
+    head = ScriptDirectory.from_config(Config(str(backend / "alembic.ini"))).get_current_head()
     versions = tmp_path / "versions"
     copytree(backend / "alembic" / "versions", versions)
     (versions / "fixture_probe.py").write_text(
         'from alembic import op\n'
         'revision = "fixture_probe"\n'
-        'down_revision = "20261021_1200"\n'
+        f'down_revision = "{head}"\n'
         'branch_labels = None\n'
         'depends_on = None\n'
         'def upgrade():\n'
