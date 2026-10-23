@@ -32,4 +32,4 @@ python -m pytest --postgres -m postgres -q
 
 `tests/test_tournament_listing.py` (32 test, chạy cả SQLite và PostgreSQL): lọc theo game/trạng thái và kết hợp, phân trang và tổng theo bộ lọc, giới hạn mặc định 50, query sai, header CORS; danh sách đội chỉ APPROVED, không lộ dữ liệu đơn, tách giải khác, phân trang/rỗng, đọc được sau khi giải đóng, giải không tồn tại/ID sai.
 
-Kết quả ngày 23/10/2026: backend 321 passed, 14 skipped; PostgreSQL marked suite 332 passed, 3 deselected.
+Kết quả ngày 23/10/2026: backend 321 passed, 14 skipped; PostgreSQL marked suite 332 passed, 3 deselected. Sau khi gộp main có W44-03 (24/10/2026): backend 362 passed, 22 skipped; PostgreSQL marked suite 381 passed, 3 deselected.
