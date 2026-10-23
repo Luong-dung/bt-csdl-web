@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.audit import record_audit
-from core.registrations import ensure_registration_open, lock_registration, lock_registration_tournament
-from middleware.auth import can_manage_tournament, get_current_user
+from core.registrations import ensure_registration_open, lock_registration, registration_timestamp
+from core.tournaments import ensure_tournament_manager, get_managed_tournament, get_tournament_or_404
+from middleware.auth import get_current_user
 from modules.identity.models import User
 from modules.teams.models import Team
-from modules.tournaments.models import Tournament, TournamentRegistration
+from modules.tournaments.models import TournamentRegistration
 from routes.tournaments import INT_MAX, TournamentId
 
 router = APIRouter(prefix="/api/v1/tournaments/{tournament_id}/registrations", tags=["Tournament registrations"])
@@ -49,11 +50,6 @@ class RegistrationDecision(BaseModel):
         return self
 
 
-def ensure_reviewer(tournament: Tournament, user: User) -> None:
-    if not can_manage_tournament(tournament, user):
-        raise HTTPException(status_code=403, detail="Bạn không có quyền xử lý đăng ký giải này")
-
-
 @router.get("", response_model=list[RegistrationRead])
 def list_registrations(
     tournament_id: TournamentId,
@@ -63,10 +59,7 @@ def list_registrations(
     offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ):
-    tournament = db.get(Tournament, tournament_id)
-    if tournament is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
-    ensure_reviewer(tournament, user)
+    ensure_tournament_manager(get_tournament_or_404(db, tournament_id), user)
     query = select(TournamentRegistration).where(TournamentRegistration.tournament_id == tournament_id)
     if status is not None:
         query = query.where(TournamentRegistration.status == status)
@@ -82,8 +75,7 @@ def decide_registration(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    tournament = lock_registration_tournament(db, tournament_id)
-    ensure_reviewer(tournament, user)
+    tournament = get_managed_tournament(db, tournament_id, user)
     registration = lock_registration(db, tournament_id, registration_id)
     ensure_registration_open(tournament)
     if registration.status != "PENDING":
@@ -91,17 +83,22 @@ def decide_registration(
     team = db.get(Team, registration.team_id)
     if data.status == "APPROVED" and (team is None or team.game_id != tournament.game_id):
         raise HTTPException(status_code=409, detail="Game của đội không khớp với giải đấu")
-    registration.status = data.status
-    registration.reviewed_by = user.user_id
-    registration.reviewed_at = datetime.now(timezone.utc)
-    registration.rejection_reason = data.rejection_reason
+    before = {
+        'status': registration.status, 'reviewed_by': registration.reviewed_by,
+        'reviewed_at': registration.reviewed_at.isoformat() if registration.reviewed_at else None,
+        'rejection_reason': registration.rejection_reason,
+    }
     try:
+        registration.status = data.status
+        registration.reviewed_by = user.user_id
+        registration.reviewed_at = registration_timestamp(db)
+        registration.rejection_reason = data.rejection_reason
         db.flush()
         record_audit(db, user.user_id, 'TOURNAMENT_REGISTRATION_' + data.status, 'tournament_registration', {
             'tournament_id': tournament_id,
             'registration_id': registration_id,
             'team_id': registration.team_id,
-            'before': {'status': 'PENDING', 'reviewed_by': None, 'reviewed_at': None, 'rejection_reason': None},
+            'before': before,
             'after': {'status': registration.status, 'reviewed_by': registration.reviewed_by,
                       'reviewed_at': registration.reviewed_at.isoformat(), 'rejection_reason': registration.rejection_reason},
         })

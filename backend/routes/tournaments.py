@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.audit import record_audit
-from middleware.auth import can_manage_tournament, get_current_user, require_role
+from core.tournaments import get_managed_tournament
+from middleware.auth import get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
 from modules.identity.models import User
-from modules.tournaments.models import Tournament
+from modules.tournaments.models import Tournament, TournamentRegistration
 
 router = APIRouter(prefix="/api/v1/tournaments", tags=["Tournaments"])
 
@@ -100,16 +101,6 @@ def ensure_references(db: Session, game_id: int | None, area_id: int | None):
         raise HTTPException(status_code=422, detail="Khu vực không tồn tại")
 
 
-def get_managed_tournament(db: Session, tournament_id: int, user: User) -> Tournament:
-    # Lock the row so concurrent status changes are checked against the latest state.
-    tournament = db.get(Tournament, tournament_id, with_for_update=True)
-    if tournament is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
-    if not can_manage_tournament(tournament, user):
-        raise HTTPException(status_code=403, detail="Bạn không có quyền quản lý giải đấu này")
-    return tournament
-
-
 def commit_tournament(db: Session, tournament: Tournament, user: User, action: str,
                       before: dict, after: dict) -> Tournament:
     # Fallback for a game/area deleted between the check and the write.
@@ -170,6 +161,12 @@ def update_tournament(
 ):
     tournament = get_managed_tournament(db, tournament_id, user)
     changes = data.model_dump(exclude_unset=True)
+    if changes.get("game_id", tournament.game_id) != tournament.game_id:
+        registration = db.scalar(select(TournamentRegistration.registration_id).where(
+            TournamentRegistration.tournament_id == tournament_id,
+        ).limit(1))
+        if registration is not None:
+            raise HTTPException(status_code=409, detail="Không thể đổi game khi giải đã có đơn đăng ký")
     if not TRANSITIONS[tournament.status]:
         raise HTTPException(status_code=409, detail="Giải đấu đã kết thúc hoặc bị hủy, không thể chỉnh sửa")
     if tournament.status == "ONGOING" and set(changes) - ONGOING_EDITABLE:

@@ -18,11 +18,14 @@ Mọi request cần JWT. Quyền quản lý giải dùng `can_manage_tournament`
 
 ## Dữ liệu, migration và transaction
 
-- Unique `(tournament_id, team_id)`; FK giải/đội/actor; CHECK trạng thái, thời điểm phù hợp trạng thái và lý do chỉ có cho REJECTED. Tạo đơn mặc định PENDING, thời điểm gửi do DB cấp. Xóa actor không xóa lịch sử; xóa đội có đơn bị chặn, xóa giải cascade đơn.
-- Migration hỗ trợ database W43 đã có dữ liệu và database mới. Revision đầu của repo gọi metadata hiện tại nên bảng có thể đã được tạo ở lượt cài mới; migration mới kiểm tra tồn tại để không tạo trùng. Downgrade xóa bảng đăng ký và dữ liệu đơn, giữ các bảng W43.
-- Thứ tự khóa chung: `lock_registration_tournament` → `lock_registration` → kiểm tra trạng thái → ghi đơn/audit → commit. Helper đọc lại dữ liệu sau khi chờ khóa, tránh dùng giá trị cũ trong identity map.
-- Endpoint đổi trạng thái giải W43 đã khóa cùng hàng giải; không thể duyệt dựa trên UPCOMING cũ sau khi giải đã đóng. W44-03 gửi/hủy đơn và W44-04 đổi game phải dùng cùng parent lock. Việc cấm đổi game khi có đơn thuộc W44-04.
-- Audit `TOURNAMENT_REGISTRATION_APPROVED`/`TOURNAMENT_REGISTRATION_REJECTED`, resource `tournament_registration`, chứa actor, ID giải/đơn/đội, before/after. Ghi audit và quyết định cùng transaction; lỗi rollback cả hai.
+- Unique `(tournament_id, team_id)`; index riêng `ix_tournament_registrations_team_id`; FK giải/đội/actor; CHECK trạng thái và thời điểm phù hợp trạng thái. Tạo đơn mặc định PENDING, thời điểm gửi do DB cấp. Xóa actor không xóa lịch sử; xóa đội có đơn bị chặn, xóa giải cascade đơn.
+- Schema cho phép CANCELLED giữ reviewed_by/reviewed_at và rejection_reason lịch sử nếu có; chỉ bắt buộc cancelled_at khác null. Đây là khả năng lưu trữ cho mở rộng sau này, chưa cho phép rút đơn đã duyệt/từ chối qua API W44.
+- Migration hỗ trợ database W43 và database mới. Nếu bảng đã được create_all tạo trước đó, migration bổ sung unique/index còn thiếu, thay CHECK theo định nghĩa hiện tại; thiếu cột bắt buộc sẽ báo lỗi thay vì stamp head. Downgrade xóa bảng đăng ký và dữ liệu đơn, giữ các bảng W43.
+- PATCH, đổi trạng thái giải và duyệt đơn dùng chung `core/tournaments.get_managed_tournament`: đọc/kiểm tra quyền trước khóa, khóa hàng giải và đọc mới dữ liệu, tải lại quyền rồi kiểm tra lần hai. User không có quyền nhận 403 mà không chờ parent lock; tài khoản bị xóa trong lúc chờ nhận 401.
+- Sau parent lock mới khóa đơn, kiểm tra trạng thái, ghi đơn/audit và commit. `lock_registration_tournament` là alias của helper khóa chung để W44-03 dùng tiếp cho gửi/hủy đơn.
+- Thời điểm duyệt lấy từ đồng hồ DB; PostgreSQL dùng clock_timestamp() sau khi chờ lock để không dùng thời gian cũ ở đầu transaction. W44-03 dùng lại `registration_timestamp` cho cancelled_at.
+- PATCH đổi game khi giải có bất kỳ đơn nào trả 409 ngay trong W44-02; gửi cùng game_id hiện tại vẫn hợp lệ. Các writer dùng cùng parent lock nên đổi game không thể làm sai game của đội đã duyệt. W44-04 dùng lại guard này khi bổ sung API còn lại.
+- Audit `TOURNAMENT_REGISTRATION_APPROVED`/`TOURNAMENT_REGISTRATION_REJECTED`, resource `tournament_registration`, chứa actor, ID giải/đơn/đội, before/after lấy từ dữ liệu thực tế. Ghi audit và quyết định cùng transaction; lỗi rollback cả hai.
 
 ## Kiểm tra
 
@@ -34,4 +37,6 @@ python -m pytest tests/test_registration_decisions.py tests/test_registration_co
 
 Test PostgreSQL dùng schema tạm. Test cạnh tranh cần các connection độc lập và schema có dữ liệu commit riêng; luôn dọn schema sau test. Bao phủ hai người duyệt cùng đơn, quyết định chờ hủy/đóng giải, endpoint đổi trạng thái cạnh tranh với quyết định, audit/rollback, constraint và upgrade/downgrade từ W43. SQLite bỏ qua các bài chỉ có ý nghĩa trên PostgreSQL.
 
-Kiểm tra ngày 23/10/2026: backend 220 passed, 6 skipped; toàn bộ PostgreSQL marked suite 223 passed, 3 deselected; nhóm test mới/migration chạy PostgreSQL riêng 53 passed. Một cảnh báo deprecation từ Starlette/AnyIO.
+Test bổ sung sau review #41: chặn đổi game ở mọi trạng thái đơn, CANCELLED giữ lịch sử duyệt, lệch đồng hồ app, audit snapshot thực tế, writer sai quyền không chờ lock, thu hồi assignment/xóa tài khoản khi đang chờ, PATCH game cạnh tranh với duyệt và sửa constraint/index trên bảng create_all cũ.
+
+Kiểm tra lại sau review ngày 23/10/2026: backend 228 passed, 13 skipped; toàn bộ PostgreSQL marked suite 238 passed, 3 deselected. Các bài skip trong suite mặc định cần PostgreSQL thật. Một cảnh báo deprecation từ Starlette/AnyIO.

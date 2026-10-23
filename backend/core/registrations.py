@@ -1,18 +1,18 @@
 """Registration writers must lock tournament first, then registration, until commit."""
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from modules.tournaments.models import Tournament, TournamentRegistration
+from core.tournaments import lock_tournament as lock_registration_tournament
 
 
-def lock_registration_tournament(db: Session, tournament_id: int) -> Tournament:
-    tournament = db.scalar(select(Tournament).where(Tournament.tournament_id == tournament_id)
-                           .with_for_update().execution_options(populate_existing=True))
-    if tournament is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
-    return tournament
+def registration_timestamp(db: Session):
+    # PostgreSQL now() is fixed at transaction start, possibly before a lock wait.
+    # clock_timestamp() uses the DB wall clock after the lock has been acquired.
+    clock = func.clock_timestamp() if db.get_bind().dialect.name == 'postgresql' else func.current_timestamp()
+    return db.scalar(select(clock))
 
 
 def ensure_registration_open(tournament: Tournament) -> None:

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -44,14 +44,15 @@ class TournamentRegistration(Base):
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     __table_args__ = (
         UniqueConstraint("tournament_id", "team_id", name="uq_registration_tournament_team"),
+        Index("ix_tournament_registrations_team_id", "team_id"),
         CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')", name="ck_registration_status"),
         CheckConstraint(
             "(status = 'PENDING' AND reviewed_at IS NULL AND cancelled_at IS NULL) OR "
             "(status IN ('APPROVED', 'REJECTED') AND reviewed_at IS NOT NULL AND cancelled_at IS NULL) OR "
-            "(status = 'CANCELLED' AND reviewed_at IS NULL AND cancelled_at IS NOT NULL)",
+            "(status = 'CANCELLED' AND cancelled_at IS NOT NULL)",
             name="ck_registration_timestamps",
         ),
-        CheckConstraint("status = 'REJECTED' OR rejection_reason IS NULL", name="ck_registration_reason"),
+        CheckConstraint("status IN ('REJECTED', 'CANCELLED') OR rejection_reason IS NULL", name="ck_registration_reason"),
     )
 
 

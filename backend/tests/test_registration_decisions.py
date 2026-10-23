@@ -207,3 +207,74 @@ def test_database_constraints(access, session_factory, pending, invalid):
             else:
                 row.team_id = 999999
             db.add(row)
+
+
+@pytest.mark.parametrize('state', ['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'])
+def test_game_cannot_change_after_any_registration(access, session_factory, pending, state):
+    client, headers, *_ = access
+    tid, rid = pending
+    if state in ('APPROVED', 'REJECTED'):
+        assert client.post(path(pending), json={'status': state}, headers=headers('organizer')).status_code == 200
+    elif state == 'CANCELLED':
+        with session_factory.begin() as db:
+            row = db.get(TournamentRegistration, rid)
+            row.status = 'CANCELLED'
+            row.cancelled_at = datetime.now(timezone.utc)
+    url = f'/api/v1/tournaments/{tid}'
+    previous = client.get(url).json()
+    with session_factory() as db:
+        old_logs = len(db.scalars(select(AuditLog)).all())
+    assert client.patch(url, json={'game_id': 2}, headers=headers('organizer')).status_code == 409
+    assert client.get(url).json() == previous
+    with session_factory() as db:
+        assert len(db.scalars(select(AuditLog)).all()) == old_logs
+    assert client.patch(url, json={'game_id': previous['game_id'], 'name': 'Same game cup'},
+                        headers=headers('organizer')).status_code == 200
+
+
+@pytest.mark.parametrize('decision', ['APPROVED', 'REJECTED'])
+def test_cancellation_schema_can_preserve_review_history(access, session_factory, pending, decision):
+    client, headers, users, *_ = access
+    payload = {'status': decision}
+    if decision == 'REJECTED':
+        payload['rejection_reason'] = 'Historic reason'
+    response = client.post(path(pending), json=payload, headers=headers('organizer'))
+    assert response.status_code == 200
+    previous = response.json()
+    # Schema readiness only: W44 still has no API for withdrawing a reviewed entry.
+    with session_factory.begin() as db:
+        row = db.get(TournamentRegistration, pending[1])
+        row.status = 'CANCELLED'
+        row.cancelled_by = users['manager']
+        row.cancelled_at = datetime.now(timezone.utc)
+    data = client.get(f'/api/v1/tournaments/{pending[0]}/registrations', headers=headers('organizer')).json()[0]
+    assert data['status'] == 'CANCELLED'
+    assert data['reviewed_at'] == previous['reviewed_at']
+    assert data['reviewed_by'] == previous['reviewed_by']
+    assert data['rejection_reason'] == previous['rejection_reason']
+    assert registration_logs(session_factory)[0].details['after']['status'] == decision
+
+
+def test_review_timestamp_comes_from_db_despite_app_clock_skew(access, pending, monkeypatch):
+    from routes import registrations
+    class SkewedClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return cls(2000, 1, 1, tzinfo=tz)
+    monkeypatch.setattr(registrations, 'datetime', SkewedClock)
+    client, headers, *_ = access
+    response = client.post(path(pending), json={'status': 'APPROVED'}, headers=headers('organizer'))
+    assert response.status_code == 200
+    data = response.json()
+    assert datetime.fromisoformat(data['reviewed_at']) >= datetime.fromisoformat(data['submitted_at'])
+
+
+def test_audit_before_is_snapshot_of_stored_registration(access, session_factory, pending):
+    client, headers, users, *_ = access
+    with session_factory.begin() as db:
+        # A legacy pending entry may already have an actor; do not invent a null snapshot.
+        db.get(TournamentRegistration, pending[1]).reviewed_by = users['admin']
+    assert client.post(path(pending), json={'status': 'APPROVED'}, headers=headers('organizer')).status_code == 200
+    log = registration_logs(session_factory)[0]
+    assert log.details['before']['reviewed_by'] == users['admin']
+    assert log.details['after']['reviewed_by'] == users['organizer']
