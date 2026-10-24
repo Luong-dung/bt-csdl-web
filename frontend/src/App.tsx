@@ -8,6 +8,18 @@ type Area = { area_id: number; name: string; code: string; parent_id: number | n
 type Team = { team_id: number; name: string; tag: string; game_id: number };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
 type TeamDetail = Team & { members: TeamMember[] };
+type Tournament = {
+  tournament_id: number; name: string; game_id: number; area_id: number | null;
+  format: "SINGLE_ELIM" | "DOUBLE_ELIM" | "ROUND_ROBIN"; start_date: string;
+  end_date: string | null; status: "UPCOMING" | "ONGOING" | "COMPLETED" | "CANCELLED";
+  description: string | null; created_by: number | null; created_at: string;
+};
+type TournamentCapabilities = {
+  tournament_id: number; can_manage: boolean; can_update: boolean;
+  can_change_status: boolean; can_review_registrations: boolean;
+  editable_fields: string[]; allowed_status_transitions: string[];
+};
+type GlobalCapabilities = { can_manage_catalog: boolean; can_create_tournament: boolean };
 type AuthMode = "login" | "register";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -53,6 +65,16 @@ export default function App() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
+  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
+  const [tournamentCapabilities, setTournamentCapabilities] = useState<TournamentCapabilities | null>(null);
+  const [tournamentLoading, setTournamentLoading] = useState(false);
+  const [tournamentError, setTournamentError] = useState("");
+  const [tournamentTotal, setTournamentTotal] = useState(0);
+  const [tournamentPage, setTournamentPage] = useState(0);
+  const [tournamentGameFilter, setTournamentGameFilter] = useState("");
+  const [tournamentStatusFilter, setTournamentStatusFilter] = useState("");
+  const [globalCapabilities, setGlobalCapabilities] = useState<GlobalCapabilities | null>(null);
   const [memberLoading, setMemberLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogReloadError, setCatalogReloadError] = useState("");
@@ -82,6 +104,24 @@ export default function App() {
     setAreas(loadedAreas);
   };
 
+  const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter) => {
+    setTournamentLoading(true);
+    setTournamentError("");
+    try {
+      const params = new URLSearchParams({ offset: String(page * 6), limit: "6" });
+      if (gameId) params.set("game_id", gameId);
+      if (status) params.set("status", status);
+      const response = await fetch(`${API}/tournaments?${params}`);
+      if (!response.ok) throw new RequestError("Không thể tải danh sách giải đấu", response.status);
+      setTournaments(await response.json() as Tournament[]);
+      setTournamentTotal(Number(response.headers.get("X-Total-Count") ?? 0));
+    } catch (reason) {
+      setTournamentError((reason as Error).message);
+    } finally {
+      setTournamentLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadTeams();
     loadCatalog().catch((reason) => {
@@ -89,6 +129,10 @@ export default function App() {
       setError(`Không thể tải catalog: ${(reason as Error).message}`);
     });
   }, []);
+
+  useEffect(() => {
+    void loadTournaments();
+  }, [tournamentPage, tournamentGameFilter, tournamentStatusFilter]);
 
   useEffect(() => {
     if (!token) return;
@@ -117,6 +161,16 @@ export default function App() {
       controller.abort();
     };
   }, [token, authCheckAttempt]);
+
+  useEffect(() => {
+    if (!token) {
+      setGlobalCapabilities(null);
+      return;
+    }
+    request<GlobalCapabilities>("/auth/capabilities", {}, token)
+      .then(setGlobalCapabilities)
+      .catch(() => setGlobalCapabilities(null));
+  }, [token]);
 
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -392,12 +446,105 @@ export default function App() {
     await catalogRequest(`/catalog/${kind}/${id}`, "DELETE");
   };
 
+  const loadTournamentCapabilities = async (tournamentId: number) => {
+    if (!token) {
+      setTournamentCapabilities(null);
+      return;
+    }
+    try {
+      setTournamentCapabilities(await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, token));
+    } catch {
+      setTournamentCapabilities(null);
+    }
+  };
+
+  const viewTournament = async (tournamentId: number) => {
+    setError("");
+    setNotice("");
+    try {
+      const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
+      setSelectedTournament(tournament);
+      await loadTournamentCapabilities(tournamentId);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  };
+
+  const submitTournament = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+    setError("");
+    setNotice("");
+    setTournamentLoading(true);
+    const form = new FormData(event.currentTarget);
+    const body = {
+      name: form.get("name"), game_id: Number(form.get("game_id")),
+      area_id: form.get("area_id") ? Number(form.get("area_id")) : null,
+      format: form.get("format"), start_date: form.get("start_date"),
+      end_date: form.get("end_date") || null, description: form.get("description") || null,
+    };
+    try {
+      await request<Tournament>("/tournaments", { method: "POST", body: JSON.stringify(body) }, token);
+      event.currentTarget.reset();
+      await loadTournaments();
+      setNotice("Đã tạo giải đấu mới.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setTournamentLoading(false);
+    }
+  };
+
+  const changeTournamentStatus = async (status: string) => {
+    if (!token || !selectedTournament) return;
+    setTournamentLoading(true);
+    setError("");
+    try {
+      const updated = await request<Tournament>(`/tournaments/${selectedTournament.tournament_id}/status`, {
+        method: "POST", body: JSON.stringify({ status }),
+      }, token);
+      setSelectedTournament(updated);
+      await loadTournamentCapabilities(updated.tournament_id);
+      await loadTournaments();
+      setNotice(`Đã chuyển trạng thái giải sang ${status}.`);
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setTournamentLoading(false);
+    }
+  };
+
+  const updateTournament = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token || !selectedTournament) return;
+    setTournamentLoading(true);
+    const form = new FormData(event.currentTarget);
+    const body: Record<string, string | number> = {};
+    for (const [key, value] of form.entries()) {
+      if (value !== "") body[key] = key === "game_id" || key === "area_id" ? Number(value) : String(value);
+    }
+    try {
+      const updated = await request<Tournament>(`/tournaments/${selectedTournament.tournament_id}`, {
+        method: "PATCH", body: JSON.stringify(body),
+      }, token);
+      setSelectedTournament(updated);
+      await loadTournamentCapabilities(updated.tournament_id);
+      await loadTournaments();
+      setNotice("Đã cập nhật thông tin giải đấu.");
+    } catch (reason) {
+      setError((reason as Error).message);
+    } finally {
+      setTournamentLoading(false);
+    }
+  };
+
   return <main className="shell">
     <header className="hero">
       <div>
-        <span className="eyebrow">W42-06 · TEAMS</span>
-        <h1>Danh sách và tạo đội</h1>
-        <p>Khám phá các đội tuyển và tạo đội mới bằng tài khoản đã xác thực.</p>
+        <div className="brand-lockup"><span className="brand-mark">N</span><span>NEXUS<span>ARENA</span></span></div>
+        <span className="eyebrow">W44 · COMPETITIVE GAMING PLATFORM</span>
+        <h1>Build your legacy.<br /><em>Own the arena.</em></h1>
+        <p>Quản lý đội tuyển, khám phá giải đấu và đưa đội của bạn lên bảng xếp hạng.</p>
       </div>
       {user && <div className="account"><span>Xin chào, <strong>{user.username}</strong></span><button className="button secondary" onClick={logout}>Đăng xuất</button></div>}
     </header>
@@ -440,6 +587,39 @@ export default function App() {
           <li>Người tạo tự động là MANAGER</li>
         </ul>
       </aside>
+    </section>
+    <section className="tournament-zone">
+      <div className="section-heading">
+        <div><span className="eyebrow">W44-05 · ARENA CONTROL</span><h2>Giải đấu đang diễn ra</h2><p>Khám phá lịch thi đấu, theo dõi trạng thái và vận hành giải từ một command center.</p></div>
+        <span className="section-count">{tournamentTotal} giải</span>
+      </div>
+      <div className="tournament-toolbar">
+        <label>Game<select value={tournamentGameFilter} onChange={(event) => { setTournamentPage(0); setTournamentGameFilter(event.target.value); }}><option value="">Tất cả game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
+        <label>Trạng thái<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option><option value="UPCOMING">Sắp diễn ra</option><option value="ONGOING">Đang diễn ra</option><option value="COMPLETED">Đã kết thúc</option><option value="CANCELLED">Đã hủy</option></select></label>
+        <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ Làm mới</button>
+      </div>
+      {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>Thử lại</button></div>}
+      {tournamentLoading && <div className="loading-state"><span className="spinner" /> Đang đồng bộ dữ liệu giải đấu...</div>}
+      {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>Chưa có giải đấu phù hợp</strong><span>Thử thay đổi bộ lọc hoặc tạo giải đấu đầu tiên.</span></div>}
+      <div className="tournament-grid">{tournaments.map((tournament) => {
+        const game = games.find((item) => item.game_id === tournament.game_id);
+        return <article className="tournament-card" key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
+          <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? "SẮP DIỄN RA" : tournament.status === "ONGOING" ? "LIVE NOW" : tournament.status === "COMPLETED" ? "ĐÃ KẾT THÚC" : "ĐÃ HỦY"}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
+          <h3>{tournament.name}</h3><p className="game-label">{game?.name ?? "Unknown title"} <span>·</span> {tournament.format.replace("_", " ")}</p>
+          <div className="card-meta"><span>◷ {new Date(tournament.start_date).toLocaleDateString("vi-VN")}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString("vi-VN")}` : "Open end"}</span></div>
+          <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>Xem chi tiết <span>→</span></button>
+        </article>;
+      })}</div>
+      {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← Trước</button><span>Trang {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>Sau →</button></div>}
+      {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> Tạo giải đấu mới</summary><form onSubmit={submitTournament} className="tournament-form">
+        <label>Tên giải đấu<input name="name" placeholder="VCT Vietnam — Stage 1" minLength={3} maxLength={150} required /></label><label>Game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label><label>Thể thức<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>Bắt đầu<input name="start_date" type="date" required /></label><label>Kết thúc<input name="end_date" type="date" /></label><label>Khu vực<select name="area_id" defaultValue=""><option value="">Toàn cầu</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">Mô tả<textarea name="description" maxLength={2000} placeholder="Thông tin giải, luật thi đấu, phần thưởng..." /></label><button className="button" disabled={tournamentLoading}>Tạo giải đấu</button>
+      </form></details>}
+      {selectedTournament && <div className="tournament-detail">
+        <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={() => { setSelectedTournament(null); setTournamentCapabilities(null); }}>Đóng ×</button></div>
+        <div className="detail-stats"><div><span>Trạng thái</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div><div><span>Ngày bắt đầu</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString("vi-VN")}</strong></div><div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div></div>
+        {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
+        {tournamentCapabilities?.can_manage && <div className="manage-panel"><div className="panel-title"><h4>Điều hành giải</h4><span>CAPABILITY VERIFIED</span></div><div className="status-actions">{tournamentCapabilities.allowed_status_transitions.map((status) => <button className="button secondary" key={status} disabled={tournamentLoading} onClick={() => void changeTournamentStatus(status)}>Chuyển sang {status}</button>)}</div>{tournamentCapabilities.can_update && <form className="tournament-form edit-form" onSubmit={updateTournament}><label>Tên giải<input name="name" defaultValue={selectedTournament.name} /></label><label>Ngày kết thúc<input name="end_date" type="date" defaultValue={selectedTournament.end_date ?? ""} /></label><label className="wide-field">Mô tả<textarea name="description" defaultValue={selectedTournament.description ?? ""} /></label><button className="button" disabled={tournamentLoading}>Lưu thay đổi</button></form>}</div>}
+      </div>}
     </section>
     <section className="panel catalog-panel">
       <div className="panel-title"><h2>Quản trị catalog</h2><span>ADMIN</span></div>
