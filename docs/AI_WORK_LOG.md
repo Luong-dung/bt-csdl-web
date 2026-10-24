@@ -59,10 +59,10 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 | `AI-2026-W43-DUONG-003` | `2026-10-21` | [W43-05 / PR #34](https://github.com/Luong-dung/bt-csdl-web/pull/34) | Hoàn thiện giao diện quản lý thành viên đội và xử lý góp ý review | Thêm thành viên bằng username, đổi vị trí, kết thúc membership/tự rời đội, xem lịch sử; chỉ ADMIN hoặc MANAGER ACTIVE thấy thao tác quản lý; giữ form khi API 403/409; xác nhận trước thao tác không hoàn tác; sửa lỗi refresh sau ghi | `frontend/src/App.tsx`, `frontend/src/styles.css`, `docs/weeks/2026-W43.md` | `npm run build` đạt; kiểm thử trình duyệt với API giả lập xác nhận phân quyền, giữ form khi 409 và hiển thị lỗi 422; PR #34 đã approve và merge commit `00d3eba` | `VERIFIED` |
 | `AI-2026-W43-DUONG-004` | `2026-10-21` | [W43-06 / PR #35](https://github.com/Luong-dung/bt-csdl-web/pull/35) | Xây dựng giao diện quản trị catalog và xử lý góp ý về danh sách, form và lỗi tải lại | Hiển thị danh sách publisher/game/khu vực cho mọi user; chỉ ADMIN thấy form và nút ghi; CRUD qua API thật, chọn publisher/khu vực cha; giữ form khi ghi lỗi; xử lý detail validation dạng mảng; phân biệt ghi thành công nhưng GET refresh lỗi và thêm nút tải lại | `frontend/src/App.tsx`, `frontend/src/styles.css`, `docs/weeks/2026-W43.md` | `npm run build` đạt; `python -m pytest tests/test_catalog_api.py tests/test_team_api.py -q`: 23 passed, 1 warning; kiểm thử trình duyệt với API giả lập xác nhận user thường xem danh sách, 409 giữ form, 422 hiển thị rõ và GET refresh lỗi không gửi lại thao tác | `VERIFIED` |
 | `AI-2026-W44-DUONG-009` | `2026-10-25` | [W44-05 / PR #46](https://github.com/Luong-dung/bt-csdl-web/pull/46) | Hoàn thiện UI danh sách, chi tiết và quản lý giải đấu theo đặc tả W44-05; tích hợp capability và xử lý đầy đủ trạng thái tải dữ liệu | Bổ sung danh sách giải có lọc/phân trang, màn hình chi tiết, form tạo/sửa giải và chuyển trạng thái theo API W43; dùng capability từ W44-01 để ẩn/hiện thao tác theo quyền; thêm trạng thái loading, empty, error và nút thử lại cho các luồng dữ liệu | `frontend/src/App.tsx`, `frontend/src/styles.css`, `docs/weeks/2026-W44.md` | CI đạt cho backend tests, frontend build và Browser E2E; `npm run build` và kiểm tra TypeScript thành công; PR #46 đã merge và W44-05 đã nghiệm thu | `VERIFIED` |
-| `AI-2026-W44-DUONG-005` | `2026-10-24` | [W44-06 / PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) | Xây dựng giao diện đăng ký đội và xử lý đơn trên màn hình chi tiết giải theo đặc tả W44-06 | Form chọn đội quản lý theo game để gửi đơn đăng ký (`POST /tournaments/{id}/registrations`); bảng danh sách đơn có lọc trạng thái; nút Hủy đơn cho đội (`POST .../cancel`); khu vực duyệt/từ chối đơn kèm lý do cho ban tổ chức (`POST .../review`); bảng đội tuyển chính thức tham gia (`GET /tournaments/{id}/teams`); xử lý lỗi 403, 409, 422 | `frontend/src/App.tsx`, `frontend/src/styles.css` | `npm run build` thành công; giao diện hiển thị đúng form, nút thao tác và danh sách theo quyền tài khoản; mở PR #47 | `APPLIED` |
+| `AI-2026-W44-DUONG-005` | `2026-10-24` | [W44-06 / PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) | Xây dựng giao diện đăng ký đội và xử lý đơn trên màn hình chi tiết giải theo đặc tả W44-06 | Form chọn đội quản lý theo game để gửi đơn đăng ký (`POST /tournaments/{id}/registrations`); bảng danh sách đơn có lọc trạng thái; nút Hủy đơn cho đội (`POST .../cancel`); khu vực duyệt/từ chối đơn kèm lý do cho ban tổ chức (`POST .../decision`); bảng đội tuyển chính thức tham gia (`GET /tournaments/{id}/teams`); xử lý lỗi 403, 409, 422 | `frontend/src/App.tsx`, `frontend/src/styles.css` | `npm run build` thành công; giao diện hiển thị đúng form, nút thao tác và danh sách theo quyền tài khoản; mở PR #47; sau review PR #47 được DOANH approve và merge commit `9b538fd` | `VERIFIED` |
 | `AI-2026-W44-DUONG-006` | `2026-10-25` | [W44-06 / PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) | Sửa 2 lỗi chặn luồng (🔴 blocker) phát hiện khi review: đội đã hủy/từ chối vẫn hiện trong dropdown dẫn đến 409 do UniqueConstraint; bộ lọc trạng thái làm sai lệch danh sách đội có thể đăng ký | Cập nhật `availableTeams` loại trừ mọi đội đã có bất kỳ đơn nào trong giải đấu (không phân biệt trạng thái PENDING, APPROVED, REJECTED, CANCELLED); tách riêng state `allTournamentRegistrations` (danh sách không lọc) dùng tính toán dropdown đăng ký độc lập với danh sách hiển thị `registrations` | `frontend/src/App.tsx` | `npm run build` đạt; kiểm tra hủy đơn thì đội không xuất hiện lại trong dropdown; lọc trạng thái APPROVED không làm đội PENDING lọt vào form đăng ký | `VERIFIED` |
 | `AI-2026-W44-DUONG-007` | `2026-10-25` | [W44-06 / PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) | Xử lý các góp ý review (🟡) về quản lý phiên đăng nhập và phân quyền: xử lý 401 khi token hết hạn; đồng bộ trạng thái khi login/logout lúc đang mở chi tiết giải; cho phép quản lý giải kiêm quản lý đội hủy đơn đội mình; hoàn thiện nút Thử lại | Thêm hàm `handleAuthExpired` tự động xóa token và reset state người dùng khi gặp lỗi 401; thêm `useEffect` theo dõi `token` để reset hoặc tải lại dữ liệu giải đấu phản ứng khi đổi đăng nhập; bỏ điều kiện `!canReview` ở nút Hủy đơn của đội; sửa nút Thử lại gọi hàm tải lại toàn diện capabilities, đội chính thức, đội quản lý và đơn đăng ký | `frontend/src/App.tsx` | `npm run build` đạt; mô phỏng 401 tự động đăng xuất; login/logout khi đang mở giải cập nhật dữ liệu đúng; người quản lý giải kiêm quản lý đội hủy được đơn đội mình; bấm Thử lại tải lại đủ dữ liệu | `VERIFIED` |
-| `AI-2026-W44-DUONG-008` | `2026-10-25` | [W44-06 / PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) | Hoàn thiện kỹ thuật theo review đợt 2 (⚪): chống race condition toàn diện qua các loader; bảo vệ trường hợp giải có trên 50 đơn; sửa định dạng newline; chuẩn hóa phạm vi cập nhật tài liệu nhóm | Truyền `expectedVersion` vào tất cả các loader con (`loadCapabilities`, `loadApprovedTeams`, `loadManagedTeamsForTournament`, `loadRegistrations`) và kiểm tra `tournamentViewVersion.current !== expectedVersion` trước khi cập nhật state; nâng `limit=100` và bổ sung quét `?team_id=` cho từng đội đang quản lý; thêm newline cuối `frontend/src/styles.css`; khôi phục trạng thái W44-01 đến W44-04 về IN PROGRESS chờ chủ task nghiệm thu, chỉ cập nhật dòng W44-06 | `frontend/src/App.tsx`, `frontend/src/styles.css`, `docs/weeks/2026-W44.md`, `docs/TEAM_WORK_PLAN.md` | `npm run build` thành công (0 lỗi, 426ms); chuyển đổi nhanh giữa các giải không bị lẫn dữ liệu; PR #47 được reviewer xác nhận đạt cả 6 điểm và CI pass cả 3 job | `VERIFIED` |
+| `AI-2026-W44-DUONG-008` | `2026-10-25` | [W44-06 / PR #49](https://github.com/Luong-dung/bt-csdl-web/pull/49) | Hoàn thiện kỹ thuật theo review đợt 2 (⚪): chống race condition toàn diện qua các loader; bảo vệ trường hợp giải có trên 50 đơn | Truyền `expectedVersion` vào tất cả các loader con (`loadCapabilities`, `loadApprovedTeams`, `loadManagedTeamsForTournament`, `loadRegistrations`) và kiểm tra `tournamentViewVersion.current !== expectedVersion` trước khi cập nhật state; nâng `limit=100` và bổ sung quét `?team_id=` cho từng đội đang quản lý; sau review PR #49: sửa đơn bị nhân đôi khi bổ sung kết quả `?team_id=` (hai danh sách dùng chung một mảng) và chỉ quét thêm khi danh sách đủ limit 100 | `frontend/src/App.tsx` | `npm run build` thành công (0 lỗi, 426ms); chuyển đổi nhanh giữa các giải không bị lẫn dữ liệu; chờ review PR #49 | `APPLIED` |
 
 ### Đồng Đức Dương — `DUC`
 
@@ -111,9 +111,9 @@ Sử dụng mẫu này khi yêu cầu có ảnh hưởng lớn đến kiến tr�
 - **File/module ảnh hưởng:** `frontend/src/App.tsx`, `frontend/src/styles.css`
 - **Kiểm tra đã chạy:** `npm run build`, kiểm tra giao diện và thao tác trên trình duyệt.
 - **Kết quả kiểm tra:** `npm run build` thành công, không có lỗi TypeScript; hiển thị đầy đủ các thành phần theo đặc tả.
-- **Người review:** Lường Tiến Dũng (`DUNG`), Nguyễn Quốc Doanh (`DOANH`)
-- **Trạng thái:** `APPLIED`
-- **Ghi chú:** Chờ review đợt 1 để hoàn thiện các ca biên và phân quyền.
+- **Người review:** Nguyễn Quốc Doanh (`DOANH`)
+- **Trạng thái:** `VERIFIED`
+- **Ghi chú:** Review đợt 1 yêu cầu sửa (xem DUONG-006/007); PR #47 đã được approve và merge commit `9b538fd`.
 
 ### AI-2026-W44-DUONG-006 — Sửa lỗi chặn luồng đăng ký (Dropdown 409 & Filter)
 
@@ -131,7 +131,7 @@ Sử dụng mẫu này khi yêu cầu có ảnh hưởng lớn đến kiến tr�
 - **File/module ảnh hưởng:** `frontend/src/App.tsx`
 - **Kiểm tra đã chạy:** `npm run build`, kiểm thử thao tác đăng ký -> hủy đơn -> kiểm tra dropdown; chuyển đổi bộ lọc trạng thái -> kiểm tra dropdown.
 - **Kết quả kiểm tra:** Build thành công; đội đã hủy/từ chối không còn hiện trong form đăng ký; chuyển filter không làm sai lệch danh sách đội có thể đăng ký.
-- **Người review:** Lường Tiến Dũng (`DUNG`)
+- **Người review:** Nguyễn Quốc Doanh (`DOANH`)
 - **Trạng thái:** `VERIFIED`
 - **Ghi chú:** Đã giải quyết triệt để 2 lỗi blocker.
 
@@ -153,31 +153,29 @@ Sử dụng mẫu này khi yêu cầu có ảnh hưởng lớn đến kiến tr�
 - **File/module ảnh hưởng:** `frontend/src/App.tsx`
 - **Kiểm tra đã chạy:** `npm run build`, mô phỏng 401 khi bấm hủy/duyệt; đăng xuất/đăng nhập lại khi đang mở giải; kiểm tra quyền hủy đơn của tài khoản đa vai trò; bấm Thử lại khi giả lập lỗi mạng.
 - **Kết quả kiểm tra:** Đạt toàn bộ; phiên đăng nhập được quản lý chuẩn mực, không còn sót dữ liệu rác hay lỗi phân quyền.
-- **Người review:** Lường Tiến Dũng (`DUNG`)
+- **Người review:** Nguyễn Quốc Doanh (`DOANH`)
 - **Trạng thái:** `VERIFIED`
 - **Ghi chú:** Hoàn thành toàn bộ 4 điểm vàng (🟡).
 
-### AI-2026-W44-DUONG-008 — Race Condition Guard, Phân trang lớn & Chuẩn hóa tài liệu
+### AI-2026-W44-DUONG-008 — Race Condition Guard, Phân trang lớn
 
 - **Người thực hiện:** Nguyễn Tùng Dương (`DUONG`)
 - **Ngày gửi:** `2026-10-25`
 - **Task tuần:** `W44-06`
-- **Pull Request/commit:** [PR #47](https://github.com/Luong-dung/bt-csdl-web/pull/47) (commit `640461b`)
-- **Mục tiêu:** Xử lý các góp ý kỹ thuật đợt 2 (⚪): chống race condition giữa các loader khi chuyển giải nhanh, bảo vệ phân trang khi giải có >50 đơn, sửa newline styles.css và giữ nguyên trạng thái task khác trong docs.
+- **Pull Request/commit:** [PR #49](https://github.com/Luong-dung/bt-csdl-web/pull/49) (commit `640461b`, sửa sau review)
+- **Mục tiêu:** Xử lý 2 góp ý nhỏ còn lại sau khi approve PR #47: chống race condition giữa các loader khi chuyển giải nhanh và bảo vệ trường hợp giải có nhiều đơn hơn limit.
 - **Tóm tắt yêu cầu gửi AI:**
   1. Truyền version guard vào từng loader trong `Promise.all` để tránh loader giải cũ ghi đè giải mới khi mạng trễ.
-  2. Phòng ngừa trường hợp giải có hơn 50 đơn khiến đơn của đội mình rơi ra ngoài trang: nâng limit lên 100 và quét thêm `?team_id=` cho từng đội đang quản lý.
-  3. Thêm newline cuối file `frontend/src/styles.css`.
-  4. Khôi phục trạng thái task W44-01 đến W44-04 về IN PROGRESS theo đúng quy định nhóm.
-- **Đề xuất chính của AI:** Thêm tham số `expectedVersion` vào `loadCapabilities`, `loadApprovedTeams`, `loadManagedTeamsForTournament`, `loadRegistrations`; thực hiện kiểm tra song song `?team_id=`; cập nhật tài liệu `docs/weeks/2026-W44.md` và `docs/TEAM_WORK_PLAN.md`.
-- **Phần đã áp dụng:** Toàn bộ đề xuất kỹ thuật và chuẩn hóa tài liệu.
+  2. Phòng ngừa trường hợp giải có nhiều đơn khiến đơn của đội mình rơi ra ngoài trang: nâng limit lên 100 và quét thêm `?team_id=` cho từng đội đang quản lý.
+- **Đề xuất chính của AI:** Thêm tham số `expectedVersion` vào `loadTournamentCapabilities`, `loadApprovedTeams`, `loadManagedTeamsForTournament`, `loadTournamentRegistrations`; thực hiện kiểm tra song song `?team_id=`.
+- **Phần đã áp dụng:** Toàn bộ đề xuất kỹ thuật. Sau review PR #49: sao chép danh sách lọc trước khi bổ sung để không nhân đôi đơn khi không lọc trạng thái; chỉ quét `?team_id=` khi danh sách đủ limit 100.
 - **Phần không áp dụng:** Không thay thế toàn bộ API bằng phân trang vô tận (infinite scroll) vì vượt quá phạm vi tuần W44.
-- **File/module ảnh hưởng:** `frontend/src/App.tsx`, `frontend/src/styles.css`, `docs/weeks/2026-W44.md`, `docs/TEAM_WORK_PLAN.md`
-- **Kiểm tra đã chạy:** `npm run build` (hoàn thành trong 426ms, 0 cảnh báo/lỗi); kiểm tra diff git; CI pass cả 3 job.
-- **Kết quả kiểm tra:** Hoàn thành xuất sắc; reviewer xác nhận toàn bộ 6 điểm đã sửa đúng, CI pass, sẵn sàng merge.
-- **Người review:** Lường Tiến Dũng (`DUNG`)
-- **Trạng thái:** `VERIFIED`
-- **Ghi chú:** PR #47 hoàn thiện trọn vẹn cả tiêu chí chính lẫn các điểm tối ưu phụ.
+- **File/module ảnh hưởng:** `frontend/src/App.tsx`
+- **Kiểm tra đã chạy:** `npm run build`; CI trên PR #49.
+- **Kết quả kiểm tra:** Build đạt; chờ review PR #49.
+- **Người review:** chờ review PR #49
+- **Trạng thái:** `APPLIED`
+- **Ghi chú:** Trạng thái task tuần W44 được chốt ở PR #51, không đổi trong PR này.
 
 
 ## 5. Mẫu ghi nhanh
