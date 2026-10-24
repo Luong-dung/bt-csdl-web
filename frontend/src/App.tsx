@@ -84,6 +84,7 @@ export default function App() {
   const [approvedTeams, setApprovedTeams] = useState<ApprovedTeam[]>([]);
   const [managedTeamsForTournament, setManagedTeamsForTournament] = useState<Team[]>([]);
   const [registrations, setRegistrations] = useState<TournamentRegistrationItem[]>([]);
+  const [allTournamentRegistrations, setAllTournamentRegistrations] = useState<TournamentRegistrationItem[]>([]);
   const [registrationLoading, setRegistrationLoading] = useState(false);
   const [registrationError, setRegistrationError] = useState("");
   const [registrationNotice, setRegistrationNotice] = useState("");
@@ -99,6 +100,26 @@ export default function App() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogReloadError, setCatalogReloadError] = useState("");
   const sessionVersion = useRef(0);
+  const tournamentViewVersion = useRef(0);
+
+  const handleAuthExpired = (customMessage?: string) => {
+    sessionVersion.current += 1;
+    localStorage.removeItem(TOKEN_KEY);
+    setToken("");
+    setUser(null);
+    setTeamCapabilities(null);
+    setTeamCapabilityError("");
+    setGlobalCapabilities(null);
+    setGlobalCapabilityError("");
+    setTournamentCapabilities(null);
+    setCapabilityError("");
+    setRegistrations([]);
+    setAllTournamentRegistrations([]);
+    setManagedTeamsForTournament([]);
+    setRegistrationError("");
+    setRegistrationNotice("");
+    setError(customMessage || "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+  };
 
   const loadTeams = async () => {
     try {
@@ -167,10 +188,7 @@ export default function App() {
       .catch((reason: unknown) => {
         if (!active || controller.signal.aborted) return;
         if (reason instanceof RequestError && (reason.status === 401 || reason.status === 403)) {
-          localStorage.removeItem(TOKEN_KEY);
-          setToken("");
-          setUser(null);
-          setError("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+          handleAuthExpired();
           return;
         }
         setError("Không thể kiểm tra phiên đăng nhập. Hãy thử lại.");
@@ -247,6 +265,13 @@ export default function App() {
     setTeamCapabilityError("");
     setGlobalCapabilities(null);
     setGlobalCapabilityError("");
+    setTournamentCapabilities(null);
+    setCapabilityError("");
+    setRegistrations([]);
+    setAllTournamentRegistrations([]);
+    setManagedTeamsForTournament([]);
+    setRegistrationError("");
+    setRegistrationNotice("");
     setNotice("Bạn đã đăng xuất.");
   };
 
@@ -496,21 +521,40 @@ export default function App() {
     await catalogRequest(`/catalog/${kind}/${id}`, "DELETE");
   };
 
-  const loadTournamentCapabilities = async (tournamentId: number) => {
-    if (!token) {
+  const closeTournamentDetail = () => {
+    tournamentViewVersion.current += 1;
+    setSelectedTournament(null);
+    setTournamentCapabilities(null);
+    setCapabilityError("");
+    setApprovedTeams([]);
+    setManagedTeamsForTournament([]);
+    setRegistrations([]);
+    setAllTournamentRegistrations([]);
+    setRegistrationError("");
+    setRegistrationNotice("");
+    setRegistrationStatusFilter("");
+  };
+
+  const loadTournamentCapabilities = async (tournamentId: number, authToken = token) => {
+    if (!authToken) {
       setTournamentCapabilities(null);
       setCapabilityError("");
       return;
     }
     try {
       setCapabilityError("");
-      setTournamentCapabilities(await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, token));
+      setTournamentCapabilities(await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, authToken));
     } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       setTournamentCapabilities(null);
       setCapabilityError((reason as Error).message || "Không thể tải quyền quản lý giải đấu.");
     }
   };
 
+  // Lưu ý: Endpoint /tournaments/{id}/teams mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
   const loadApprovedTeams = async (tournamentId: number) => {
     try {
       const list = await request<ApprovedTeam[]>(`/tournaments/${tournamentId}/teams`);
@@ -521,38 +565,82 @@ export default function App() {
     }
   };
 
-  const loadManagedTeamsForTournament = async (gameId: number) => {
-    if (!token) {
+  // Lưu ý: Endpoint /teams/managed mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
+  const loadManagedTeamsForTournament = async (gameId: number, authToken = token) => {
+    if (!authToken) {
       setManagedTeamsForTournament([]);
       return;
     }
     try {
-      const list = await request<Team[]>(`/teams/managed?game_id=${gameId}`, {}, token);
+      const list = await request<Team[]>(`/teams/managed?game_id=${gameId}`, {}, authToken);
       setManagedTeamsForTournament(list);
     } catch (reason) {
       setManagedTeamsForTournament([]);
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       setRegistrationError((reason as Error).message);
     }
   };
 
-  const loadTournamentRegistrations = async (tournamentId: number, statusFilter?: string) => {
+  // Lưu ý: Endpoint /tournaments/{id}/registrations mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đơn.
+  const loadTournamentRegistrations = async (tournamentId: number, statusFilter?: string, authToken = token) => {
     setRegistrationError("");
-    if (!token) {
+    if (!authToken) {
       setRegistrations([]);
+      setAllTournamentRegistrations([]);
       return;
     }
     try {
-      const query = statusFilter ? `?status=${statusFilter}` : "";
-      const list = await request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations${query}`, {}, token);
-      setRegistrations(list);
+      const unfilteredPromise = request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations`, {}, authToken);
+      const filteredPromise = statusFilter
+        ? request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?status=${statusFilter}`, {}, authToken)
+        : unfilteredPromise;
+
+      const [unfilteredList, filteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
+      setAllTournamentRegistrations(unfilteredList);
+      setRegistrations(filteredList);
     } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       if ((reason as RequestError).status === 403) {
         setRegistrations([]);
+        setAllTournamentRegistrations([]);
       } else {
         setRegistrationError((reason as Error).message);
       }
     }
   };
+
+  const reloadTournamentDetailsData = async (tournament: Tournament) => {
+    setRegistrationError("");
+    await Promise.all([
+      loadTournamentCapabilities(tournament.tournament_id),
+      loadApprovedTeams(tournament.tournament_id),
+      loadManagedTeamsForTournament(tournament.game_id),
+      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter),
+    ]);
+  };
+
+  useEffect(() => {
+    if (!selectedTournament) return;
+    if (!token) {
+      setTournamentCapabilities(null);
+      setCapabilityError("");
+      setRegistrations([]);
+      setAllTournamentRegistrations([]);
+      setManagedTeamsForTournament([]);
+      setRegistrationError("");
+      setRegistrationNotice("");
+      return;
+    }
+    void loadTournamentCapabilities(selectedTournament.tournament_id, token);
+    void loadManagedTeamsForTournament(selectedTournament.game_id, token);
+    void loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token);
+  }, [token]);
 
   const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -577,9 +665,12 @@ export default function App() {
         loadManagedTeamsForTournament(selectedTournament.game_id),
       ]);
     } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       setRegistrationError((reason as Error).message);
-    }
-    finally {
+    } finally {
       setRegistrationLoading(false);
     }
   };
@@ -600,9 +691,12 @@ export default function App() {
         loadManagedTeamsForTournament(selectedTournament.game_id),
       ]);
     } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       setRegistrationError((reason as Error).message);
-    }
-    finally {
+    } finally {
       setRegistrationLoading(false);
     }
   };
@@ -632,27 +726,49 @@ export default function App() {
         loadTournamentCapabilities(selectedTournament.tournament_id),
       ]);
     } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
       setRegistrationError((reason as Error).message);
-    }
-    finally {
+    } finally {
       setRegistrationLoading(false);
     }
   };
 
-  const handleRegistrationFilterChange = (status: string) => {
+  const handleRegistrationFilterChange = async (status: string) => {
     setRegistrationStatusFilter(status);
-    if (selectedTournament) {
-      void loadTournamentRegistrations(selectedTournament.tournament_id, status);
+    if (!selectedTournament || !token) return;
+    try {
+      const query = status ? `?status=${status}` : "";
+      const list = await request<TournamentRegistrationItem[]>(
+        `/tournaments/${selectedTournament.tournament_id}/registrations${query}`,
+        {},
+        token
+      );
+      setRegistrations(list);
+    } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if ((reason as RequestError).status === 403) {
+        setRegistrations([]);
+      } else {
+        setRegistrationError((reason as Error).message);
+      }
     }
   };
 
   const viewTournament = async (tournamentId: number) => {
+    const version = ++tournamentViewVersion.current;
     setError("");
     setNotice("");
     setRegistrationError("");
     setRegistrationNotice("");
     try {
       const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
+      if (tournamentViewVersion.current !== version) return;
       setSelectedTournament(tournament);
       await Promise.all([
         loadTournamentCapabilities(tournamentId),
@@ -661,6 +777,7 @@ export default function App() {
         loadTournamentRegistrations(tournamentId, registrationStatusFilter),
       ]);
     } catch (reason) {
+      if (tournamentViewVersion.current !== version) return;
       setError((reason as Error).message);
     }
   };
@@ -819,7 +936,7 @@ export default function App() {
         <label>Tên giải đấu<input name="name" placeholder="VCT Vietnam — Stage 1" minLength={3} maxLength={150} required /></label><label>Tựa game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn tựa game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label><label>Thể thức<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>Bắt đầu<input name="start_date" type="date" required /></label><label>Kết thúc<input name="end_date" type="date" /></label><label>Khu vực<select name="area_id" defaultValue=""><option value="">Toàn cầu</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">Mô tả<textarea name="description" maxLength={2000} placeholder="Thông tin giải, luật thi đấu, phần thưởng..." /></label><button className="button" disabled={tournamentLoading}>Tạo giải đấu</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
-        <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={() => { setSelectedTournament(null); setTournamentCapabilities(null); setCapabilityError(""); setApprovedTeams([]); setManagedTeamsForTournament([]); setRegistrations([]); setRegistrationError(""); setRegistrationNotice(""); setRegistrationStatusFilter(""); }}>Đóng ×</button></div>
+        <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>Đóng ×</button></div>
         <div className="detail-stats"><div><span>Trạng thái</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div><div><span>Ngày bắt đầu</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString("vi-VN")}</strong></div><div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div></div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
         {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id)}>Thử lại</button></div>}
@@ -860,7 +977,7 @@ export default function App() {
         )}</div>}
 
         <div className="approved-teams-section">
-          <h4>Đội tuyển tham gia ({approvedTeams.length})</h4>
+          <h4>Đội tuyển tham gia ({approvedTeams.length}{approvedTeams.length >= 50 ? "+" : ""})</h4>
           {approvedTeams.length === 0 ? (
             <p className="muted">Chưa có đội tuyển nào được nhận vào giải.</p>
           ) : (
@@ -878,7 +995,7 @@ export default function App() {
         {selectedTournament.status === "UPCOMING" && token && (
           (() => {
             const availableTeams = managedTeamsForTournament.filter(
-              (team) => !registrations.some((r) => r.team_id === team.team_id && r.status !== "CANCELLED")
+              (team) => !allTournamentRegistrations.some((r) => r.team_id === team.team_id)
             );
             return availableTeams.length > 0 ? (
               <form className="registration-form" onSubmit={submitRegistration}>
@@ -923,7 +1040,7 @@ export default function App() {
             {registrationError && (
               <div className="error-banner">
                 <span>{registrationError}</span>
-                <button className="button secondary" onClick={() => void loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter)}>Thử lại</button>
+                <button className="button secondary" onClick={() => void reloadTournamentDetailsData(selectedTournament)}>Thử lại</button>
               </div>
             )}
             {registrationNotice && <div className="notice-banner">{registrationNotice}</div>}
@@ -970,7 +1087,7 @@ export default function App() {
                             </button>
                           </>
                         )}
-                        {!canReview && isMyManagedTeam && reg.status === "PENDING" && selectedTournament.status === "UPCOMING" && (
+                        {isMyManagedTeam && reg.status === "PENDING" && selectedTournament.status === "UPCOMING" && (
                           <button
                             className="button secondary small danger"
                             disabled={registrationLoading}
