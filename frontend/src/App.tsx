@@ -616,12 +616,14 @@ export default function App() {
         ? request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?status=${statusFilter}&limit=100`, {}, authToken)
         : unfilteredPromise;
 
-      const [unfilteredList, filteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
+      const [unfilteredList, fetchedFilteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
+      // Không lọc thì hai promise trả cùng một mảng; sao chép để bổ sung bên dưới không nhân đôi đơn.
+      const filteredList = statusFilter ? fetchedFilteredList : [...fetchedFilteredList];
 
-      // Nếu danh sách đạt ngưỡng (>= 50) và có đội người dùng quản lý:
+      // Nếu danh sách đủ limit 100 (có thể còn trang sau) và có đội người dùng quản lý:
       // Kiểm tra thêm từng đội quản lý chưa có trong unfilteredList qua ?team_id= để đảm bảo không bị sót đơn ngoài trang
       const teamsToCheck = managedTeams ?? managedTeamsForTournament;
-      if (unfilteredList.length >= 50 && teamsToCheck.length > 0) {
+      if (unfilteredList.length >= 100 && teamsToCheck.length > 0) {
         const existingTeamIds = new Set(unfilteredList.map((r) => r.team_id));
         const missingTeams = teamsToCheck.filter((t) => !existingTeamIds.has(t.team_id));
         if (missingTeams.length > 0) {
