@@ -16,7 +16,7 @@ def test_admin_can_manage_catalog_and_viewer_cannot(page: Page, demo_password: s
     expect(page.get_by_role("heading", name="Tài khoản đã xác thực")).to_be_visible()
     expect(page.get_by_role("button", name="Thêm publisher")).to_have_count(0)
     expect(page.locator(".catalog-panel")).to_contain_text(
-        "Chỉ ADMIN được thêm, sửa hoặc xóa"
+        "Bạn chưa được cấp quyền quản lý publisher, game và khu vực"
     )
 
     page.get_by_role("button", name="Đăng xuất").click()
