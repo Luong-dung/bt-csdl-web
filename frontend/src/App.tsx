@@ -20,6 +20,7 @@ type TournamentCapabilities = {
   editable_fields: string[]; allowed_status_transitions: string[];
 };
 type GlobalCapabilities = { can_manage_catalog: boolean; can_create_tournament: boolean };
+type TeamCapabilities = { team_id: number; can_manage_members: boolean; can_register_for_tournament: boolean };
 type AuthMode = "login" | "register";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -65,6 +66,7 @@ export default function App() {
   const [areas, setAreas] = useState<Area[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
+  const [teamCapabilities, setTeamCapabilities] = useState<TeamCapabilities | null>(null);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [tournamentCapabilities, setTournamentCapabilities] = useState<TournamentCapabilities | null>(null);
@@ -165,6 +167,7 @@ export default function App() {
   useEffect(() => {
     if (!token) {
       setGlobalCapabilities(null);
+      setTeamCapabilities(null);
       return;
     }
     request<GlobalCapabilities>("/auth/capabilities", {}, token)
@@ -213,6 +216,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUser(null);
+    setTeamCapabilities(null);
     setNotice("Bạn đã đăng xuất.");
   };
 
@@ -247,15 +251,30 @@ export default function App() {
     setError("");
     setNotice("");
     try {
-      setSelectedTeam(await request<TeamDetail>(`/teams/${teamId}`));
+      const [team, capabilities] = await Promise.all([
+        request<TeamDetail>(`/teams/${teamId}`),
+        token
+          ? request<TeamCapabilities>(`/teams/${teamId}/capabilities`, {}, token)
+          : Promise.resolve(null),
+      ]);
+      setSelectedTeam(team);
+      setTeamCapabilities(capabilities);
     } catch (reason) {
+      setTeamCapabilities(null);
       setError((reason as Error).message);
     }
   };
 
   const refreshSelectedTeam = async () => {
     if (!selectedTeam) return;
-    setSelectedTeam(await request<TeamDetail>(`/teams/${selectedTeam.team_id}`));
+    const [team, capabilities] = await Promise.all([
+      request<TeamDetail>(`/teams/${selectedTeam.team_id}`),
+      token
+        ? request<TeamCapabilities>(`/teams/${selectedTeam.team_id}/capabilities`, {}, token)
+        : Promise.resolve(null),
+    ]);
+    setSelectedTeam(team);
+    setTeamCapabilities(capabilities);
   };
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
@@ -323,19 +342,10 @@ export default function App() {
     }
   };
 
-  const canManageSelectedTeam = Boolean(
-    user && (
-      user.role === "ADMIN"
-      || selectedTeam?.members.some(
-        (member) => member.user_id === user.id
-          && member.status === "ACTIVE"
-          && member.role === "MANAGER",
-      )
-    ),
-  );
+  const canManageSelectedTeam = teamCapabilities?.can_manage_members === true;
 
   const catalogRequest = async (path: string, method: "POST" | "PATCH" | "DELETE", body?: object): Promise<boolean> => {
-    if (!token || user?.role !== "ADMIN") return false;
+    if (!token || !globalCapabilities?.can_manage_catalog) return false;
     setError("");
     setNotice("");
     setCatalogLoading(true);
@@ -476,7 +486,8 @@ export default function App() {
     setError("");
     setNotice("");
     setTournamentLoading(true);
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const body = {
       name: form.get("name"), game_id: Number(form.get("game_id")),
       area_id: form.get("area_id") ? Number(form.get("area_id")) : null,
@@ -485,7 +496,7 @@ export default function App() {
     };
     try {
       await request<Tournament>("/tournaments", { method: "POST", body: JSON.stringify(body) }, token);
-      event.currentTarget.reset();
+      formElement.reset();
       await loadTournaments();
       setNotice("Đã tạo giải đấu mới.");
     } catch (reason) {
@@ -594,7 +605,7 @@ export default function App() {
         <span className="section-count">{tournamentTotal} giải</span>
       </div>
       <div className="tournament-toolbar">
-        <label>Tựa thi đấu<select value={tournamentGameFilter} onChange={(event) => { setTournamentPage(0); setTournamentGameFilter(event.target.value); }}><option value="">Tất cả tựa</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
+        <label>Tựa game thi đấu<select value={tournamentGameFilter} onChange={(event) => { setTournamentPage(0); setTournamentGameFilter(event.target.value); }}><option value="">Tất cả tựa game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
         <label>Trạng thái<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option><option value="UPCOMING">Sắp diễn ra</option><option value="ONGOING">Đang diễn ra</option><option value="COMPLETED">Đã kết thúc</option><option value="CANCELLED">Đã hủy</option></select></label>
         <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ Làm mới</button>
       </div>
@@ -612,7 +623,7 @@ export default function App() {
       })}</div>
       {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← Trước</button><span>Trang {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>Sau →</button></div>}
       {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> Tạo giải đấu mới</summary><form onSubmit={submitTournament} className="tournament-form">
-        <label>Tên giải đấu<input name="name" placeholder="VCT Vietnam — Stage 1" minLength={3} maxLength={150} required /></label><label>Tựa thi đấu<select name="game_id" defaultValue="" required><option value="" disabled>Chọn tựa</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label><label>Thể thức<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>Bắt đầu<input name="start_date" type="date" required /></label><label>Kết thúc<input name="end_date" type="date" /></label><label>Khu vực<select name="area_id" defaultValue=""><option value="">Toàn cầu</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">Mô tả<textarea name="description" maxLength={2000} placeholder="Thông tin giải, luật thi đấu, phần thưởng..." /></label><button className="button" disabled={tournamentLoading}>Tạo giải đấu</button>
+        <label>Tên giải đấu<input name="name" placeholder="VCT Vietnam — Stage 1" minLength={3} maxLength={150} required /></label><label>Tựa game thi đấu<select name="game_id" defaultValue="" required><option value="" disabled>Chọn tựa game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label><label>Thể thức<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>Bắt đầu<input name="start_date" type="date" required /></label><label>Kết thúc<input name="end_date" type="date" /></label><label>Khu vực<select name="area_id" defaultValue=""><option value="">Toàn cầu</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">Mô tả<textarea name="description" maxLength={2000} placeholder="Thông tin giải, luật thi đấu, phần thưởng..." /></label><button className="button" disabled={tournamentLoading}>Tạo giải đấu</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
         <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={() => { setSelectedTournament(null); setTournamentCapabilities(null); }}>Đóng ×</button></div>
@@ -622,9 +633,9 @@ export default function App() {
       </div>}
     </section>
     <section className="panel catalog-panel">
-      <div className="panel-title"><h2>Quản trị catalog</h2><span>ADMIN</span></div>
-      {user?.role !== "ADMIN" && <p className="muted">Chỉ ADMIN được thêm, sửa hoặc xóa publisher, game và khu vực.</p>}
-      {user?.role === "ADMIN" && <>
+      <div className="panel-title"><h2>Quản trị catalog</h2><span>CAPABILITY</span></div>
+      {!globalCapabilities?.can_manage_catalog && <p className="muted">Bạn chưa được cấp quyền quản lý publisher, game và khu vực.</p>}
+      {globalCapabilities?.can_manage_catalog && <>
         <div className="catalog-forms">
           <form onSubmit={submitPublisher}>
             <h3>Publisher</h3>
@@ -652,9 +663,9 @@ export default function App() {
         <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>
       </div>}
       <div className="catalog-lists">
-        <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
-        <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
-        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{user?.role === "ADMIN" && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span>}</p>)}</div>
       </div>
     </section>
     <section className="panel teams-panel">
@@ -670,7 +681,7 @@ export default function App() {
         <button className="link-button" onClick={() => viewTeam(team.team_id)}>Xem đội</button>
       </article>)}</div>}
       {selectedTeam && <div className="team-detail">
-        <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => setSelectedTeam(null)}>Đóng</button></div>
+      <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); }}>Đóng</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
         {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
           <label>Tên đăng nhập<input name="username" placeholder="username" maxLength={50} required /></label>
