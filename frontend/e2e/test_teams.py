@@ -6,7 +6,7 @@ from helpers import login, register_user, unique_username
 def create_team(page: Page, team_name: str, tag: str) -> None:
     page.get_by_label("Tên đội").fill(team_name)
     page.get_by_label("Tag").fill(tag)
-    page.get_by_label("Game").select_option(label="VALORANT")
+    page.locator("form.team-form select[name='game_id']").select_option(label="VALORANT")
     page.get_by_role("button", name="Tạo đội").click()
     expect(page.locator(".message.success")).to_contain_text("Tạo đội thành công")
     expect(page.locator(".team-list article").filter(has_text=team_name)).to_be_visible()
