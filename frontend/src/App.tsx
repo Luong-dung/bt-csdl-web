@@ -535,16 +535,20 @@ export default function App() {
     setRegistrationStatusFilter("");
   };
 
-  const loadTournamentCapabilities = async (tournamentId: number, authToken = token) => {
+  const loadTournamentCapabilities = async (tournamentId: number, authToken = token, expectedVersion?: number) => {
     if (!authToken) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setTournamentCapabilities(null);
       setCapabilityError("");
       return;
     }
     try {
       setCapabilityError("");
-      setTournamentCapabilities(await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, authToken));
+      const caps = await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, authToken);
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setTournamentCapabilities(caps);
     } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
@@ -555,53 +559,98 @@ export default function App() {
   };
 
   // Lưu ý: Endpoint /tournaments/{id}/teams mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
-  const loadApprovedTeams = async (tournamentId: number) => {
+  const loadApprovedTeams = async (tournamentId: number, expectedVersion?: number) => {
     try {
       const list = await request<ApprovedTeam[]>(`/tournaments/${tournamentId}/teams`);
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setApprovedTeams(list);
     } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setApprovedTeams([]);
       setRegistrationError((reason as Error).message);
     }
   };
 
   // Lưu ý: Endpoint /teams/managed mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
-  const loadManagedTeamsForTournament = async (gameId: number, authToken = token) => {
+  const loadManagedTeamsForTournament = async (gameId: number, authToken = token, expectedVersion?: number): Promise<Team[]> => {
     if (!authToken) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
       setManagedTeamsForTournament([]);
-      return;
+      return [];
     }
     try {
       const list = await request<Team[]>(`/teams/managed?game_id=${gameId}`, {}, authToken);
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
       setManagedTeamsForTournament(list);
+      return list;
     } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
       setManagedTeamsForTournament([]);
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
-        return;
+        return [];
       }
       setRegistrationError((reason as Error).message);
+      return [];
     }
   };
 
-  // Lưu ý: Endpoint /tournaments/{id}/registrations mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đơn.
-  const loadTournamentRegistrations = async (tournamentId: number, statusFilter?: string, authToken = token) => {
+  // Lưu ý: Endpoint /tournaments/{id}/registrations mặc định limit 50, hỗ trợ tối đa 100 qua limit param.
+  const loadTournamentRegistrations = async (
+    tournamentId: number,
+    statusFilter?: string,
+    authToken = token,
+    expectedVersion?: number,
+    managedTeams?: Team[],
+  ) => {
     setRegistrationError("");
     if (!authToken) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setRegistrations([]);
       setAllTournamentRegistrations([]);
       return;
     }
     try {
-      const unfilteredPromise = request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations`, {}, authToken);
+      const unfilteredPromise = request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?limit=100`, {}, authToken);
       const filteredPromise = statusFilter
-        ? request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?status=${statusFilter}`, {}, authToken)
+        ? request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?status=${statusFilter}&limit=100`, {}, authToken)
         : unfilteredPromise;
 
-      const [unfilteredList, filteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
+      const [unfilteredList, fetchedFilteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
+      // Không lọc thì hai promise trả cùng một mảng; sao chép để bổ sung bên dưới không nhân đôi đơn.
+      const filteredList = statusFilter ? fetchedFilteredList : [...fetchedFilteredList];
+
+      // Nếu danh sách đủ limit 100 (có thể còn trang sau) và có đội người dùng quản lý:
+      // Kiểm tra thêm từng đội quản lý chưa có trong unfilteredList qua ?team_id= để đảm bảo không bị sót đơn ngoài trang
+      const teamsToCheck = managedTeams ?? managedTeamsForTournament;
+      if (unfilteredList.length >= 100 && teamsToCheck.length > 0) {
+        const existingTeamIds = new Set(unfilteredList.map((r) => r.team_id));
+        const missingTeams = teamsToCheck.filter((t) => !existingTeamIds.has(t.team_id));
+        if (missingTeams.length > 0) {
+          const extraResults = await Promise.all(
+            missingTeams.map((t) =>
+              request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?team_id=${t.team_id}`, {}, authToken).catch(() => [])
+            )
+          );
+          for (const extraList of extraResults) {
+            for (const item of extraList) {
+              if (!existingTeamIds.has(item.team_id)) {
+                unfilteredList.push(item);
+                existingTeamIds.add(item.team_id);
+                if (!statusFilter || item.status === statusFilter) {
+                  filteredList.push(item);
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setAllTournamentRegistrations(unfilteredList);
       setRegistrations(filteredList);
     } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
@@ -616,12 +665,14 @@ export default function App() {
   };
 
   const reloadTournamentDetailsData = async (tournament: Tournament) => {
+    const version = tournamentViewVersion.current;
     setRegistrationError("");
+    const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, token, version);
+    if (tournamentViewVersion.current !== version) return;
     await Promise.all([
-      loadTournamentCapabilities(tournament.tournament_id),
-      loadApprovedTeams(tournament.tournament_id),
-      loadManagedTeamsForTournament(tournament.game_id),
-      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter),
+      loadTournamentCapabilities(tournament.tournament_id, token, version),
+      loadApprovedTeams(tournament.tournament_id, version),
+      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
     ]);
   };
 
@@ -637,9 +688,15 @@ export default function App() {
       setRegistrationNotice("");
       return;
     }
-    void loadTournamentCapabilities(selectedTournament.tournament_id, token);
-    void loadManagedTeamsForTournament(selectedTournament.game_id, token);
-    void loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token);
+    const version = tournamentViewVersion.current;
+    void (async () => {
+      const managedTeams = await loadManagedTeamsForTournament(selectedTournament.game_id, token, version);
+      if (tournamentViewVersion.current !== version) return;
+      await Promise.all([
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, version),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
+      ]);
+    })();
   }, [token]);
 
   const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
@@ -739,15 +796,18 @@ export default function App() {
   const handleRegistrationFilterChange = async (status: string) => {
     setRegistrationStatusFilter(status);
     if (!selectedTournament || !token) return;
+    const version = tournamentViewVersion.current;
     try {
-      const query = status ? `?status=${status}` : "";
+      const query = status ? `?status=${status}&limit=100` : `?limit=100`;
       const list = await request<TournamentRegistrationItem[]>(
         `/tournaments/${selectedTournament.tournament_id}/registrations${query}`,
         {},
         token
       );
+      if (tournamentViewVersion.current !== version) return;
       setRegistrations(list);
     } catch (reason) {
+      if (tournamentViewVersion.current !== version) return;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
@@ -770,11 +830,18 @@ export default function App() {
       const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
       if (tournamentViewVersion.current !== version) return;
       setSelectedTournament(tournament);
+
+      const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version);
+      const capsPromise = loadTournamentCapabilities(tournamentId, token, version);
+      const approvedPromise = loadApprovedTeams(tournamentId, version);
+
+      const managedTeams = await managedTeamsPromise;
+      if (tournamentViewVersion.current !== version) return;
+
       await Promise.all([
-        loadTournamentCapabilities(tournamentId),
-        loadApprovedTeams(tournamentId),
-        loadManagedTeamsForTournament(tournament.game_id),
-        loadTournamentRegistrations(tournamentId, registrationStatusFilter),
+        capsPromise,
+        approvedPromise,
+        loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams),
       ]);
     } catch (reason) {
       if (tournamentViewVersion.current !== version) return;
