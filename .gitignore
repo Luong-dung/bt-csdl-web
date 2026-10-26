@@ -19,6 +19,14 @@ build/
 *.tsbuildinfo
 frontend/e2e-artifacts/
 
+# Local review tools and test artifacts
+/.review-fix/
+/.ui-test-tools/
+.pytest_cache/
+/backend/.pytest-tmp-*/
+/backend/.test-run-*/
+/backend/.test-pg-*/
+
 # IDE config
 .vscode/
 .idea/
