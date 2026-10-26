@@ -1,15 +1,6 @@
 from playwright.sync_api import Browser, Page, expect
 
-from helpers import login, register_user, unique_username
-
-
-def create_team(page: Page, team_name: str, tag: str) -> None:
-    page.get_by_label("Tên đội").fill(team_name)
-    page.get_by_label("Tag").fill(tag)
-    page.locator("form.team-form select[name='game_id']").select_option(label="VALORANT")
-    page.get_by_role("button", name="Tạo đội").click()
-    expect(page.locator(".message.success")).to_contain_text("Tạo đội thành công")
-    expect(page.locator(".team-list article").filter(has_text=team_name)).to_be_visible()
+from helpers import create_team, login, register_user, unique_username
 
 
 def test_authenticated_user_can_create_team(page: Page):
@@ -41,9 +32,12 @@ def test_manager_can_add_update_and_end_membership(page: Page, browser: Browser)
     create_team(page, team_name, tag)
 
     player_page = browser.new_page(viewport={"width": 1440, "height": 1000})
-    player_page.goto(page.url)
-    register_user(player_page, player)
-    player_page.close()
+    player_page.set_default_timeout(10_000)
+    try:
+        player_page.goto(page.url)
+        register_user(player_page, player)
+    finally:
+        player_page.close()
 
     page.locator(".team-list article").filter(has_text=team_name).get_by_role(
         "button", name="Xem đội"

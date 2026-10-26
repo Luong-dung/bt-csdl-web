@@ -159,7 +159,6 @@ jobs:
             cat frontend/e2e-artifacts/frontend.log
             exit 1
           fi
-          curl --fail --silent http://127.0.0.1:8000/health
           cd frontend
           npm run test:e2e
       - uses: actions/upload-artifact@v4
