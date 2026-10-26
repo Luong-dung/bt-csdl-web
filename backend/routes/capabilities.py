@@ -36,6 +36,8 @@ class TournamentCapabilities(BaseModel):
     can_update: bool
     can_change_status: bool
     can_review_registrations: bool
+    roster_locked: bool
+    can_lock_roster: bool
     editable_fields: list[str]
     allowed_status_transitions: list[str]
 
@@ -82,7 +84,9 @@ def tournament_capabilities(
         can_manage=allowed,
         can_update=bool(fields),
         can_change_status=bool(transitions),
-        can_review_registrations=allowed and registrations_open(tournament.status),
+        can_review_registrations=allowed and registrations_open(tournament.status, tournament.roster_locked_at),
+        roster_locked=tournament.roster_locked_at is not None,
+        can_lock_roster=allowed and registrations_open(tournament.status, tournament.roster_locked_at),
         editable_fields=fields,
         allowed_status_transitions=transitions,
     )

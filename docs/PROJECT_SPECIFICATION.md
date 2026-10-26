@@ -75,6 +75,12 @@ Backend dùng kiến trúc **modular monolith**. Các module dùng chung một �
 - `tournament_rosters`: snapshot đội hình tại thời điểm đăng ký.
 - `tournament_standings`: thứ hạng, số trận, thắng/thua, điểm và tiền thưởng.
 
+#### Nền tảng roster W44-2-01
+
+`tournaments.roster_locked_at/by` lưu trạng thái khóa; `tournament_rosters` dùng unique `(tournament_id, user_id)`, index theo giải/đội, role PLAYER/SUBSTITUTE và `display_name` snapshot nullable cho dữ liệu cũ. FK đến user/đội dùng RESTRICT để giữ lịch sử; membership thay đổi không tự cập nhật snapshot. Migration `cb86835f3e5f` không tự khóa/backfill snapshot lịch sử; dừng khi dữ liệu cũ trùng user hoặc role không hợp lệ.
+
+Đã có GET trạng thái khóa công khai, capability roster theo giải/đội và helper transaction/khóa dùng chung. Đơn đăng ký không được thay đổi sau khi roster đã khóa. API chọn roster và thao tác khóa/bắt đầu giải theo điều kiện mới sẽ được triển khai ở W44-2-03/04; chưa ghi nhận các API ghi này đã có. Schema, quyền, request/response và hướng dẫn bàn giao tại [W44_2_ROSTER_FOUNDATION.md](./W44_2_ROSTER_FOUNDATION.md).
+
 #### Vòng đời và quyền sửa giải đấu
 
 | Trạng thái | Được chuyển sang | Sửa thông tin (`PATCH`) |
@@ -122,6 +128,7 @@ Schema triển khai nằm tại [database/schema_postgres.sql](../database/schem
 | Teams | `/api/v1/teams`, `/api/v1/teams/{team_id}`, `/api/v1/teams/{team_id}/members` |
 | Catalog | `/api/v1/catalog/games`, `/api/v1/catalog/publishers`, `/api/v1/catalog/areas` |
 | Tournaments | `/api/v1/tournaments`, `/api/v1/tournaments/{tournament_id}`, `/api/v1/tournaments/{tournament_id}/status` |
+| Roster foundation | `GET /api/v1/tournaments/{tournament_id}/roster-lock`, `GET /api/v1/tournaments/{tournament_id}/teams/{team_id}/roster/capabilities`; capability giải thêm `roster_locked`, `can_lock_roster` |
 | Vận hành | `/health`, `/ready`, `/docs` |
 
 ## 9. Tiến độ
