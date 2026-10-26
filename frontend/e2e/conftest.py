@@ -34,12 +34,17 @@ def browser() -> Browser:
 
 
 @pytest.fixture
-def page(browser: Browser, request: pytest.FixtureRequest) -> Page:
+def app_base_url() -> str:
+    return os.environ.get("E2E_BASE_URL", "http://127.0.0.1:5173")
+
+
+@pytest.fixture
+def page(browser: Browser, request: pytest.FixtureRequest, app_base_url: str) -> Page:
     context = browser.new_context(viewport={"width": 1440, "height": 1000})
     context.tracing.start(screenshots=True, snapshots=True, sources=True)
     page = context.new_page()
     page.set_default_timeout(10_000)
-    page.goto(os.environ.get("E2E_BASE_URL", "http://127.0.0.1:5173"))
+    page.goto(app_base_url)
     yield page
 
     report = getattr(request.node, "rep_call", None)
