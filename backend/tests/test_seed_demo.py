@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -145,7 +145,8 @@ def test_seeded_accounts_login_and_enforce_roles(factory):
         assert client.post(f"/api/v1/teams/{team_id}/members", json={"username": "demo_free_player"},
                            headers=tokens["demo_manager"]).status_code == 201
         game_id = client.get("/api/v1/catalog/games").json()[0]["game_id"]
-        body = {"name": "Demo tournament", "game_id": game_id, "start_date": "2026-10-25"}
+        body = {"name": "Demo tournament", "game_id": game_id,
+                "start_date": (date.today() + timedelta(days=7)).isoformat()}
         assert client.post("/api/v1/tournaments", json=body, headers=tokens["demo_organizer"]).status_code == 201
         assert client.post("/api/v1/tournaments", json=body, headers=tokens["demo_viewer"]).status_code == 403
 
