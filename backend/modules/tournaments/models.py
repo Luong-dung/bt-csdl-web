@@ -19,12 +19,17 @@ class Tournament(Base):
     status = Column(String(20), nullable=False, default="UPCOMING")
     description = Column(Text, nullable=True)
     created_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True)
+    roster_locked_at = Column(DateTime(timezone=True), nullable=True)
+    roster_locked_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL",
+                                                   name="fk_tournaments_roster_locked_by"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     stages = relationship("Stage", back_populates="tournament", cascade="all, delete-orphan")
     __table_args__ = (
         CheckConstraint("format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')"),
         CheckConstraint("status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')", name="ck_tournaments_status"),
         CheckConstraint("end_date IS NULL OR end_date >= start_date", name="ck_tournaments_dates"),
+        CheckConstraint("roster_locked_at IS NOT NULL OR roster_locked_by IS NULL",
+                        name="ck_tournaments_roster_lock"),
     )
 
 
@@ -84,9 +89,20 @@ class TournamentRoster(Base):
     __tablename__ = "tournament_rosters"
     roster_id = Column(Integer, primary_key=True)
     tournament_id = Column(Integer, ForeignKey("tournaments.tournament_id", ondelete="CASCADE"), nullable=False)
-    team_id = Column(Integer, ForeignKey("teams.team_id", ondelete="CASCADE"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="CASCADE"), nullable=False)
+    team_id = Column(Integer, ForeignKey("teams.team_id", ondelete="RESTRICT",
+                                        name="fk_rosters_team"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id", ondelete="RESTRICT",
+                                        name="fk_rosters_user"), nullable=False)
     role_in_team = Column(String(30), nullable=False, default="PLAYER")
+    # Filled by roster writers; frozen at lock time, never reconstructed from membership.
+    display_name = Column(String(100), nullable=True)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "user_id", name="uq_rosters_tournament_user"),
+        Index("ix_rosters_tournament_team", "tournament_id", "team_id"),
+        CheckConstraint("role_in_team IN ('PLAYER', 'SUBSTITUTE')", name="ck_rosters_role"),
+        CheckConstraint("display_name IS NULL OR length(trim(display_name)) > 0",
+                        name="ck_rosters_display_name"),
+    )
 
 
 class TournamentStanding(Base):

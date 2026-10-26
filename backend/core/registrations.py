@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from modules.tournaments.models import Tournament, TournamentRegistration
-from core.tournament_policy import registrations_open
+from core.tournament_policy import registration_resolution_open, registrations_open
 from core.tournaments import lock_tournament as lock_registration_tournament
 
 
@@ -17,8 +17,13 @@ def registration_timestamp(db: Session):
 
 
 def ensure_registration_open(tournament: Tournament) -> None:
-    if not registrations_open(tournament.status):
+    if not registrations_open(tournament.status, tournament.roster_locked_at):
         raise HTTPException(status_code=409, detail="Giải đấu đã đóng đăng ký")
+
+
+def ensure_registration_resolution_open(tournament: Tournament) -> None:
+    if not registration_resolution_open(tournament.status):
+        raise HTTPException(status_code=409, detail="Giải đấu đã đóng xử lý đơn đăng ký")
 
 
 def lock_registration(db: Session, tournament_id: int, registration_id: int) -> TournamentRegistration:

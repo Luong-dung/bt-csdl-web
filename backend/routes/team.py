@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.validation import DbId, INT_MAX, ResourceId
+from core.rosters import lock_membership_team
 from middleware.auth import ensure_team_manager, get_current_user, managed_teams_query
 from modules.catalog.models import Game
 from modules.identity.models import AuditLog, User
@@ -83,7 +84,7 @@ def get_team_or_404(db: Session, team_id: int) -> Team:
 
 
 def get_membership_or_404(db: Session, team_id: int, membership_id: int) -> TeamMembership:
-    membership = db.get(TeamMembership, membership_id)
+    membership = db.get(TeamMembership, membership_id, populate_existing=True)
     if membership is None or membership.team_id != team_id:
         raise HTTPException(status_code=404, detail="Không tìm thấy thành viên trong đội")
     return membership
@@ -196,6 +197,8 @@ def add_member(team_id: ResourceId, data: MemberCreate, user: User = Depends(get
                db: Session = Depends(get_db)):
     get_team_or_404(db, team_id)
     ensure_team_manager(db, team_id, user)
+    user = lock_membership_team(db, team_id, user)
+    ensure_team_manager(db, team_id, user)
     member = db.scalar(select(User).where(User.username == data.username))
     if member is None:
         raise HTTPException(status_code=404, detail="Tài khoản không tồn tại")
@@ -221,6 +224,8 @@ def update_member_role(team_id: ResourceId, membership_id: ResourceId, data: Mem
                        user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     get_team_or_404(db, team_id)
     ensure_team_manager(db, team_id, user)
+    user = lock_membership_team(db, team_id, user)
+    ensure_team_manager(db, team_id, user)
     membership = get_membership_or_404(db, team_id, membership_id)
     if membership.status != ACTIVE:
         raise HTTPException(status_code=409, detail="Không thể đổi vị trí của thành viên đã rời đội")
@@ -241,6 +246,10 @@ def end_membership(team_id: ResourceId, membership_id: ResourceId, user: User = 
     get_team_or_404(db, team_id)
     membership = get_membership_or_404(db, team_id, membership_id)
     # Members may leave on their own; ending someone else needs manager rights.
+    if membership.user_id != user.user_id:
+        ensure_team_manager(db, team_id, user)
+    user = lock_membership_team(db, team_id, user)
+    membership = get_membership_or_404(db, team_id, membership_id)
     if membership.user_id != user.user_id:
         ensure_team_manager(db, team_id, user)
     if membership.status != ACTIVE:

@@ -91,10 +91,13 @@ CREATE TABLE tournaments (
     status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
     description TEXT,
     created_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+    roster_locked_at TIMESTAMPTZ,
+    roster_locked_by INT CONSTRAINT fk_tournaments_roster_locked_by REFERENCES users(user_id) ON DELETE SET NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK (format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')),
     CONSTRAINT ck_tournaments_status CHECK (status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')),
-    CONSTRAINT ck_tournaments_dates CHECK (end_date IS NULL OR end_date >= start_date)
+    CONSTRAINT ck_tournaments_dates CHECK (end_date IS NULL OR end_date >= start_date),
+    CONSTRAINT ck_tournaments_roster_lock CHECK (roster_locked_at IS NOT NULL OR roster_locked_by IS NULL)
 );
 CREATE TABLE stages (
     stage_id SERIAL PRIMARY KEY,
@@ -119,11 +122,15 @@ CREATE TABLE matches (
 CREATE TABLE tournament_rosters (
     roster_id SERIAL PRIMARY KEY,
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
-    team_id INT NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
-    user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    team_id INT NOT NULL CONSTRAINT fk_rosters_team REFERENCES teams(team_id) ON DELETE RESTRICT,
+    user_id INT NOT NULL CONSTRAINT fk_rosters_user REFERENCES users(user_id) ON DELETE RESTRICT,
     role_in_team VARCHAR(30) NOT NULL DEFAULT 'PLAYER',
-    UNIQUE (tournament_id, user_id)
+    display_name VARCHAR(100),
+    CONSTRAINT uq_rosters_tournament_user UNIQUE (tournament_id, user_id),
+    CONSTRAINT ck_rosters_role CHECK (role_in_team IN ('PLAYER', 'SUBSTITUTE')),
+    CONSTRAINT ck_rosters_display_name CHECK (display_name IS NULL OR length(trim(display_name)) > 0)
 );
+CREATE INDEX ix_rosters_tournament_team ON tournament_rosters(tournament_id, team_id);
 CREATE TABLE tournament_standings (
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
     team_id INT NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
