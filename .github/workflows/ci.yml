@@ -98,7 +98,7 @@ jobs:
       DB_PASSWORD: postgres
       JWT_SECRET: ci-only-test-secret-not-for-deployment
       DEMO_PASSWORD: browser-e2e-only-password
-      E2E_DB_NAME: esports_tournament_w43_e2e_test
+      E2E_DB_NAME: esports_tournament_w44_08_e2e_test
       E2E_DEMO_PASSWORD: browser-e2e-only-password
       E2E_BASE_URL: http://127.0.0.1:5173
     steps:
