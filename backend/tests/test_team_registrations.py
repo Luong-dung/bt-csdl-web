@@ -81,6 +81,25 @@ def test_role_without_team_scope_cannot_submit(access, session_factory):
     assert register(client, headers, tid, teams['Alpha']).status_code == 403
 
 
+def test_global_team_manager_assignment_does_not_grant_registration_access(access, session_factory):
+    client, headers, users, teams, roles = access
+    tid = organizer_tournament(client, headers)
+    created = register(client, headers, tid, teams['Alpha'], 'admin')
+    assert created.status_code == 201, created.text
+    rid = created.json()['registration_id']
+    with session_factory.begin() as db:
+        db.add(RoleAssignment(user_id=users['viewer'], role_id=roles['TEAM_MANAGER'],
+                              scope_type='GLOBAL', scope_id=None))
+
+    # A global TEAM_MANAGER assignment must not be treated as authority over every team.
+    assert register(client, headers, tid, teams['Beta'], 'viewer').status_code == 403
+    assert client.get(url(tid), headers=headers('viewer')).status_code == 403
+    assert client.post(url(tid, f'/{rid}/cancel'), headers=headers('viewer')).status_code == 403
+    with session_factory() as db:
+        assert db.get(TournamentRegistration, rid).status == 'PENDING'
+    assert len(registration_logs(session_factory)) == 1
+
+
 @pytest.mark.parametrize('payload', [
     {}, {'team_id': 0}, {'team_id': -1}, {'team_id': 'abc'}, {'team_id': 2147483648},
     {'team_id': 1, 'status': 'APPROVED'}, {'team_id': 1, 'submitted_by': 1},
