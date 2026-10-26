@@ -95,4 +95,4 @@ Test cạnh tranh dùng connection PostgreSQL độc lập đã xác minh writer
 
 ## Kiểm tra và trạng thái
 
-Bằng chứng lệnh/kết quả cập nhật ở [kế hoạch W44(2)](./weeks/2026-W44-2.md). Chỉ chuyển DONE sau DOANH review và CI đạt; không xem nền tảng này là đã hoàn thành W44-2-03/04 hoặc stage W44-2-02.
+Bằng chứng lệnh/kết quả cập nhật ở [kế hoạch W44(2)](./weeks/2026-W44-2.md). W44-2-01 đã nghiệm thu ngày 26/10: DOANH approve head `dfb9345`, [CI 40347479342](https://github.com/Luong-dung/bt-csdl-web/actions/runs/40347479342) đạt cả 3 job, PR #57 merge `f538524`. Không xem nền tảng này là đã hoàn thành W44-2-03/04 hoặc stage W44-2-02.
