@@ -98,7 +98,7 @@ jobs:
       DB_PASSWORD: postgres
       JWT_SECRET: ci-only-test-secret-not-for-deployment
       DEMO_PASSWORD: browser-e2e-only-password
-      E2E_DB_NAME: esports_tournament_w43_e2e_test
+      E2E_DB_NAME: esports_tournament_w44_08_e2e_test
       E2E_DEMO_PASSWORD: browser-e2e-only-password
       E2E_BASE_URL: http://127.0.0.1:5173
     steps:
@@ -133,16 +133,32 @@ jobs:
           (cd frontend && VITE_API_URL=http://127.0.0.1:8000/api/v1 npm run dev -- --host 127.0.0.1 --port 5173 --strictPort) > frontend/e2e-artifacts/frontend.log 2>&1 &
           FRONTEND_PID=$!
           trap 'kill "$BACKEND_PID" "$FRONTEND_PID" 2>/dev/null || true' EXIT
+          backend_ready=false
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:8000/health > /dev/null; then break; fi
+            if curl --fail --silent http://127.0.0.1:8000/health > /dev/null; then
+              backend_ready=true
+              break
+            fi
             sleep 2
           done
+          if [ "$backend_ready" != true ]; then
+            echo "::error::Backend API was not ready at http://127.0.0.1:8000/health after 60 seconds"
+            cat frontend/e2e-artifacts/backend.log
+            exit 1
+          fi
+          frontend_ready=false
           for attempt in $(seq 1 30); do
-            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then break; fi
+            if curl --fail --silent http://127.0.0.1:5173/ > /dev/null; then
+              frontend_ready=true
+              break
+            fi
             sleep 2
           done
-          curl --fail --silent http://127.0.0.1:8000/health
-          curl --fail --silent http://127.0.0.1:5173/ > /dev/null
+          if [ "$frontend_ready" != true ]; then
+            echo "::error::Frontend dev server was not ready at http://127.0.0.1:5173/ after 60 seconds"
+            cat frontend/e2e-artifacts/frontend.log
+            exit 1
+          fi
           cd frontend
           npm run test:e2e
       - uses: actions/upload-artifact@v4

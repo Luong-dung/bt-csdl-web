@@ -990,7 +990,7 @@ export default function App() {
       {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>Chưa có giải đấu phù hợp</strong><span>Thử thay đổi bộ lọc hoặc tạo giải đấu đầu tiên.</span></div>}
       <div className="tournament-grid">{tournaments.map((tournament) => {
         const game = games.find((item) => item.game_id === tournament.game_id);
-        return <article className="tournament-card" key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
+        return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
           <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? "SẮP DIỄN RA" : tournament.status === "ONGOING" ? "LIVE NOW" : tournament.status === "COMPLETED" ? "ĐÃ KẾT THÚC" : "ĐÃ HỦY"}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
           <h3>{tournament.name}</h3><p className="game-label">{game?.name ?? "Unknown title"} <span>·</span> {tournament.format.replace("_", " ")}</p>
           <div className="card-meta"><span>◷ {new Date(tournament.start_date).toLocaleDateString("vi-VN")}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString("vi-VN")}` : "Open end"}</span></div>
@@ -1050,7 +1050,7 @@ export default function App() {
           ) : (
             <div className="approved-teams-grid">
               {approvedTeams.map((team) => (
-                <div className="approved-team-card" key={team.team_id}>
+                <div className="approved-team-card" data-team-id={team.team_id} key={team.team_id}>
                   <strong>{team.name}</strong>
                   <span className="tag">#{team.tag}</span>
                 </div>
@@ -1126,7 +1126,7 @@ export default function App() {
                   const canReview = tournamentCapabilities?.can_review_registrations;
 
                   return (
-                    <div className="registration-card" key={reg.registration_id}>
+                    <div className="registration-card" data-registration-id={reg.registration_id} data-team-id={reg.team_id} key={reg.registration_id}>
                       <div className="reg-info">
                         <strong>{teamName} {teamTag && <span className="tag">#{teamTag}</span>}</strong>
                         <span className={`reg-badge reg-badge-${reg.status.toLowerCase()}`}>{reg.status}</span>
@@ -1218,7 +1218,7 @@ export default function App() {
         <label>Game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
         <button className="button" disabled={loading}>Tạo đội</button>
       </form> : <p className="muted">Đăng nhập để tạo đội mới. Danh sách đội vẫn được xem công khai.</p>}
-      {teams.length === 0 ? <p className="muted">Chưa có đội tuyển.</p> : <div className="team-list">{teams.map((team) => <article key={team.team_id}>
+      {teams.length === 0 ? <p className="muted">Chưa có đội tuyển.</p> : <div className="team-list">{teams.map((team) => <article data-team-id={team.team_id} key={team.team_id}>
         <div><h3>{team.name}</h3><p>#{team.tag} · {games.find((game) => game.game_id === team.game_id)?.name ?? "Game"}</p></div>
         <button className="link-button" onClick={() => viewTeam(team.team_id)}>Xem đội</button>
       </article>)}</div>}

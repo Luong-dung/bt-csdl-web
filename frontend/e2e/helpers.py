@@ -26,3 +26,12 @@ def login(page: Page, username: str, password: str = TEST_PASSWORD) -> None:
     page.get_by_role("button", name="Đăng nhập").click()
     expect(page.get_by_role("heading", name="Tài khoản đã xác thực")).to_be_visible()
     expect(page.locator(".profile")).to_contain_text(username)
+
+
+def create_team(page: Page, team_name: str, tag: str) -> None:
+    page.get_by_label("Tên đội").fill(team_name)
+    page.get_by_label("Tag").fill(tag)
+    page.locator("form.team-form select[name='game_id']").select_option(label="VALORANT")
+    page.get_by_role("button", name="Tạo đội").click()
+    expect(page.locator(".message.success")).to_contain_text("Tạo đội thành công")
+    expect(page.locator(".team-list article").filter(has_text=team_name)).to_be_visible()

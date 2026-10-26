@@ -1,6 +1,6 @@
-# Browser E2E tests — W43-07
+# Browser E2E tests — W43-07 and W44-08
 
-The Playwright suite exercises the real React UI and FastAPI API for registration/login, team creation, membership management, and catalog administration. Use only a disposable PostgreSQL database and the demo accounts created for that database. Never point the browser suite at a personal, shared, staging, or production database.
+The Playwright suite exercises the real React UI and FastAPI API for registration/login, team creation, membership management, catalog administration, and tournament registration. The W44-08 flow creates a tournament, registers separate teams, approves one request, rejects another, cancels a pending request, and verifies that only the approved team appears in the public tournament details. Use only a disposable PostgreSQL database and the demo accounts created for that database. Never point the browser suite at a personal, shared, staging, or production database.
 
 ## Local setup (Windows PowerShell)
 
@@ -15,7 +15,7 @@ npm ci
 cd ..
 ```
 
-Create a dedicated PostgreSQL database such as `esports_tournament_w43_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
+Create a dedicated PostgreSQL database such as `esports_tournament_w44_08_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
 
 ```powershell
 cd backend
@@ -23,7 +23,7 @@ $credential = Get-Credential -UserName 'e2e' -Message 'Test-only demo password (
 $env:DEMO_PASSWORD = $credential.GetNetworkCredential().Password
 $env:E2E_DEMO_PASSWORD = $env:DEMO_PASSWORD
 try {
-    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_w43_e2e_test --migrate
+    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_w44_08_e2e_test --migrate
     if ($LASTEXITCODE -ne 0) { throw 'Demo seed failed' }
 } finally {
     Remove-Item Env:DEMO_PASSWORD -ErrorAction SilentlyContinue
@@ -36,7 +36,7 @@ Run the backend in one terminal, overriding only that process's database name:
 
 ```powershell
 cd backend
-$env:DB_NAME = 'esports_tournament_w43_e2e_test'
+$env:DB_NAME = 'esports_tournament_w44_08_e2e_test'
 .\.venv\Scripts\python.exe -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -62,8 +62,8 @@ Remove-Item Env:E2E_BROWSER_PATH -ErrorAction SilentlyContinue
 deactivate
 ```
 
-The suite creates uniquely named browser-test accounts, teams, and catalog records. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w43_e2e_test`; do not drop the database from `.env`.
+The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
 
 ## CI
 
-The `Browser E2E (Playwright)` job creates its own PostgreSQL service database, seeds a separate `_test` database, starts the API and Vite, and runs `npm run test:e2e`. JUnit, screenshots, traces, and server logs are uploaded as the `browser-e2e-results` artifact even when the job fails. The demo password is fixed only inside that disposable, job-scoped database and is not used outside CI.
+The `Browser E2E (Playwright)` job creates its own PostgreSQL service database, seeds a separate `_test` database, starts the API and Vite, and runs `npm run test:e2e` across auth, membership, catalog, and tournament flows. JUnit, screenshots, traces, and server logs are uploaded as the `browser-e2e-results` artifact even when the job fails. The demo password is fixed only inside that disposable, job-scoped database and is not used outside CI.
