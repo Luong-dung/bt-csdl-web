@@ -45,6 +45,8 @@ Sau khóa: `locked: true`, `locked_at` là ISO timestamp. Không trả actor ho�
 
 `GET /api/v1/tournaments/{id}/capabilities` thêm `roster_locked` và `can_lock_roster`; giữ nguyên trường cũ. `can_lock_roster` thể hiện quyền và lifecycle (quản lý đúng giải, UPCOMING, chưa khóa), không bảo đảm dữ liệu đã đầy đủ để khóa. W44-2-04 phải kiểm tra roster của mọi đội APPROVED, trả 409 nếu thiếu/không hợp lệ. Không tự ẩn nút và bỏ qua lý do nghiệp vụ.
 
+`can_review_registrations` cho phép xử lý/từ chối đơn khi quản lý đúng giải và còn UPCOMING, kể cả roster đã khóa. Field mới `can_approve_registrations` chỉ true khi có quyền đó và chưa khóa. UI dùng field mới cho nút Duyệt, giữ nút Từ chối theo can_review_registrations; ẩn form tạo đơn khi roster_locked, giữ Hủy đơn cho quản lý đúng đội khi UPCOMING. Sau ONGOING/COMPLETED/CANCELLED cả duyệt, từ chối và hủy đều bị chặn như W44.
+
 ## Contract bàn giao W44-2-03
 
 Schema dùng chung ở `modules/tournaments/roster_schemas.py`; consumer import trực tiếp, không khai báo bản khác.
@@ -80,7 +82,7 @@ Helper không commit/rollback thay caller; `get_db` đóng session rollback khi 
 1. Dùng `get_managed_tournament` để chặn người ngoài trước khi lock và kiểm tra lại quyền sau chờ. Nếu đã khóa, trả trạng thái hiện có không ghi lại audit, kể cả giải đã bắt đầu/hủy; quyền quản lý vẫn phải hợp lệ. Nếu chưa khóa mà không UPCOMING: 409.
 2. Giữ khóa giải, lấy toàn bộ đội APPROVED, khóa các đội theo team_id tăng dần, rồi khóa membership/roster bằng helper. Không có đội APPROVED, đội thiếu PLAYER, user không còn ACTIVE, left_date khác NULL, role không khớp hoặc snapshot sai đội/game: 409. Không mặc định game nào cần 5 người.
 3. Chụp display_name từ username, lưu role đã xác minh, lấy thời điểm DB sau khi giữ đủ lock (có thể dùng `registration_timestamp` hiện có), đặt locked_at/by và audit rồi commit. Thất bại không để khóa hoặc snapshot dở dang.
-4. `ensure_registration_open` và `can_review_registrations` đã kiểm tra cả roster_locked_at, nên sau khóa chặn gửi/hủy/duyệt/từ chối đơn. Endpoint quyết định đã giữ khóa giải, cùng hàng khóa với roster; không đổi tập APPROVED sau snapshot.
+4. Policy tách hai nhánh: tạo đơn và APPROVED dùng `ensure_registration_open` (UPCOMING, chưa khóa); REJECTED và hủy đơn PENDING dùng `ensure_registration_resolution_open` (chỉ cần UPCOMING). Sau khóa vẫn cho quản lý đúng đội hủy, quản lý đúng giải từ chối đơn PENDING, có audit và không thay tập APPROVED; không tự đóng đơn hoặc mở khóa snapshot. Capability phân biệt quyền xử lý và duyệt như trên. Endpoint quyết định/hủy giữ khóa giải và đơn như trước; không đổi tập APPROVED sau snapshot.
 5. Bổ sung điều kiện UPCOMING → ONGOING yêu cầu khóa vào API và capability trong W44-2-04, test cả hai. Không cản ONGOING → COMPLETED/CANCELLED của dữ liệu cũ; không khóa bù lịch sử. Giao diện cũ vẫn hoạt động trong W44-2-01 vì chưa kích hoạt điều kiện bắt đầu mới trước khi có endpoint khóa.
 
 ## Thứ tự khóa và đường ghi membership

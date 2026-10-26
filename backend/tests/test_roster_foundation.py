@@ -88,7 +88,8 @@ def test_lifecycle_closes_roster_context_and_hints(access, session_factory, acce
     data = client.get(caps(accepted, teams['Alpha']), headers=headers('manager')).json()
     assert not data['can_edit_roster']
     hints = client.get(f'/api/v1/tournaments/{accepted}/capabilities', headers=headers('organizer')).json()
-    assert not hints['can_lock_roster'] and not hints['can_review_registrations']
+    assert not hints['can_lock_roster'] and not hints['can_approve_registrations']
+    assert hints['can_review_registrations'] == (state == 'UPCOMING')
     with session_factory() as db:
         with pytest.raises(HTTPException) as exc:
             get_editable_roster_context(db, accepted, teams['Alpha'], db.get(User, users['manager']))
@@ -148,8 +149,9 @@ def test_lock_state_ids_and_no_cache(access, suffix, expected):
     assert response.headers['cache-control'] == 'private, no-store'
 
 
-def test_locked_tournament_blocks_all_registration_writes(access, session_factory, accepted):
-    client, headers, users, teams, _ = access
+@pytest.mark.parametrize('action', ['reject', 'cancel'])
+def test_locked_tournament_can_resolve_pending_without_changing_approved_teams(access, session_factory, accepted, action):
+    client, headers, users, teams, roles = access
     with session_factory.begin() as db:
         tournament = db.get(Tournament, accepted)
         tournament.roster_locked_at = datetime.now(timezone.utc)
@@ -157,10 +159,51 @@ def test_locked_tournament_blocks_all_registration_writes(access, session_factor
         db.add(pending)
         db.flush()
         rid = pending.registration_id
+        if action == 'cancel':
+            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['TEAM_MANAGER'],
+                                  scope_type='TEAM', scope_id=teams['Beta']))
     path = f'/api/v1/tournaments/{accepted}/registrations'
-    for action, payload in [('decision', {'status': 'APPROVED'}), ('decision', {'status': 'REJECTED'}), ('cancel', {})]:
-        assert client.post(f'{path}/{rid}/{action}', headers=headers('admin'), json=payload).status_code == 409
+    assert client.post(f'{path}/{rid}/decision', headers=headers('organizer'),
+                       json={'status': 'APPROVED'}).status_code == 409
     assert client.post(path, headers=headers('admin'), json={'team_id': teams['Beta']}).status_code == 409
+    # Locking does not grant new team/tournament rights to an unrelated viewer.
+    suffix = 'decision' if action == 'reject' else 'cancel'
+    payload = {'status': 'REJECTED', 'rejection_reason': 'Roster already locked'} if action == 'reject' else {}
+    assert client.post(f'{path}/{rid}/{suffix}', headers=headers('viewer'), json=payload).status_code == 403
+    assert client.post(f'{path}/{rid}/{suffix}', headers=headers('manager'), json=payload).status_code == 403
+    auth = headers('organizer' if action == 'reject' else 'referee')
+    result = client.post(f'{path}/{rid}/{suffix}', headers=auth, json=payload)
+    assert result.status_code == 200, result.text
+    expected = 'REJECTED' if action == 'reject' else 'CANCELLED'
+    assert result.json()['status'] == expected
+    assert client.post(f'{path}/{rid}/{suffix}', headers=auth, json=payload).status_code == 409
+    with session_factory() as db:
+        assert db.get(TournamentRegistration, rid).status == expected
+        assert list(db.scalars(select(TournamentRegistration.team_id).where(
+            TournamentRegistration.tournament_id == accepted, TournamentRegistration.status == 'APPROVED',
+        ))) == [teams['Alpha']]
+        logs = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'tournament_registration')))
+        assert len(logs) == 1
+        assert logs[0].action == 'TOURNAMENT_REGISTRATION_' + expected
+        assert logs[0].user_id == users['organizer' if action == 'reject' else 'referee']
+        assert logs[0].details['before']['status'] == 'PENDING'
+        assert logs[0].details['after']['status'] == expected
+
+
+@pytest.mark.parametrize('state', ['ONGOING', 'COMPLETED', 'CANCELLED'])
+def test_resolving_pending_remains_closed_after_upcoming(access, session_factory, accepted, state):
+    client, headers, _, teams, _ = access
+    with session_factory.begin() as db:
+        tournament = db.get(Tournament, accepted)
+        tournament.status = state
+        tournament.roster_locked_at = datetime.now(timezone.utc)
+        pending = TournamentRegistration(tournament_id=accepted, team_id=teams['Beta'])
+        db.add(pending)
+        db.flush()
+        rid = pending.registration_id
+    path = f'/api/v1/tournaments/{accepted}/registrations/{rid}'
+    assert client.post(path + '/decision', headers=headers('organizer'), json={'status': 'REJECTED'}).status_code == 409
+    assert client.post(path + '/cancel', headers=headers('admin')).status_code == 409
     with session_factory() as db:
         assert db.get(TournamentRegistration, rid).status == 'PENDING'
         assert db.scalar(select(AuditLog.log_id).where(AuditLog.resource == 'tournament_registration')) is None

@@ -17,6 +17,7 @@ type Tournament = {
 type TournamentCapabilities = {
   tournament_id: number; can_manage: boolean; can_update: boolean;
   can_change_status: boolean; can_review_registrations: boolean;
+  can_approve_registrations: boolean; roster_locked: boolean;
   editable_fields: string[]; allowed_status_transitions: string[];
 };
 type RegistrationStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
@@ -1059,7 +1060,7 @@ export default function App() {
           )}
         </div>
 
-        {selectedTournament.status === "UPCOMING" && token && (
+        {selectedTournament.status === "UPCOMING" && tournamentCapabilities?.roster_locked === false && token && (
           (() => {
             const availableTeams = managedTeamsForTournament.filter(
               (team) => !allTournamentRegistrations.some((r) => r.team_id === team.team_id)
@@ -1138,6 +1139,7 @@ export default function App() {
                       <div className="reg-actions">
                         {canReview && reg.status === "PENDING" && selectedTournament.status === "UPCOMING" && (
                           <>
+                            {tournamentCapabilities?.can_approve_registrations && (
                             <button
                               className="button small"
                               disabled={registrationLoading}
@@ -1145,6 +1147,7 @@ export default function App() {
                             >
                               Duyệt
                             </button>
+                            )}
                             <button
                               className="button secondary small danger"
                               disabled={registrationLoading}
