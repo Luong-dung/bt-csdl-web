@@ -37,9 +37,9 @@ Kế hoạch chi tiết của tuần hiện tại được tách riêng để d�
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
 - [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): cập nhật 23/10/2026, `8/8 DONE`, `0 IN PROGRESS`, `0 TODO`; backend/PostgreSQL, frontend build và kiểm thử trình duyệt đạt. Chi tiết bằng chứng và giới hạn xác minh CI/review ghi trong W43.
 
-- [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): `6/8 DONE`, `2 TODO`; W44-01 đến W44-06 đã approve và merge; còn W44-07/08; tập trung UI giải đấu, quyền theo scope và đăng ký/duyệt đội tham gia giải.
+- [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): chốt sớm ngày 26/10/2026, **`8/8 DONE`, `0 IN PROGRESS`, `0 TODO`**; cả 8 task đã review/merge, CI và nghiệm thu local đạt. Hoàn thành UI giải, capability và đăng ký/duyệt đội. [Đánh giá từng người](./weeks/2026-W44.md#6-đánh-giá-cuối-tuần): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm đề xuất trên thang 5).
 
-W42 đã hoàn thành. W43 là tuần hiện tại (19–25/10), đã chốt `8/8 DONE` ngày 23/10; W44 là kế hoạch tuần kế tiếp. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
+W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 là tuần hiện tại (26/10–01/11), đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng; chưa lập phân công chi tiết W45. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
 ### Tiến độ đối chiếu W42 — 18/10/2026
 
@@ -140,10 +140,10 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W05-01 | CRUD tournament và trạng thái vòng đời | `DOANH` | `DUNG` | Tournament API | `TODO` |
-| W05-02 | API đăng ký, duyệt và từ chối đội | `DOANH` | `DUC` | Registration flow | `TODO` |
-| W05-03 | Form tạo giải và danh sách giải | `DUONG` | `DOANH` | Tournament UI | `TODO` |
-| W05-04 | Test quyền owner/admin và dữ liệu không hợp lệ | `DUC` | `DUNG` | Test report | `TODO` |
+| W05-01 | CRUD tournament và trạng thái vòng đời | `DOANH` | `DUNG` | Đã tạo/list/chi tiết/cập nhật/chuyển trạng thái (W43, W44-04); chưa có xóa giải | `IN PROGRESS` |
+| W05-02 | API đăng ký, duyệt và từ chối đội | `DOANH` | `DUC` | Registration flow (W44-02/03/04; DUNG cùng triển khai) | `DONE` |
+| W05-03 | Form tạo giải và danh sách giải | `DUONG` | `DOANH` | Tournament UI (W44-05/06) | `DONE` |
+| W05-04 | Test quyền owner/admin và dữ liệu không hợp lệ | `DUC` | `DUNG` | Test/CI và nghiệm thu W44-07/08, kế thừa test nghiệp vụ | `DONE` |
 
 **Nghiệm thu tuần:** người có quyền tạo giải; đội không hợp lệ không thể đăng ký.
 
@@ -182,7 +182,7 @@ Một đầu việc chỉ được nghiệm thu khi:
 | W08-01 | Middleware/checker cho role assignment | `DUNG` | `DOANH` | Scope authorization (W42-02) | `DONE` |
 | W08-02 | Giới hạn trọng tài theo tournament scope | `DUNG` | `DUC` | Permission tests | `TODO` |
 | W08-03 | Ghi audit cho đổi quyền và nhập điểm | `DUNG` | `DUC` | Audit service | `TODO` |
-| W08-04 | Hiển thị lỗi quyền trong frontend | `DUONG` | `DUNG` | Permission UX | `TODO` |
+| W08-04 | Hiển thị lỗi quyền trong frontend | `DUONG` | `DUNG` | Capability và lỗi quyền cho catalog/đội/giải/đơn (W44-05/06) | `DONE` |
 
 **Nghiệm thu tuần:** user chỉ sửa được tài nguyên trong scope được cấp; audit log có actor, action, resource và thời gian.
 
