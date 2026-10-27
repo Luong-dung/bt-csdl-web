@@ -103,12 +103,15 @@ CREATE TABLE stages (
     stage_id SERIAL PRIMARY KEY,
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
     name VARCHAR(80) NOT NULL,
-    sequence_order INT NOT NULL
+    sequence_order INT NOT NULL,
+    CONSTRAINT uq_stages_tournament_order UNIQUE (tournament_id, sequence_order),
+    CONSTRAINT ck_stages_positive_order CHECK (sequence_order > 0),
+    CONSTRAINT ck_stages_name CHECK (length(trim(name)) BETWEEN 1 AND 80)
 );
 CREATE TABLE matches (
     match_id SERIAL PRIMARY KEY,
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
-    stage_id INT NOT NULL REFERENCES stages(stage_id) ON DELETE CASCADE,
+    stage_id INT NOT NULL CONSTRAINT fk_matches_stage REFERENCES stages(stage_id) ON DELETE RESTRICT,
     round_no INT NOT NULL,
     team1_id INT REFERENCES teams(team_id) ON DELETE SET NULL,
     team2_id INT REFERENCES teams(team_id) ON DELETE SET NULL,

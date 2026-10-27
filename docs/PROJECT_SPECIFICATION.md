@@ -71,6 +71,7 @@ Backend dùng kiến trúc **modular monolith**. Các module dùng chung một �
 
 - `tournaments`: tên, game, khu vực, thể thức, thời gian và trạng thái.
 - `stages`: các vòng theo thứ tự.
+- W44-2-02 triển khai list/detail stage công khai, tạo/sửa/xóa/sắp thứ tự cho quản lý đúng giải khi UPCOMING; roster đã khóa vẫn cấu hình stage được. Thứ tự nguyên dương và unique trong giải; không xóa stage có match (FK RESTRICT), mutation/audit cùng transaction. Reorder gửi đủ tập ID và thực hiện nguyên tử. Chi tiết tại [W44_2_STAGES.md](./W44_2_STAGES.md).
 - `matches`: hai đội, tỉ số, đội thắng và trận kế tiếp.
 - `tournament_rosters`: snapshot đội hình tại thời điểm đăng ký.
 - `tournament_standings`: thứ hạng, số trận, thắng/thua, điểm và tiền thưởng.
@@ -129,6 +130,7 @@ Schema triển khai nằm tại [database/schema_postgres.sql](../database/schem
 | Catalog | `/api/v1/catalog/games`, `/api/v1/catalog/publishers`, `/api/v1/catalog/areas` |
 | Tournaments | `/api/v1/tournaments`, `/api/v1/tournaments/{tournament_id}`, `/api/v1/tournaments/{tournament_id}/status` |
 | Roster foundation | `GET /api/v1/tournaments/{tournament_id}/roster-lock`, `GET /api/v1/tournaments/{tournament_id}/teams/{team_id}/roster/capabilities`; capability giải thêm `roster_locked`, `can_lock_roster`, `can_approve_registrations` |
+| Stage | `GET/POST /api/v1/tournaments/{tournament_id}/stages`, `GET/PATCH/DELETE .../stages/{stage_id}`, `PUT .../stages/order`; capability giải thêm `can_manage_stages` |
 | Vận hành | `/health`, `/ready`, `/docs` |
 
 ## 9. Tiến độ

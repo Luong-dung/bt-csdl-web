@@ -12,3 +12,7 @@ def registration_resolution_open(status: str) -> bool:
 
 def roster_editable(tournament) -> bool:
     return registrations_open(tournament.status, tournament.roster_locked_at)
+
+
+def stages_editable(status: str) -> bool:
+    return status == 'UPCOMING'
