@@ -75,6 +75,16 @@ Luồng ghi:
 
 Helper không commit/rollback thay caller; `get_db` đóng session rollback khi exception, nhưng endpoint phải xử lý rollback rõ khi bắt lỗi commit. Không giữ ORM object nháp sau rollback để trả response thành công.
 
+### Đã triển khai trong W44-2-03
+
+`GET/PUT /api/v1/tournaments/{id}/teams/{team_id}/roster` theo contract trên, trong `routes/rosters.py`. Các điểm contract chưa nêu rõ được chốt như sau:
+
+- GET dùng xác thực tùy chọn (`get_optional_user`): không gửi token vẫn đọc được roster đã khóa; token gửi lên mà sai/hết hạn vẫn trả 401. Roster nháp: không đăng nhập 401, đăng nhập nhưng không quản lý đúng đội/giải 403. Response/lỗi `private, no-store` vì nội dung phụ thuộc quyền.
+- Thứ tự kiểm tra GET: giải 404 → đội 404 → chưa APPROVED 404 → quyền xem nháp. PUT: body 422 → quyền/lifecycle/APPROVED theo `get_editable_roster_context` → membership 422 → trùng roster đội khác 409.
+- PUT cập nhật tại chỗ hàng giữ lại, chỉ xóa hàng bị bỏ và thêm hàng mới, không xóa rồi chèn lại cùng user. `display_name` lấy username tại thời điểm lưu.
+- Gửi lại roster giống hệt (cả vai trò và display_name) là no-op: trả 200, không ghi audit. Audit `TOURNAMENT_ROSTER_UPDATED` (resource `tournament_roster`) ghi `tournament_id`, `team_id`, `before`/`after` gồm `user_id`, `role_in_team`, `display_name`, sắp theo user_id.
+- User đang có trong roster nháp của đội khác cùng giải (ví dụ đã chuyển đội) trả 409; đội cũ phải bỏ user khỏi roster trước. Không tự gỡ khỏi đội cũ.
+
 ## Contract bàn giao W44-2-04
 
 `POST /api/v1/tournaments/{id}/roster-lock`, không có body bắt buộc; response `RosterLockRead` như GET. Ghi `TOURNAMENT_ROSTER_LOCKED` một lần trong cùng transaction (actor, tournament_id, thời điểm, số đội/số thành viên; không cần log email).
