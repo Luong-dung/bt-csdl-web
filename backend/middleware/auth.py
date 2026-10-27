@@ -7,6 +7,7 @@ from core.security import decode_access_token
 from modules.identity.models import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+optional_oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 
 
 def get_current_user(
@@ -24,6 +25,13 @@ def get_current_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Tài khoản không tồn tại", headers={"WWW-Authenticate": "Bearer"})
     return user
+
+
+def get_optional_user(
+    token: str | None = Depends(optional_oauth2_scheme), db: Session = Depends(get_db)
+) -> User | None:
+    """Anonymous callers get None; a token that is sent must still be valid."""
+    return None if token is None else get_current_user(token, db)
 
 
 def has_role(user: User, *role_names: str, scope_type: str = "GLOBAL", scope_id: int | None = None) -> bool:
