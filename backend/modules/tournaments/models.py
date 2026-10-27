@@ -68,13 +68,19 @@ class Stage(Base):
     name = Column(String(80), nullable=False)
     sequence_order = Column(Integer, nullable=False)
     tournament = relationship("Tournament", back_populates="stages")
+    __table_args__ = (
+        UniqueConstraint('tournament_id', 'sequence_order', name='uq_stages_tournament_order'),
+        CheckConstraint('sequence_order > 0', name='ck_stages_positive_order'),
+        CheckConstraint('length(trim(name)) BETWEEN 1 AND 80', name='ck_stages_name'),
+    )
 
 
 class Match(Base):
     __tablename__ = "matches"
     match_id = Column(Integer, primary_key=True)
     tournament_id = Column(Integer, ForeignKey("tournaments.tournament_id", ondelete="CASCADE"), nullable=False)
-    stage_id = Column(Integer, ForeignKey("stages.stage_id", ondelete="CASCADE"), nullable=False)
+    stage_id = Column(Integer, ForeignKey("stages.stage_id", ondelete="RESTRICT",
+                                         name="fk_matches_stage"), nullable=False)
     round_no = Column(Integer, nullable=False)
     team1_id = Column(Integer, ForeignKey("teams.team_id"), nullable=True)
     team2_id = Column(Integer, ForeignKey("teams.team_id"), nullable=True)
