@@ -138,7 +138,8 @@ def test_tournament_capabilities_respect_scope_and_state(access, session_factory
     assert data['can_update'] == editable
     assert data['can_change_status'] == editable
     assert data['can_review_registrations'] == (manages and state == 'UPCOMING')
-    expected = {'UPCOMING': ['CANCELLED', 'ONGOING'], 'ONGOING': ['CANCELLED', 'COMPLETED']}.get(state, [])
+    # Unlocked UPCOMING cannot start yet (W44-2-04); the locked case is covered in test_roster_lock.py.
+    expected = {'UPCOMING': ['CANCELLED'], 'ONGOING': ['CANCELLED', 'COMPLETED']}.get(state, [])
     assert data['allowed_status_transitions'] == (expected if manages else [])
     if editable and state == 'ONGOING':
         assert data['editable_fields'] == ['description', 'end_date', 'name']

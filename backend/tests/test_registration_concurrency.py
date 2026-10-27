@@ -110,7 +110,7 @@ def test_status_endpoint_and_decision_share_parent_lock(access, session_factory,
         with make_client(session_factory, logged_in=False) as client:
             if operation == 'decision':
                 return client.post(path(pending), json={'status': 'APPROVED'}, headers=headers('organizer')).status_code
-            return client.post(f'/api/v1/tournaments/{tid}/status', json={'status': 'ONGOING'},
+            return client.post(f'/api/v1/tournaments/{tid}/status', json={'status': 'CANCELLED'},
                                headers=headers('organizer')).status_code
     with ThreadPoolExecutor(max_workers=2) as pool:
         decision, close = list(pool.map(request, ['decision', 'close']))

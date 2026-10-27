@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
+from core.rosters import approved_teams_without_player
 from core.tournaments import get_managed_tournament, get_tournament_or_404
 from middleware.auth import get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
@@ -33,6 +34,14 @@ TRANSITIONS = {
     "CANCELLED": set(),
 }
 ONGOING_EDITABLE = {"name", "description", "end_date"}
+
+
+def status_transitions(tournament: Tournament) -> set[str]:
+    """Starting requires a locked roster; legacy ONGOING tournaments keep their transitions."""
+    allowed = set(TRANSITIONS[tournament.status])
+    if tournament.status == "UPCOMING" and tournament.roster_locked_at is None:
+        allowed.discard("ONGOING")
+    return allowed
 REQUIRED_FIELDS = {"name", "game_id", "format", "start_date"}
 
 
@@ -227,6 +236,14 @@ def change_tournament_status(
     if data.status not in TRANSITIONS[tournament.status]:
         raise HTTPException(status_code=409,
                             detail=f"Không thể chuyển giải từ {tournament.status} sang {data.status}")
+    if data.status == "ONGOING":
+        # The tournament lock is held, so the APPROVED set and the snapshot cannot change under this check.
+        if tournament.roster_locked_at is None:
+            raise HTTPException(status_code=409, detail="Cần khóa đội hình trước khi bắt đầu giải")
+        missing = approved_teams_without_player(db, tournament_id)
+        if missing:
+            raise HTTPException(status_code=409,
+                                detail=f"Đội đã duyệt chưa có tuyển thủ PLAYER trong đội hình: {missing}")
     before = {"status": tournament.status}
     tournament.status = data.status
     return commit_tournament(db, tournament, user, "TOURNAMENT_STATUS_CHANGED", before, {"status": data.status})
