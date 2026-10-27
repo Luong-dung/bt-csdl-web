@@ -9,7 +9,9 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.audit import record_audit
-from core.registrations import ensure_registration_open, lock_registration, registration_timestamp
+from core.registrations import (
+    ensure_registration_open, ensure_registration_resolution_open, lock_registration, registration_timestamp,
+)
 from core.tournaments import get_managed_tournament, get_tournament_or_404, lock_tournament_as
 from core.validation import DbId
 from middleware.auth import can_manage_tournament, ensure_team_manager, get_current_user, managed_teams_query
@@ -165,7 +167,7 @@ def cancel_registration(
     tournament, user = lock_tournament_as(db, tournament_id, user)
     registration = lock_registration(db, tournament_id, registration_id)
     ensure_team_manager(db, registration.team_id, user)
-    ensure_registration_open(tournament)
+    ensure_registration_resolution_open(tournament)
     if registration.status != "PENDING":
         raise HTTPException(status_code=409, detail="Chỉ hủy được đơn đang chờ duyệt")
     fields = ('status', 'cancelled_by', 'cancelled_at')
@@ -186,7 +188,10 @@ def decide_registration(
 ):
     tournament = get_managed_tournament(db, tournament_id, user)
     registration = lock_registration(db, tournament_id, registration_id)
-    ensure_registration_open(tournament)
+    if data.status == 'APPROVED':
+        ensure_registration_open(tournament)
+    else:
+        ensure_registration_resolution_open(tournament)
     if registration.status != "PENDING":
         raise HTTPException(status_code=409, detail="Đơn đăng ký không còn chờ duyệt")
     team = db.get(Team, registration.team_id)

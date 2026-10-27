@@ -6,7 +6,8 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 PERMISSION_PATH = re.compile(
-    r'/api/v1/(?:auth/capabilities|teams/managed|(?:teams|tournaments)/[^/]+/capabilities)/?'
+    r'/api/v1/(?:auth/capabilities|teams/managed|(?:teams|tournaments)/[^/]+/capabilities'
+    r'|tournaments/[^/]+/teams/[^/]+/roster/capabilities|tournaments/[^/]+/roster-lock)/?'
 )
 
 

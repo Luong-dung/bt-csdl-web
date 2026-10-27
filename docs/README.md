@@ -6,6 +6,7 @@
 - [Kế hoạch chia việc và đánh giá theo tuần](./TEAM_WORK_PLAN.md)
 - [Công việc và đánh giá tuần hiện tại — 26/10 đến 01/11/2026](./weeks/2026-W44.md)
 - [Phân công đợt tiếp theo W44(2) — 27/10 đến 01/11/2026](./weeks/2026-W44-2.md)
+- [Contract nền tảng roster và khóa snapshot — W44-2-01](./W44_2_ROSTER_FOUNDATION.md)
 - [Nhật ký sử dụng AI](./AI_WORK_LOG.md)
 - [ADR-001: Modular monolith](./ADR/001-modular-monolith.md)
 

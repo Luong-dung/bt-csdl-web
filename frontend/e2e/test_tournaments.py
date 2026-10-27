@@ -1,6 +1,7 @@
 import re
 from datetime import date, timedelta
 
+import pytest
 from playwright.sync_api import Browser, Page, expect
 
 from helpers import create_team, login, register_user, unique_username
@@ -154,5 +155,59 @@ def test_tournament_cancellation_persists_after_reload(
             f'.registration-card[data-registration-id="{registration_id}"]'
         )
         expect(cancelled_registration.locator(".reg-badge")).to_have_text("CANCELLED")
+    finally:
+        manager_page.close()
+
+
+@pytest.mark.parametrize('action', ['reject', 'cancel'])
+def test_locked_capabilities_hide_new_entries_and_approval_but_keep_resolution(
+    page: Page, browser: Browser, app_base_url: str, demo_password: str, action: str
+):
+    """UI contract test: intercept lock hints until W44-2-04 supplies lock mutation.
+
+    Backend locked-state enforcement and unchanged APPROVED teams are tested
+    separately in test_roster_foundation.py on SQLite and PostgreSQL.
+    """
+    name, tid = create_tournament(page, demo_password)
+    manager_page, username, _team_id, rid = create_user_team_and_register(
+        browser, app_base_url, tid, name, 'lock' + action
+    )
+
+    def locked_hints(route):
+        response = route.fetch()
+        data = response.json()
+        data.update(roster_locked=True, can_lock_roster=False, can_approve_registrations=False)
+        route.fulfill(response=response, json=data)
+
+    try:
+        page.get_by_role('button', name='Đăng xuất', exact=True).click()
+        login(page, 'demo_admin', demo_password)
+        refresh_tournament(page, tid, name, username='demo_admin')
+        # ADMIN also manages the seeded demo team, so there is a real submit
+        # form to hide; the pending registration does not by itself hide it.
+        expect(page.locator('.registration-form')).to_be_visible()
+        path = f'**/api/v1/tournaments/{tid}/capabilities'
+        page.route(path, locked_hints)
+        manager_page.route(path, locked_hints)
+        refresh_tournament(page, tid, name, username='demo_admin')
+        expect(page.locator('.registration-form')).to_have_count(0)
+        registration = page.locator(f'.registration-card[data-registration-id="{rid}"]')
+        expect(registration.get_by_role('button', name='Duyệt', exact=True)).to_have_count(0)
+        expect(registration.get_by_role('button', name='Từ chối', exact=True)).to_be_visible()
+
+        if action == 'reject':
+            page.once('dialog', lambda dialog: dialog.accept('Closed before roster lock'))
+            registration.get_by_role('button', name='Từ chối', exact=True).click()
+            expect(registration.locator('.reg-badge')).to_have_text('REJECTED')
+            refresh_tournament(page, tid, name, username='demo_admin')
+            expect(page.locator(f'.registration-card[data-registration-id="{rid}"] .reg-badge')).to_have_text('REJECTED')
+        else:
+            refresh_tournament(manager_page, tid, name, username=username)
+            own_registration = manager_page.locator(f'.registration-card[data-registration-id="{rid}"]')
+            manager_page.once('dialog', lambda dialog: dialog.accept())
+            own_registration.get_by_role('button', name='Hủy đơn', exact=True).click()
+            expect(own_registration.locator('.reg-badge')).to_have_text('CANCELLED')
+            refresh_tournament(manager_page, tid, name, username=username)
+            expect(manager_page.locator(f'.registration-card[data-registration-id="{rid}"] .reg-badge')).to_have_text('CANCELLED')
     finally:
         manager_page.close()

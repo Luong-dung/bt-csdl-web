@@ -39,7 +39,7 @@ Kế hoạch chi tiết của tuần hiện tại được tách riêng để d�
 
 - [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): chốt sớm ngày 26/10/2026, **`8/8 DONE`, `0 IN PROGRESS`, `0 TODO`**; cả 8 task đã review/merge, CI và nghiệm thu local đạt. Hoàn thành UI giải, capability và đăng ký/duyệt đội. [Đánh giá từng người](./weeks/2026-W44.md#6-đánh-giá-cuối-tuần): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm đề xuất trên thang 5).
 
-- [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): đợt tiếp theo trong tuần lịch `2026-W44`; `0/8 DONE`, `8 TODO`. Mỗi người hai task: DUNG nền tảng roster/stage, DOANH API roster/khóa và bắt đầu giải, DUONG UI roster/stage và danh sách lớn, DUC integration/E2E. Mã task dùng `W44-2-01`…`W44-2-08`, không trùng W44 đã chốt.
+- [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): đợt tiếp theo trong tuần lịch `2026-W44`; cập nhật 26/10: `1/8 DONE`, `0 REVIEW`, `7 TODO` (W44-2-01 được DOANH approve, CI đạt cả 3 job, PR #57 merge `f538524`). Mỗi người hai task: DUNG nền tảng roster/stage, DOANH API roster/khóa và bắt đầu giải, DUONG UI roster/stage và danh sách lớn, DUC integration/E2E. Mã task dùng `W44-2-01`…`W44-2-08`, không trùng W44 đã chốt.
 
 W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 là tuần hiện tại (26/10–01/11), đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
