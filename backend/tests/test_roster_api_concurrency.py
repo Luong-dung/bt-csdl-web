@@ -56,15 +56,50 @@ def test_put_rechecks_after_membership_change_while_waiting(session_factory, acc
     assert logs(session_factory) == []
 
 
-def test_two_teams_cannot_claim_the_same_player(session_factory, access, case):
-    """Serialized by the tournament lock: the second writer sees the first roster and gets 409."""
-    client, headers, users, teams, _ = access
-    with session_factory.begin() as db:
+def transfer_p1_to_beta(factory, users, teams, tid):
+    with factory.begin() as db:
         # p1 transfers to Beta after Alpha drafted them; Alpha's draft still references p1.
-        db.add(TournamentRoster(tournament_id=case, team_id=teams['Alpha'], user_id=users['p1'],
+        db.add(TournamentRoster(tournament_id=tid, team_id=teams['Alpha'], user_id=users['p1'],
                                 role_in_team='PLAYER', display_name='p1'))
         db.scalar(select(TeamMembership).where(TeamMembership.user_id == users['p1'])).status = 'INACTIVE'
         db.add(TeamMembership(team_id=teams['Beta'], user_id=users['p1'], role_in_team='PLAYER'))
+
+
+@pytest.mark.parametrize('released,status', [(True, 200), (False, 409)])
+def test_waiting_writer_sees_committed_roster_of_other_team(session_factory, access, case, released, status):
+    """Beta's PUT queues on the tournament lock while Alpha's writer holds it, then reads Alpha's outcome."""
+    client, headers, users, teams, _ = access
+    transfer_p1_to_beta(session_factory, users, teams, case)
+    with session_factory() as holder:
+        lock_tournament(holder, case)
+        engine = holder.get_bind()
+        started = Event()
+        listener = tournament_lock_probe(engine, started)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(lambda: client.put(roster(case, teams['Beta']), headers=headers('admin'),
+                                                        json=body((users['p1'], 'PLAYER'))).status_code)
+                try:
+                    assert started.wait(3), 'Beta writer never queued on the tournament lock'
+                    assert not future.done(), 'Beta writer did not wait for the tournament lock'
+                    if released:  # Alpha's writer drops p1 and commits before Beta proceeds
+                        holder.delete(holder.scalar(select(TournamentRoster).where(
+                            TournamentRoster.team_id == teams['Alpha'])))
+                        holder.commit()
+                finally:
+                    holder.rollback()
+                assert future.result(timeout=5) == status
+        finally:
+            event.remove(engine, 'before_cursor_execute', listener)
+    with session_factory() as db:
+        assert [r.team_id for r in db.scalars(select(TournamentRoster))] == [
+            teams['Beta'] if released else teams['Alpha']]
+
+
+def test_transfer_flow_requires_old_team_to_release_player(session_factory, access, case):
+    """Sequential flow (not a race): Beta gets 409 until Alpha removes p1 from its draft."""
+    client, headers, users, teams, _ = access
+    transfer_p1_to_beta(session_factory, users, teams, case)
     responses = [client.put(roster(case, teams['Beta']), headers=headers('admin'),
                             json=body((users['p1'], 'PLAYER'))).status_code,
                  client.put(roster(case, teams['Alpha']), headers=headers('admin'),
