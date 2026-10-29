@@ -18,7 +18,37 @@ type TournamentCapabilities = {
   tournament_id: number; can_manage: boolean; can_update: boolean;
   can_change_status: boolean; can_review_registrations: boolean;
   can_approve_registrations: boolean; roster_locked: boolean;
+  can_lock_roster: boolean; can_manage_stages?: boolean;
   editable_fields: string[]; allowed_status_transitions: string[];
+};
+type RosterRole = "PLAYER" | "SUBSTITUTE";
+type RosterMember = {
+  user_id: number;
+  display_name: string | null;
+  role_in_team: RosterRole;
+};
+type RosterRead = {
+  tournament_id: number;
+  team_id: number;
+  locked: boolean;
+  members: RosterMember[];
+};
+type RosterLockRead = {
+  tournament_id: number;
+  locked: boolean;
+  locked_at: string | null;
+};
+type RosterCapabilities = {
+  tournament_id: number;
+  team_id: number;
+  can_view_roster: boolean;
+  can_edit_roster: boolean;
+};
+type RosterDraftItem = {
+  user_id: number;
+  role_in_team: RosterRole;
+  username?: string;
+  display_name?: string;
 };
 type RegistrationStatus = "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED";
 type TournamentRegistrationItem = {
@@ -100,8 +130,33 @@ export default function App() {
   const [memberLoading, setMemberLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogReloadError, setCatalogReloadError] = useState("");
+  const [selectedRosterTeam, setSelectedRosterTeam] = useState<{ team_id: number; name: string; tag?: string } | null>(null);
+  const [rosterLock, setRosterLock] = useState<RosterLockRead | null>(null);
+  const [rosterData, setRosterData] = useState<RosterRead | null>(null);
+  const [rosterCapabilities, setRosterCapabilities] = useState<RosterCapabilities | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [rosterError, setRosterError] = useState("");
+  const [rosterNotice, setRosterNotice] = useState("");
+  const [rosterSaving, setRosterSaving] = useState(false);
+  const [teamEligibleMembers, setTeamEligibleMembers] = useState<TeamMember[]>([]);
+  const [rosterDraftMembers, setRosterDraftMembers] = useState<RosterDraftItem[]>([]);
+  const [lockLoading, setLockLoading] = useState(false);
+  const [lockError, setLockError] = useState("");
+  const [lockNotice, setLockNotice] = useState("");
   const sessionVersion = useRef(0);
   const tournamentViewVersion = useRef(0);
+
+  const resetRosterState = () => {
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
+  };
 
   const handleAuthExpired = (customMessage?: string) => {
     sessionVersion.current += 1;
@@ -119,6 +174,16 @@ export default function App() {
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
+    resetRosterState();
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     setError(customMessage || "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
   };
 
@@ -273,6 +338,15 @@ export default function App() {
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     setNotice("Bạn đã đăng xuất.");
   };
 
@@ -533,7 +607,18 @@ export default function App() {
     setAllTournamentRegistrations([]);
     setRegistrationError("");
     setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     setRegistrationStatusFilter("");
+    setRosterLock(null);
+    resetRosterState();
   };
 
   const loadTournamentCapabilities = async (tournamentId: number, authToken = token, expectedVersion?: number) => {
@@ -665,6 +750,201 @@ export default function App() {
     }
   };
 
+  const loadRosterLock = async (tournamentId: number, expectedVersion?: number) => {
+    try {
+      const res = await request<RosterLockRead>(`/tournaments/${tournamentId}/roster-lock`);
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setRosterLock(res);
+    } catch {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setRosterLock(null);
+    }
+  };
+
+  const loadTeamRosterData = async (teamId: number, expectedVersion?: number) => {
+    if (!selectedTournament) return;
+    setRosterLoading(true);
+    setRosterError("");
+    setRosterNotice("");
+    try {
+      let caps: RosterCapabilities | null = null;
+      if (token) {
+        caps = await request<RosterCapabilities>(
+          `/tournaments/${selectedTournament.tournament_id}/teams/${teamId}/roster/capabilities`,
+          {},
+          token
+        ).catch(() => null);
+      }
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setRosterCapabilities(caps);
+
+      const roster = await request<RosterRead>(
+        `/tournaments/${selectedTournament.tournament_id}/teams/${teamId}/roster`,
+        {},
+        token || undefined
+      );
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setRosterData(roster);
+      setRosterDraftMembers(
+        roster.members.map((m) => ({
+          user_id: m.user_id,
+          role_in_team: m.role_in_team,
+          display_name: m.display_name ?? undefined,
+        }))
+      );
+
+      if (caps?.can_edit_roster && token) {
+        try {
+          const members = await request<TeamMember[]>(
+            `/teams/${teamId}/members?include_history=false`,
+            {},
+            token
+          );
+          if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+          const eligible = members.filter(
+            (m) => m.status === "ACTIVE" && (m.role === "PLAYER" || m.role === "SUBSTITUTE")
+          );
+          setTeamEligibleMembers(eligible);
+        } catch {
+          if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+          setTeamEligibleMembers([]);
+        }
+      } else {
+        setTeamEligibleMembers([]);
+      }
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      setRosterData(null);
+      if (reason instanceof RequestError) {
+        if (reason.status === 401) {
+          if (token) {
+            handleAuthExpired();
+          } else {
+            setRosterError("Đội hình đang là bản nháp riêng tư. Cần đăng nhập để xem.");
+          }
+          return;
+        }
+        if (reason.status === 403) {
+          setRosterError("Bạn không có quyền xem đội hình nháp này (chỉ quản lý đội hoặc quản lý giải).");
+          return;
+        }
+      }
+      setRosterError((reason as Error).message || "Không thể tải thông tin đội hình.");
+    } finally {
+      if (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) {
+        setRosterLoading(false);
+      }
+    }
+  };
+
+  const openTeamRoster = async (teamId: number, teamName: string, teamTag?: string) => {
+    if (selectedRosterTeam?.team_id === teamId) {
+      resetRosterState();
+      return;
+    }
+    setSelectedRosterTeam({ team_id: teamId, name: teamName, tag: teamTag });
+    await loadTeamRosterData(teamId, tournamentViewVersion.current);
+  };
+
+  const addMemberToRosterDraft = (userId: number) => {
+    const member = teamEligibleMembers.find((m) => m.user_id === userId);
+    if (!member) return;
+    if (rosterDraftMembers.some((m) => m.user_id === userId)) return;
+    setRosterNotice("");
+    setRosterError("");
+    setRosterDraftMembers((prev) => [
+      ...prev,
+      {
+        user_id: member.user_id,
+        role_in_team: member.role as RosterRole,
+        username: member.username,
+      },
+    ]);
+  };
+
+  const removeMemberFromRosterDraft = (userId: number) => {
+    setRosterNotice("");
+    setRosterError("");
+    setRosterDraftMembers((prev) => prev.filter((m) => m.user_id !== userId));
+  };
+
+  const saveRoster = async () => {
+    if (!token || !selectedTournament || !selectedRosterTeam) return;
+    setRosterSaving(true);
+    setRosterError("");
+    setRosterNotice("");
+    try {
+      const payload = {
+        members: rosterDraftMembers.map((m) => ({
+          user_id: m.user_id,
+          role_in_team: m.role_in_team,
+        })),
+      };
+      const updated = await request<RosterRead>(
+        `/tournaments/${selectedTournament.tournament_id}/teams/${selectedRosterTeam.team_id}/roster`,
+        {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        },
+        token
+      );
+      setRosterData(updated);
+      setRosterDraftMembers(
+        updated.members.map((m) => ({
+          user_id: m.user_id,
+          role_in_team: m.role_in_team,
+          display_name: m.display_name ?? undefined,
+        }))
+      );
+      setRosterNotice("Đã lưu đội hình tham dự thành công!");
+    } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setRosterError((reason as Error).message || "Không thể lưu đội hình.");
+    } finally {
+      setRosterSaving(false);
+    }
+  };
+
+  const handleLockRoster = async () => {
+    if (!token || !selectedTournament) return;
+    const confirmed = window.confirm(
+      "Xác nhận khóa đội hình cho giải đấu này?\n\nSau khi khóa:\n- Không thể chỉnh sửa đội hình của các đội.\n- Không thể nhận thêm đơn đăng ký mới.\n- Snapshot đội hình sẽ được cố định để chuẩn bị thi đấu."
+    );
+    if (!confirmed) return;
+
+    setLockLoading(true);
+    setLockError("");
+    setLockNotice("");
+    try {
+      const res = await request<RosterLockRead>(
+        `/tournaments/${selectedTournament.tournament_id}/roster-lock`,
+        { method: "POST" },
+        token
+      );
+      setRosterLock(res);
+      setLockNotice("Đã khóa đội hình giải đấu thành công! Snapshot đội hình đã được cố định.");
+      const version = tournamentViewVersion.current;
+      await Promise.all([
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, version),
+        loadApprovedTeams(selectedTournament.tournament_id, version),
+        loadTournaments(),
+      ]);
+      if (selectedRosterTeam) {
+        await loadTeamRosterData(selectedRosterTeam.team_id, version);
+      }
+    } catch (reason) {
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setLockError((reason as Error).message || "Không thể khóa đội hình.");
+    } finally {
+      setLockLoading(false);
+    }
+  };
   const reloadTournamentDetailsData = async (tournament: Tournament) => {
     const version = tournamentViewVersion.current;
     setRegistrationError("");
@@ -674,7 +954,11 @@ export default function App() {
       loadTournamentCapabilities(tournament.tournament_id, token, version),
       loadApprovedTeams(tournament.tournament_id, version),
       loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
+      loadRosterLock(tournament.tournament_id, version),
     ]);
+    if (selectedRosterTeam) {
+      await loadTeamRosterData(selectedRosterTeam.team_id, version);
+    }
   };
 
   useEffect(() => {
@@ -687,6 +971,15 @@ export default function App() {
       setManagedTeamsForTournament([]);
       setRegistrationError("");
       setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
       return;
     }
     const version = tournamentViewVersion.current;
@@ -696,7 +989,11 @@ export default function App() {
       await Promise.all([
         loadTournamentCapabilities(selectedTournament.tournament_id, token, version),
         loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
+        loadRosterLock(selectedTournament.tournament_id, version),
       ]);
+      if (selectedRosterTeam) {
+        await loadTeamRosterData(selectedRosterTeam.team_id, version);
+      }
     })();
   }, [token]);
 
@@ -706,6 +1003,15 @@ export default function App() {
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     const form = new FormData(event.currentTarget);
     const teamId = Number(form.get("team_id"));
     if (!teamId) {
@@ -739,6 +1045,15 @@ export default function App() {
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     try {
       await request<TournamentRegistrationItem>(`/tournaments/${selectedTournament.tournament_id}/registrations/${registrationId}/cancel`, {
         method: "POST",
@@ -770,6 +1085,15 @@ export default function App() {
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     try {
       const body: { status: "APPROVED" | "REJECTED"; rejection_reason?: string } = { status };
       if (rejectionReason) body.rejection_reason = rejectionReason;
@@ -827,6 +1151,16 @@ export default function App() {
     setNotice("");
     setRegistrationError("");
     setRegistrationNotice("");
+    resetRosterState();
+    setSelectedRosterTeam(null);
+    setRosterData(null);
+    setRosterCapabilities(null);
+    setRosterError("");
+    setRosterNotice("");
+    setTeamEligibleMembers([]);
+    setRosterDraftMembers([]);
+    setLockError("");
+    setLockNotice("");
     try {
       const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
       if (tournamentViewVersion.current !== version) return;
@@ -835,6 +1169,7 @@ export default function App() {
       const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version);
       const capsPromise = loadTournamentCapabilities(tournamentId, token, version);
       const approvedPromise = loadApprovedTeams(tournamentId, version);
+      const lockPromise = loadRosterLock(tournamentId, version);
 
       const managedTeams = await managedTeamsPromise;
       if (tournamentViewVersion.current !== version) return;
@@ -842,6 +1177,7 @@ export default function App() {
       await Promise.all([
         capsPromise,
         approvedPromise,
+        lockPromise,
         loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams),
       ]);
     } catch (reason) {
@@ -886,6 +1222,7 @@ export default function App() {
       }, token);
       setSelectedTournament(updated);
       await loadTournamentCapabilities(updated.tournament_id);
+      await loadRosterLock(updated.tournament_id);
       await loadTournaments();
       setNotice(`Đã chuyển trạng thái giải sang ${status}.`);
     } catch (reason) {
@@ -1005,10 +1342,58 @@ export default function App() {
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
         <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>Đóng ×</button></div>
-        <div className="detail-stats"><div><span>Trạng thái</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div><div><span>Ngày bắt đầu</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString("vi-VN")}</strong></div><div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div></div>
+                <div className="detail-stats">
+          <div><span>Trạng thái</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div>
+          <div><span>Đội hình</span><strong className={tournamentCapabilities?.roster_locked || rosterLock?.locked ? "status status-completed" : "status status-upcoming"}>{tournamentCapabilities?.roster_locked || rosterLock?.locked ? "Đã khóa" : "Chưa khóa"}</strong></div>
+          <div><span>Ngày bắt đầu</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString("vi-VN")}</strong></div>
+          <div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div>
+        </div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
         {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id)}>Thử lại</button></div>}
-        {tournamentCapabilities?.can_manage && <div className="manage-panel"><div className="panel-title"><h4>Điều hành giải</h4><span>CAPABILITY VERIFIED</span></div><div className="status-actions">{tournamentCapabilities.allowed_status_transitions.map((status) => <button className="button secondary" key={status} disabled={tournamentLoading} onClick={() => void changeTournamentStatus(status)}>Chuyển sang {status}</button>)}</div>{tournamentCapabilities.can_update && tournamentCapabilities.editable_fields.length > 0 && (
+                {tournamentCapabilities?.can_manage && <div className="manage-panel">
+          <div className="panel-title"><h4>Điều hành giải</h4><span>CAPABILITY VERIFIED</span></div>
+          {selectedTournament.status === "UPCOMING" && (
+            <div className="start-conditions-box">
+              {tournamentCapabilities.roster_locked || rosterLock?.locked ? (
+                <div className="condition-item met">
+                  <span className="condition-icon">✓</span>
+                  <span>Đội hình giải đấu đã được khóa{rosterLock?.locked_at ? ` (${new Date(rosterLock.locked_at).toLocaleString("vi-VN")})` : ""}. Đã đủ điều kiện khóa để bắt đầu giải đấu.</span>
+                </div>
+              ) : (
+                <div className="condition-item unmet">
+                  <span className="condition-icon">⚠️</span>
+                  <div>
+                    <strong>Điều kiện bắt đầu giải đấu (chuyển sang ONGOING):</strong>
+                    <p>Giải đấu cần phải khóa đội hình và mỗi đội đã duyệt phải có ít nhất một tuyển thủ (PLAYER). Nút "Chuyển sang ONGOING" sẽ tự động hiển thị sau khi khóa thành công.</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {selectedTournament.status === "UPCOMING" && (
+            <div className="roster-lock-controls">
+              {tournamentCapabilities.can_lock_roster && !(tournamentCapabilities.roster_locked || rosterLock?.locked) && (
+                <div className="lock-prompt">
+                  <button
+                    type="button"
+                    className="button warning"
+                    disabled={lockLoading || tournamentLoading}
+                    onClick={() => void handleLockRoster()}
+                  >
+                    {lockLoading ? <><span className="spinner" /> Đang khóa đội hình...</> : "🔒 Khóa đội hình giải đấu"}
+                  </button>
+                </div>
+              )}
+              {lockError && (
+                <div className="error-banner">
+                  <span>{lockError}</span>
+                  <button type="button" className="button secondary" onClick={() => void handleLockRoster()}>Thử lại</button>
+                </div>
+              )}
+              {lockNotice && <div className="notice-banner">{lockNotice}</div>}
+            </div>
+          )}
+          <div className="status-actions">{tournamentCapabilities.allowed_status_transitions.map((status) => <button className="button secondary" key={status} disabled={tournamentLoading} onClick={() => void changeTournamentStatus(status)}>Chuyển sang {status}</button>)}</div>{tournamentCapabilities.can_update && tournamentCapabilities.editable_fields.length > 0 && (
           <form className="tournament-form edit-form" onSubmit={updateTournament}>
             {tournamentCapabilities.editable_fields.includes("name") && (
               <label>Tên giải đấu<input name="name" defaultValue={selectedTournament.name} minLength={3} maxLength={150} required /></label>
@@ -1052,10 +1437,179 @@ export default function App() {
             <div className="approved-teams-grid">
               {approvedTeams.map((team) => (
                 <div className="approved-team-card" data-team-id={team.team_id} key={team.team_id}>
-                  <strong>{team.name}</strong>
-                  <span className="tag">#{team.tag}</span>
+                  <div className="team-basic-info">
+                    <strong>{team.name}</strong>
+                    <span className="tag">#{team.tag}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="link-button roster-btn"
+                    onClick={() => void openTeamRoster(team.team_id, team.name, team.tag)}
+                  >
+                    {selectedRosterTeam?.team_id === team.team_id ? "Đóng đội hình ▲" : "Đội hình ▼"}
+                  </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {selectedRosterTeam && (
+            <div className="team-roster-panel" data-team-id={selectedRosterTeam.team_id}>
+              <div className="panel-header">
+                <div>
+                  <span className="eyebrow">TOURNAMENT ROSTER</span>
+                  <h5>
+                    Đội hình: {selectedRosterTeam.name}
+                    {selectedRosterTeam.tag && <span className="tag"> #{selectedRosterTeam.tag}</span>}
+                  </h5>
+                </div>
+                <div className="header-badges">
+                  {rosterData?.locked || rosterLock?.locked || tournamentCapabilities?.roster_locked ? (
+                    <span className="status status-completed">🔒 Đã khóa (Snapshot)</span>
+                  ) : (
+                    <span className="status status-upcoming">📝 Bản nháp (Chưa khóa)</span>
+                  )}
+                  <button
+                    type="button"
+                    className="link-button"
+                    onClick={resetRosterState}
+                  >
+                    Đóng ×
+                  </button>
+                </div>
+              </div>
+
+              {rosterLoading && (
+                <div className="loading-state">
+                  <span className="spinner" /> Đang tải dữ liệu đội hình...
+                </div>
+              )}
+
+              {rosterError && (
+                <div className="error-banner">
+                  <span>{rosterError}</span>
+                  <button
+                    type="button"
+                    className="button secondary"
+                    onClick={() => void loadTeamRosterData(selectedRosterTeam.team_id, tournamentViewVersion.current)}
+                  >
+                    Thử lại
+                  </button>
+                </div>
+              )}
+
+              {rosterNotice && <div className="notice-banner">{rosterNotice}</div>}
+
+              {!rosterLoading && !rosterError && (
+                <>
+                  {!Boolean(rosterData?.locked || rosterLock?.locked || tournamentCapabilities?.roster_locked) &&
+                  selectedTournament.status === "UPCOMING" &&
+                  rosterCapabilities?.can_edit_roster ? (
+                    <div className="roster-editor">
+                      <div className="editor-heading">
+                        <strong>Danh sách tuyển thủ tham gia giải đấu:</strong>
+                        <span className="muted">
+                          (Yêu cầu tối thiểu 1 tuyển thủ PLAYER để đủ điều kiện khóa giải)
+                        </span>
+                      </div>
+
+                      {rosterDraftMembers.length === 0 ? (
+                        <p className="muted empty-roster-msg">Chưa có tuyển thủ nào trong đội hình tham dự.</p>
+                      ) : (
+                        <div className="roster-members-list">
+                          {rosterDraftMembers.map((m) => {
+                            const displayName =
+                              m.display_name ??
+                              m.username ??
+                              teamEligibleMembers.find((em) => em.user_id === m.user_id)?.username ??
+                              `User #${m.user_id}`;
+                            return (
+                              <div className="roster-member-row" key={m.user_id}>
+                                <div className="member-name-role">
+                                  <strong>{displayName}</strong>
+                                  <span className={`role-badge role-${m.role_in_team.toLowerCase()}`}>
+                                    {m.role_in_team === "PLAYER" ? "Chính thức (PLAYER)" : "Dự bị (SUBSTITUTE)"}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="link-button danger-link"
+                                  disabled={rosterSaving}
+                                  onClick={() => removeMemberFromRosterDraft(m.user_id)}
+                                >
+                                  Gỡ khỏi đội hình
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {teamEligibleMembers.filter((em) => !rosterDraftMembers.some((m) => m.user_id === em.user_id)).length > 0 && (
+                        <div className="add-member-form">
+                          <label>
+                            Thêm tuyển thủ từ danh sách đội:
+                            <select
+                              defaultValue=""
+                              value=""
+                              onChange={(e) => {
+                                const uid = Number(e.target.value);
+                                if (uid) {
+                                  addMemberToRosterDraft(uid);
+                                  e.target.value = "";
+                                }
+                              }}
+                            >
+                              <option value="" disabled>-- Chọn thành viên để thêm --</option>
+                              {teamEligibleMembers
+                                .filter((em) => !rosterDraftMembers.some((m) => m.user_id === em.user_id))
+                                .map((em) => (
+                                  <option key={em.user_id} value={em.user_id}>
+                                    {em.username} ({em.role})
+                                  </option>
+                                ))}
+                            </select>
+                          </label>
+                        </div>
+                      )}
+
+                      {teamEligibleMembers.length === 0 && (
+                        <p className="muted small-text">
+                          Đội chưa có thành viên PLAYER hoặc SUBSTITUTE đang hoạt động nào. Hãy thêm tuyển thủ vào đội tuyển trước.
+                        </p>
+                      )}
+
+                      <div className="roster-save-actions">
+                        <button
+                          type="button"
+                          className="button"
+                          disabled={rosterSaving}
+                          onClick={() => void saveRoster()}
+                        >
+                          {rosterSaving ? <><span className="spinner" /> Đang lưu...</> : "Lưu đội hình"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="roster-viewer">
+                      {(!rosterData?.members || rosterData.members.length === 0) ? (
+                        <p className="muted">Đội tuyển chưa có danh sách tuyển thủ.</p>
+                      ) : (
+                        <div className="roster-members-grid">
+                          {rosterData.members.map((m) => (
+                            <div className="roster-member-card" key={m.user_id}>
+                              <strong>{m.display_name ?? `User #${m.user_id}`}</strong>
+                              <span className={`role-badge role-${m.role_in_team.toLowerCase()}`}>
+                                {m.role_in_team === "PLAYER" ? "Chính thức (PLAYER)" : "Dự bị (SUBSTITUTE)"}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </> 
+              )}
             </div>
           )}
         </div>
@@ -1086,8 +1640,19 @@ export default function App() {
           })()
         )}
 
+        {selectedTournament.status === "UPCOMING" && (tournamentCapabilities?.roster_locked || rosterLock?.locked) && token && (
+          <div className="info-banner" style={{ marginTop: "16px" }}>
+            🔒 Đội hình giải đấu đã khóa — Không thể gửi đơn đăng ký mới.
+          </div>
+        )}
+
         {(registrations.length > 0 || tournamentCapabilities?.can_review_registrations || registrationError) && (
           <div className="registrations-section">
+            {(tournamentCapabilities?.roster_locked || rosterLock?.locked) && selectedTournament.status === "UPCOMING" && (
+              <div className="info-banner">
+                🔒 Đội hình giải đấu đã khóa — Thao tác duyệt đơn mới bị tạm dừng. Người quản lý giải vẫn có thể từ chối và quản lý đội vẫn có thể hủy đơn đang chờ.
+              </div>
+            )}
             <div className="section-header">
               <h4>Đơn đăng ký giải ({registrations.length})</h4>
               {tournamentCapabilities?.can_review_registrations && (
