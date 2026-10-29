@@ -24,6 +24,19 @@ def approved_team(db: Session, tournament_id: int, team_id: int) -> bool:
     )) is not None
 
 
+
+def approved_team_ids(db: Session, tournament_id: int) -> list[int]:
+    return list(db.scalars(select(TournamentRegistration.team_id).where(
+        TournamentRegistration.tournament_id == tournament_id,
+        TournamentRegistration.status == 'APPROVED',
+    ).order_by(TournamentRegistration.team_id)))
+
+
+def approved_teams_without_player(db: Session, tournament_id: int) -> list[int]:
+    with_player = set(db.scalars(select(TournamentRoster.team_id).where(
+        TournamentRoster.tournament_id == tournament_id, TournamentRoster.role_in_team == 'PLAYER')))
+    return [team_id for team_id in approved_team_ids(db, tournament_id) if team_id not in with_player]
+
 def ensure_roster_editable(tournament: Tournament) -> None:
     if not roster_editable(tournament):
         raise HTTPException(status_code=409, detail="Đội hình đã khóa hoặc giải không còn UPCOMING")

@@ -191,7 +191,7 @@ def organizer_tournament(client, headers):
 def tournament_writes(client, tournament_id, auth):
     path = f"/api/v1/tournaments/{tournament_id}"
     return (client.patch(path, json={"description": "Updated"}, headers=auth).status_code,
-            client.post(path + "/status", json={"status": "ONGOING"}, headers=auth).status_code)
+            client.post(path + "/status", json={"status": "CANCELLED"}, headers=auth).status_code)
 
 
 def test_tournament_records_creator(access):

@@ -14,7 +14,7 @@ from middleware.auth import (
 from modules.identity.models import User
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
-from routes.tournaments import ONGOING_EDITABLE, TRANSITIONS, TournamentUpdate
+from routes.tournaments import ONGOING_EDITABLE, TournamentUpdate, status_transitions
 
 router = APIRouter(tags=["Capabilities"])
 
@@ -77,7 +77,7 @@ def tournament_capabilities(
     if tournament is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
     allowed = can_manage_tournament(tournament, user)
-    transitions = sorted(TRANSITIONS[tournament.status]) if allowed else []
+    transitions = sorted(status_transitions(tournament)) if allowed else []
     fields = []
     if transitions:
         fields = sorted(ONGOING_EDITABLE if tournament.status == "ONGOING" else TournamentUpdate.model_fields)

@@ -95,6 +95,16 @@ Helper không commit/rollback thay caller; `get_db` đóng session rollback khi 
 4. Policy tách hai nhánh: tạo đơn và APPROVED dùng `ensure_registration_open` (UPCOMING, chưa khóa); REJECTED và hủy đơn PENDING dùng `ensure_registration_resolution_open` (chỉ cần UPCOMING). Sau khóa vẫn cho quản lý đúng đội hủy, quản lý đúng giải từ chối đơn PENDING, có audit và không thay tập APPROVED; không tự đóng đơn hoặc mở khóa snapshot. Capability phân biệt quyền xử lý và duyệt như trên. Endpoint quyết định/hủy giữ khóa giải và đơn như trước; không đổi tập APPROVED sau snapshot.
 5. Bổ sung điều kiện UPCOMING → ONGOING yêu cầu khóa vào API và capability trong W44-2-04, test cả hai. Không cản ONGOING → COMPLETED/CANCELLED của dữ liệu cũ; không khóa bù lịch sử. Giao diện cũ vẫn hoạt động trong W44-2-01 vì chưa kích hoạt điều kiện bắt đầu mới trước khi có endpoint khóa.
 
+### Đã triển khai trong W44-2-04
+
+`POST /api/v1/tournaments/{id}/roster-lock` và điều kiện bắt đầu giải, theo contract trên. Các điểm chốt khi triển khai:
+
+- Thứ tự kiểm tra: quyền quản lý giải (401/403, kiểm tra lại sau khi chờ khóa giải) → đã khóa thì trả trạng thái hiện có, không audit, bất kể lifecycle → chưa khóa mà không UPCOMING: 409 → không có đội APPROVED: 409 → khóa đội/membership/roster theo thứ tự chung → đội đổi game, roster thuộc đội không còn APPROVED, tuyển thủ hết ACTIVE/đã rời/sai vai trò, đội APPROVED không có PLAYER: 409 kèm ID liên quan.
+- Đội APPROVED có roster rỗng là thiếu PLAYER nên không khóa được; roster chỉ có SUBSTITUTE cũng vậy.
+- Khi khóa: chụp lại `display_name` từ username hiện tại cho mọi hàng, `roster_locked_at` lấy đồng hồ DB sau khi giữ đủ khóa (`registration_timestamp`), `roster_locked_by` là người khóa. Audit `TOURNAMENT_ROSTER_LOCKED` (resource `tournament_roster`) ghi `tournament_id`, `locked_at`, `team_count`, `member_count`. Lỗi bất kỳ rollback cả khóa, display_name và audit.
+- `POST /status` sang ONGOING từ UPCOMING: 409 nếu chưa khóa; kiểm tra lại mọi đội APPROVED có PLAYER trong snapshot (phòng dữ liệu sửa ngoài API). ONGOING → COMPLETED/CANCELLED và UPCOMING → CANCELLED không đổi; giải ONGOING cũ chưa khóa không bị chặn.
+- Capability: `allowed_status_transitions` của giải UPCOMING chưa khóa không còn `ONGOING`; sau khóa có lại. UI hiện dựng nút theo field này nên tự ẩn nút bắt đầu; nút khóa và cảnh báo thuộc W44-2-05.
+
 ## Thứ tự khóa và đường ghi membership
 
 Roster writer: **giải → đội theo ID tăng dần → membership theo membership_id tăng dần → roster theo roster_id tăng dần**. Nếu cần registration, giữ thứ tự giải trước đơn; không lấy đội sau khi đã khóa các hàng con theo thứ tự ngược. Lock không kéo qua request hoặc tách commit ở giữa.

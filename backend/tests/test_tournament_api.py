@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -117,9 +117,13 @@ def test_invalid_list_filter_returns_422(client, params):
 
 
 @pytest.fixture
-def tournament(client, refs):
+def tournament(client, refs, session_factory):
     games, _ = refs
-    return client.post(URL, json=payload(games["valorant"])).json()
+    tournament_id = client.post(URL, json=payload(games["valorant"])).json()["tournament_id"]
+    # Lifecycle tests start the tournament; W44-2-04 requires a locked roster (tested in test_roster_lock.py).
+    with session_factory.begin() as db:
+        db.get(Tournament, tournament_id).roster_locked_at = datetime.now(timezone.utc)
+    return client.get(f"{URL}/{tournament_id}").json()
 
 
 def set_status(client, tournament_id, *statuses):

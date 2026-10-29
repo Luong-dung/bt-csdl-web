@@ -35,7 +35,7 @@ def test_tournament_audit_actor_resource_and_changes(access, session_factory):
     path = f"{URL}/{tid}"
     new_date = str(date.today() + timedelta(days=8))
     assert client.patch(path, headers=auth, json={"name": "Renamed cup", "start_date": new_date}).status_code == 200
-    assert client.post(path + "/status", headers=auth, json={"status": "ONGOING"}).status_code == 200
+    assert client.post(path + "/status", headers=auth, json={"status": "CANCELLED"}).status_code == 200
     entries = logs(session_factory)
     assert [entry.action for entry in entries] == [
         "TOURNAMENT_CREATED", "TOURNAMENT_UPDATED", "TOURNAMENT_STATUS_CHANGED",
@@ -45,7 +45,7 @@ def test_tournament_audit_actor_resource_and_changes(access, session_factory):
     assert entries[0].details["after"]["created_by"] == users["organizer"]
     assert entries[1].details["before"]["name"] == "Audit cup"
     assert entries[1].details["after"] == {"name": "Renamed cup", "start_date": new_date}
-    assert entries[2].details == {"tournament_id": tid, "before": {"status": "UPCOMING"}, "after": {"status": "ONGOING"}}
+    assert entries[2].details == {"tournament_id": tid, "before": {"status": "UPCOMING"}, "after": {"status": "CANCELLED"}}
     # Rejected writes must not append successful audit entries.
     assert client.patch(path, headers=headers("viewer"), json={"name": "Forbidden"}).status_code == 403
     assert client.patch(path, headers=auth, json={"name": None}).status_code == 422
@@ -70,7 +70,7 @@ def test_audit_failure_rolls_back_tournament_write(access, session_factory, oper
         elif operation == "update":
             response = client.patch(path, headers=auth, json={"name": "Must rollback"})
         else:
-            response = client.post(path + "/status", headers=auth, json={"status": "ONGOING"})
+            response = client.post(path + "/status", headers=auth, json={"status": "CANCELLED"})
         assert response.status_code == 409
     finally:
         event.remove(AuditLog, "before_insert", reject_audit)
