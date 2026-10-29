@@ -86,7 +86,7 @@ def test_approved_team_roster_selection_and_organizer_lock(
         # Add player from dropdown
         add_select = roster_panel.locator(".add-member-form select")
         expect(add_select).to_be_visible()
-        add_select.select_option(label=re.compile(f".*{player}.*"))
+        add_select.select_option(label=f"{player} (PLAYER)")
 
         # Verify member appears in roster draft list
         expect(roster_panel.locator(".roster-members-list")).to_contain_text(player)
