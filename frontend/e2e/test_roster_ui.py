@@ -140,7 +140,10 @@ def test_approved_team_roster_selection_and_organizer_lock(
         roster_panel = manager_page.locator(f'.team-roster-panel[data-team-id="{team_id}"]')
         expect(roster_panel.locator(".roster-members-list")).to_contain_text(player)
 
-        # 5. Organizer locks tournament roster
+        # Manager changes draft in UI (gỡ thành viên) but hasn't saved yet
+        roster_panel.locator(".roster-member-row button").filter(has_text="Gỡ khỏi đội hình").click()
+
+        # 5. Organizer locks tournament roster in parallel session
         refresh_tournament(page, tournament_id, tournament_name)
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(".roster-lock-controls button").filter(has_text="Khóa đội hình giải đấu").click()
@@ -155,11 +158,25 @@ def test_approved_team_roster_selection_and_organizer_lock(
         # Detail stat shows "Đã khóa"
         expect(page.locator(".detail-stats")).to_contain_text("Đã khóa")
 
-        # 5b. Bấm chuyển trạng thái sang ONGOING thật
+        # 5a. E2E ca 409 khi lưu: Quản lý đội lưu bản nháp sau khi giải đã bị khóa -> nhận 409, giữ thông báo lỗi, tự chuyển sang snapshot
+        roster_panel.get_by_role("button", name="Lưu đội hình").click()
+        expect(roster_panel.locator(".error-banner")).to_be_visible()
+        expect(roster_panel.locator(".error-banner")).to_contain_text(re.compile(r"Xung đột|đã bị khóa|khóa"))
+        expect(roster_panel).to_contain_text("Đã khóa (Snapshot)")
+        expect(roster_panel.get_by_role("button", name="Lưu đội hình")).to_have_count(0)
+        expect(roster_panel.locator(".roster-members-grid")).to_contain_text(player)
+
+        # 5b. E2E ca đổi giải / reset lockLoading: đóng chi tiết giải và mở lại -> không bị kẹt spinner lockLoading
+        page.locator("button").filter(has_text="Quay lại danh sách giải").click()
+        expect(page.locator(".tournament-detail")).to_have_count(0)
+        open_tournament(page, tournament_id, tournament_name)
+        expect(page.locator(".roster-lock-controls .spinner")).to_have_count(0)
+
+        # 5c. Bấm chuyển trạng thái sang ONGOING thật
         page.locator(".status-actions button").filter(has_text="Chuyển sang ONGOING").click()
         expect(page.locator(".detail-stats")).to_contain_text("ONGOING")
 
-        # 6. Manager reloads - roster is now locked (read-only snapshot)
+        # 6. Manager reloads - roster is locked read-only snapshot
         refresh_tournament(manager_page, tournament_id, tournament_name, username=manager)
         manager_page.locator(f'.approved-team-card[data-team-id="{team_id}"] .roster-btn').click()
         locked_roster_panel = manager_page.locator(f'.team-roster-panel[data-team-id="{team_id}"]')
