@@ -193,3 +193,9 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opa
 .roster-member-card { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 .small-text { font-size: 12px; margin: 4px 0; }
 .empty-roster-msg { margin: 8px 0; }
+.status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px; }
+.status-badge.ready { background: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.3); }
+.status-badge.missing-player { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+.condition-warning-detail { margin-top: 6px; font-size: 12px; }
+.text-warning { color: #fde68a; }
+.text-success { color: #86efac; }

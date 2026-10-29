@@ -72,6 +72,45 @@ def test_approved_team_roster_selection_and_organizer_lock(
         expect(page.locator(".condition-item.unmet")).to_contain_text("Điều kiện bắt đầu giải đấu")
         expect(page.locator(".roster-lock-controls button")).to_contain_text("Khóa đội hình giải đấu")
 
+        # 3a. Khóa 409: Thử khóa khi đội APPROVED chưa có PLAYER trong roster
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.locator(".roster-lock-controls button").filter(has_text="Khóa đội hình giải đấu").click()
+        expect(page.locator(".roster-lock-controls .error-banner")).to_be_visible()
+        expect(page.locator(".condition-item.unmet")).to_be_visible()
+
+        # 3b. Xem nháp 401: Khách vãng lai chưa đăng nhập xem nháp bị 401
+        anon_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        anon_page.set_default_timeout(10_000)
+        try:
+            anon_page.goto(app_base_url)
+            open_tournament(anon_page, tournament_id, tournament_name)
+            anon_card = anon_page.locator(f'.approved-team-card[data-team-id="{team_id}"]')
+            expect(anon_card).to_be_visible()
+            anon_card.locator(".roster-btn").click()
+            expect(anon_page.locator(f'.team-roster-panel[data-team-id="{team_id}"] .error-banner')).to_contain_text(
+                "Đội hình đang là bản nháp riêng tư. Cần đăng nhập để xem."
+            )
+        finally:
+            anon_page.close()
+
+        # 3c. Xem nháp 403: Người dùng khác không thuộc đội và không quản lý giải bị 403
+        stranger_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+        stranger_page.set_default_timeout(10_000)
+        try:
+            stranger = unique_username("stranger")
+            stranger_page.goto(app_base_url)
+            register_user(stranger_page, stranger)
+            login(stranger_page, stranger)
+            open_tournament(stranger_page, tournament_id, tournament_name)
+            stranger_card = stranger_page.locator(f'.approved-team-card[data-team-id="{team_id}"]')
+            expect(stranger_card).to_be_visible()
+            stranger_card.locator(".roster-btn").click()
+            expect(stranger_page.locator(f'.team-roster-panel[data-team-id="{team_id}"] .error-banner')).to_contain_text(
+                "Bạn không có quyền xem đội hình nháp này"
+            )
+        finally:
+            stranger_page.close()
+
         # 4. Manager selects and saves roster
         refresh_tournament(manager_page, tournament_id, tournament_name, username=manager)
         approved_card = manager_page.locator(f'.approved-team-card[data-team-id="{team_id}"]')
@@ -116,6 +155,10 @@ def test_approved_team_roster_selection_and_organizer_lock(
         # Detail stat shows "Đã khóa"
         expect(page.locator(".detail-stats")).to_contain_text("Đã khóa")
 
+        # 5b. Bấm chuyển trạng thái sang ONGOING thật
+        page.locator(".status-actions button").filter(has_text="Chuyển sang ONGOING").click()
+        expect(page.locator(".detail-stats")).to_contain_text("ONGOING")
+
         # 6. Manager reloads - roster is now locked (read-only snapshot)
         refresh_tournament(manager_page, tournament_id, tournament_name, username=manager)
         manager_page.locator(f'.approved-team-card[data-team-id="{team_id}"] .roster-btn').click()
@@ -124,7 +167,7 @@ def test_approved_team_roster_selection_and_organizer_lock(
         expect(locked_roster_panel.get_by_role("button", name="Lưu đội hình")).to_have_count(0)
         expect(locked_roster_panel.locator(".roster-members-grid")).to_contain_text(player)
 
-        # 7. Public user views the locked roster snapshot
+        # 7. Public user views the locked roster snapshot (publicly viewable after lock)
         public_page = browser.new_page(viewport={"width": 1440, "height": 1000})
         public_page.set_default_timeout(10_000)
         public_page.goto(app_base_url)
@@ -141,4 +184,3 @@ def test_approved_team_roster_selection_and_organizer_lock(
         manager_page.close()
         if public_page is not None:
             public_page.close()
-
