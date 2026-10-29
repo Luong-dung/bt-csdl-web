@@ -1711,7 +1711,7 @@ export default function App() {
 
               {rosterNotice && <div className="notice-banner">{rosterNotice}</div>}
 
-              {!rosterLoading && !rosterError && (
+              {!rosterLoading && (rosterData || !rosterError) && (
                 <>
                   {!Boolean(rosterData?.locked || rosterLock?.locked || tournamentCapabilities?.roster_locked) &&
                   selectedTournament.status === "UPCOMING" &&

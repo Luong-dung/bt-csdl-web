@@ -1,5 +1,4 @@
 import re
-from datetime import date, timedelta
 from playwright.sync_api import Browser, Page, expect
 
 from helpers import create_team, login, register_user, unique_username
