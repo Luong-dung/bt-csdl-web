@@ -166,7 +166,7 @@ def test_approved_team_roster_selection_and_organizer_lock(
         expect(roster_panel.locator(".roster-members-grid")).to_contain_text(player)
 
         # 5b. E2E ca đổi giải / reset lockLoading: đóng chi tiết giải và mở lại -> không bị kẹt spinner lockLoading
-        page.locator("button").filter(has_text="Quay lại danh sách giải").click()
+        page.locator(".tournament-detail .detail-header button").filter(has_text=re.compile("Đóng|Close")).click()
         expect(page.locator(".tournament-detail")).to_have_count(0)
         open_tournament(page, tournament_id, tournament_name)
         expect(page.locator(".roster-lock-controls .spinner")).to_have_count(0)
