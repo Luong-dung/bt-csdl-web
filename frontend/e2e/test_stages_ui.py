@@ -326,3 +326,79 @@ def test_post_registration_session_switch_guard(
         expect(page.locator(".registrations-section").filter(has_text=team_a_name)).to_have_count(0)
     finally:
         page.unroute(post_url)
+
+
+def test_stage_mutation_session_switch_guard(
+    page: Page, browser: Browser, app_base_url: str, demo_password: str
+):
+    # 1. Organizer A creates tournament
+    tournament_name, tournament_id = create_tournament(page, demo_password)
+    open_tournament(page, tournament_id, tournament_name)
+    stages_section = page.locator('[data-testid="tournament-stages-section"]')
+    expect(stages_section).to_be_visible()
+    add_btn = stages_section.get_by_role("button", name="+ Thêm vòng đấu")
+    expect(add_btn).to_be_visible()
+
+    # 2. Register regular user B on separate page
+    user_b = unique_username("userb")
+    reg_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    try:
+        reg_page.goto(app_base_url)
+        register_user(reg_page, user_b, demo_password)
+    finally:
+        reg_page.close()
+
+    # 3. Organizer A fills create stage form
+    add_btn.click()
+    create_form = page.locator('[data-testid="stage-create-form"]')
+    expect(create_form).to_be_visible()
+    create_form.get_by_label(re.compile("Tên vòng đấu")).fill("Vòng Bảng Test")
+    create_form.get_by_label(re.compile("Thứ tự")).fill("1")
+
+    # 4. Intercept POST /stages request
+    held_posts = []
+
+    def intercept_stage_post(route):
+        if route.request.method == "POST":
+            held_posts.append(route)
+            return
+        route.continue_()
+
+    stage_post_url = f"**/api/v1/tournaments/{tournament_id}/stages"
+    page.route(stage_post_url, intercept_stage_post)
+
+    try:
+        # Organizer A submits stage creation
+        create_form.get_by_role("button", name="Lưu vòng đấu").click()
+        page.wait_for_timeout(300)
+        assert len(held_posts) == 1
+
+        # While Organizer A's POST request is still in-flight, Organizer A logs out
+        page.get_by_role("button", name="Đăng xuất").click()
+        expect(page.get_by_role("heading", name="Đăng nhập")).to_be_visible()
+
+        # User B logs in
+        login(page, user_b, demo_password)
+
+        # Ensure tournament detail is open for User B
+        if page.locator(".tournament-detail").count() == 0:
+            open_tournament(page, tournament_id, tournament_name)
+
+        # 5. Fulfill Organizer A's held POST request
+        for r in held_posts:
+            response = r.fetch()
+            r.fulfill(response=response)
+        held_posts.clear()
+
+        # 6. Verify session guard prevented Organizer A's response from affecting User B
+        page.wait_for_timeout(500)
+        # User B must NOT see the success notice "Đã thêm vòng đấu thành công."
+        expect(page.locator(".notice-banner")).to_have_count(0)
+        # User B must NOT see the create form
+        expect(page.locator('[data-testid="stage-create-form"]')).to_have_count(0)
+        # User B is not organizer, so must NOT see manage stage buttons
+        stages_b = page.locator('[data-testid="tournament-stages-section"]')
+        expect(stages_b.get_by_role("button", name="+ Thêm vòng đấu")).to_have_count(0)
+    finally:
+        page.unroute(stage_post_url)
+

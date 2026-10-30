@@ -945,21 +945,30 @@ export default function App() {
     return all;
   };
 
-  const loadTournamentStages = async (tournamentId: number, expectedVersion?: number): Promise<Stage[]> => {
+  const loadTournamentStages = async (
+    tournamentId: number,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<Stage[]> => {
     setStagesLoading(true);
     setStagesError("");
     try {
       const list = await fetchAllStages(tournamentId);
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return list;
+      if (expectedSessionVersion !== undefined && sessionVersion.current !== expectedSessionVersion) return list;
       setStages(list);
       return list;
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      if (expectedSessionVersion !== undefined && sessionVersion.current !== expectedSessionVersion) return [];
       setStages([]);
       setStagesError((reason as Error).message || "Không thể tải danh sách vòng đấu.");
       return [];
     } finally {
-      if (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) {
+      if (
+        (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) &&
+        (expectedSessionVersion === undefined || sessionVersion.current === expectedSessionVersion)
+      ) {
         setStagesLoading(false);
       }
     }
@@ -968,6 +977,8 @@ export default function App() {
   const handleCreateStage = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
     const trimmedName = newStageName.trim();
@@ -989,22 +1000,44 @@ export default function App() {
       await request<Stage>(`/tournaments/${currentTournamentId}/stages`, {
         method: "POST",
         body: JSON.stringify({ name: trimmedName, sequence_order: orderNum }),
-      }, token);
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      }, startingToken);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       setNewStageName("");
       setNewStageOrder("");
       setIsCreatingStage(false);
       setStagesNotice("Đã thêm vòng đấu thành công.");
-      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
     } catch (reason) {
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setStageFormError((reason as Error).message || "Không thể tạo vòng đấu.");
     } finally {
-      if (tournamentViewVersion.current === currentTournamentVersion) {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
         setStageActionLoading(false);
       }
     }
@@ -1013,6 +1046,8 @@ export default function App() {
   const handleUpdateStage = async (stageId: number, e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
     const trimmedName = editingStageName.trim();
@@ -1034,20 +1069,42 @@ export default function App() {
       await request<Stage>(`/tournaments/${currentTournamentId}/stages/${stageId}`, {
         method: "PATCH",
         body: JSON.stringify({ name: trimmedName, sequence_order: orderNum }),
-      }, token);
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      }, startingToken);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       setEditingStageId(null);
       setStagesNotice("Đã cập nhật vòng đấu.");
-      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
     } catch (reason) {
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setStageFormError((reason as Error).message || "Không thể cập nhật vòng đấu.");
     } finally {
-      if (tournamentViewVersion.current === currentTournamentVersion) {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
         setStageActionLoading(false);
       }
     }
@@ -1055,6 +1112,8 @@ export default function App() {
 
   const handleDeleteStage = async (stage: Stage) => {
     if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
     if (!window.confirm(`Bạn có chắc chắn muốn xóa vòng đấu "${stage.name}"?`)) return;
@@ -1065,19 +1124,41 @@ export default function App() {
     try {
       await request(`/tournaments/${currentTournamentId}/stages/${stage.stage_id}`, {
         method: "DELETE",
-      }, token);
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      }, startingToken);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       setStagesNotice("Đã xóa vòng đấu.");
-      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
     } catch (reason) {
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setStagesError((reason as Error).message || "Không thể xóa vòng đấu.");
     } finally {
-      if (tournamentViewVersion.current === currentTournamentVersion) {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
         setStageActionLoading(false);
       }
     }
@@ -1088,6 +1169,8 @@ export default function App() {
     const targetIndex = direction === "up" ? stageIndex - 1 : stageIndex + 1;
     if (targetIndex < 0 || targetIndex >= stages.length) return;
 
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
     setStageActionLoading(true);
@@ -1096,9 +1179,16 @@ export default function App() {
 
     try {
       const allStages = await fetchAllStages(currentTournamentId);
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
 
-      const currentStageId = stages[stageIndex].stage_id;
+      const currentStageId = stages[stageIndex]?.stage_id;
+      if (!currentStageId) return;
       const allIdx = allStages.findIndex((s) => s.stage_id === currentStageId);
       if (allIdx === -1) {
         throw new Error("Không tìm thấy vòng đấu để sắp xếp.");
@@ -1115,21 +1205,43 @@ export default function App() {
       const reordered = await request<Stage[]>(`/tournaments/${currentTournamentId}/stages/order`, {
         method: "PUT",
         body: JSON.stringify({ stage_ids: stageIds }),
-      }, token);
+      }, startingToken);
 
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       setStages(reordered);
       setStagesNotice("Đã cập nhật thứ tự vòng đấu.");
     } catch (reason) {
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setStagesError((reason as Error).message || "Không thể sắp xếp thứ tự vòng đấu.");
-      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
     } finally {
-      if (tournamentViewVersion.current === currentTournamentVersion) {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
         setStageActionLoading(false);
       }
     }
