@@ -70,7 +70,7 @@ body { background: #070b15 radial-gradient(circle at 82% 4%, rgba(34,211,238,.12
 .detail-header { display: flex; justify-content: space-between; gap: 20px; }
 .detail-header h3 { font-size: 28px; margin: 8px 0 4px; }
 .detail-header p { margin: 0; }
-.detail-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 22px 0; }
+.detail-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 22px 0; }
 .detail-stats div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
 .detail-stats span { color: var(--subtle); font-size: 11px; text-transform: uppercase; letter-spacing: .1em; }
 .detail-stats strong { font-size: 14px; }
@@ -150,3 +150,52 @@ body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opa
 .button.small { padding: 6px 12px; font-size: 13px; }
 .button.danger { background: #991b1b; color: #fff; }
 .notice-banner { padding: 10px 14px; background: #123329; color: #86efac; border-radius: 6px; margin-bottom: 12px; font-size: 13px; }
+
+/* W44-2-05: Tournament Roster Management & Snapshot Lock */
+.button.warning { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25); border: 0; }
+.button.warning:hover { background: #d97706; }
+.info-banner { padding: 10px 14px; background: rgba(30, 41, 59, 0.7); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; margin-bottom: 12px; font-size: 13px; line-height: 1.5; }
+
+.start-conditions-box { margin-top: 14px; }
+.condition-item { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 8px; font-size: 13px; line-height: 1.5; }
+.condition-item.unmet { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a; }
+.condition-item.unmet p { margin: 4px 0 0; color: #cbd5e1; font-size: 12px; }
+.condition-item.met { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #86efac; }
+.condition-icon { font-size: 15px; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+
+.roster-lock-controls { margin-top: 14px; }
+.lock-prompt { display: flex; align-items: center; gap: 12px; }
+
+.team-basic-info { display: flex; align-items: center; gap: 6px; }
+.roster-btn { font-size: 12px; padding: 4px 8px; border-radius: 4px; background: rgba(34, 211, 238, 0.1); color: var(--cyan); border: 1px solid rgba(34, 211, 238, 0.25); cursor: pointer; }
+.roster-btn:hover { background: rgba(34, 211, 238, 0.2); }
+
+.team-roster-panel { margin-top: 16px; padding: 20px; background: rgba(15, 23, 42, 0.95); border: 1px solid rgba(34, 211, 238, 0.35); border-radius: 10px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.team-roster-panel .panel-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--line); flex-wrap: wrap; gap: 12px; }
+.team-roster-panel .panel-header h5 { margin: 4px 0 0; font-size: 18px; color: #f8fafc; }
+.team-roster-panel .header-badges { display: flex; align-items: center; gap: 12px; }
+
+.roster-editor { display: grid; gap: 14px; }
+.editor-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; font-size: 13px; color: #cbd5e1; }
+.roster-members-list { display: grid; gap: 8px; }
+.roster-member-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--line); border-radius: 6px; gap: 12px; }
+.member-name-role { display: flex; align-items: center; gap: 10px; }
+.role-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+.role-badge.role-player { background: rgba(34, 211, 238, 0.16); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); }
+.role-badge.role-substitute { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.3); }
+
+.add-member-form { padding: 12px 14px; background: rgba(2, 6, 23, 0.4); border: 1px dashed var(--line); border-radius: 6px; }
+.add-member-form label { margin: 0; font-size: 13px; }
+.roster-save-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+
+.roster-viewer { padding: 8px 0; }
+.roster-members-grid { display: flex; flex-wrap: wrap; gap: 10px; }
+.roster-member-card { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: rgba(30, 41, 59, 0.6); border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.small-text { font-size: 12px; margin: 4px 0; }
+.empty-roster-msg { margin: 8px 0; }
+.status-badge { font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600; margin-left: 6px; }
+.status-badge.ready { background: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.3); }
+.status-badge.missing-player { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+.condition-warning-detail { margin-top: 6px; font-size: 12px; }
+.text-warning { color: #fde68a; }
+.text-success { color: #86efac; }
