@@ -217,7 +217,7 @@ def test_session_switch_anti_stale_response_guard(
 
         # While Organizer A's requests are in-flight, Organizer A logs out
         page.get_by_role("button", name="Đăng xuất").click()
-        expect(page.locator(".auth-card")).to_be_visible()
+        expect(page.get_by_role("heading", name="Đăng nhập")).to_be_visible()
 
         # User B (regular user, not organizer) logs in
         login(page, user_b, demo_password)
