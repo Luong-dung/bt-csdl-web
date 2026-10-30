@@ -250,3 +250,79 @@ def test_session_switch_anti_stale_response_guard(
     finally:
         page.unroute(cap_url)
         page.unroute(reg_url)
+
+
+def test_post_registration_session_switch_guard(
+    page: Page, browser: Browser, app_base_url: str, demo_password: str
+):
+    # 1. Organizer creates tournament
+    tournament_name, tournament_id = create_tournament(page, demo_password)
+    page.get_by_role("button", name="Đăng xuất").click()
+    expect(page.get_by_role("heading", name="Đăng nhập")).to_be_visible()
+
+    # 2. Manager A registers user and creates Team A (VALORANT)
+    mgr_a = unique_username("mgra")
+    register_user(page, mgr_a, demo_password)
+    login(page, mgr_a, demo_password)
+    team_a_name = f"Team Alpha {unique_username('alpha')[-5:]}"
+    tag_a = f"A{unique_username('tag')[-5:]}".upper()[:10]
+    create_team(page, team_a_name, tag_a)
+
+    # 3. Register regular user B on separate page
+    user_b = unique_username("userb")
+    reg_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    try:
+        reg_page.goto(app_base_url)
+        register_user(reg_page, user_b, demo_password)
+    finally:
+        reg_page.close()
+
+    # 4. Manager A opens tournament: registration form is visible
+    open_tournament(page, tournament_id, tournament_name)
+    reg_form = page.locator(".registration-form")
+    expect(reg_form).to_be_visible()
+
+    # 5. Intercept POST registration request
+    held_posts = []
+
+    def intercept_post_reg(route):
+        if route.request.method == "POST":
+            held_posts.append(route)
+            return
+        route.continue_()
+
+    post_url = f"**/api/v1/tournaments/{tournament_id}/registrations"
+    page.route(post_url, intercept_post_reg)
+
+    try:
+        # Manager A submits registration
+        reg_form.get_by_role("button", name="Gửi đơn đăng ký").click()
+        page.wait_for_timeout(300)
+        assert len(held_posts) == 1
+
+        # While Manager A's POST request is still in-flight, Manager A logs out
+        page.get_by_role("button", name="Đăng xuất").click()
+        expect(page.get_by_role("heading", name="Đăng nhập")).to_be_visible()
+
+        # User B logs in
+        login(page, user_b, demo_password)
+
+        # Ensure tournament detail is open for User B
+        if page.locator(".tournament-detail").count() == 0:
+            open_tournament(page, tournament_id, tournament_name)
+
+        # 6. Fulfill Manager A's held POST request
+        for r in held_posts:
+            response = r.fetch()
+            r.fulfill(response=response)
+        held_posts.clear()
+
+        # 7. Verify session guard prevented Manager A's response from affecting User B
+        page.wait_for_timeout(500)
+        # User B must NOT see the success notice "Đã gửi đơn đăng ký thành công."
+        expect(page.locator(".notice-banner")).to_have_count(0)
+        # User B must NOT see Team A in registrations or form
+        expect(page.locator(".registration-form")).to_have_count(0)
+        expect(page.locator(".registrations-section").filter(has_text=team_a_name)).to_have_count(0)
+    finally:
+        page.unroute(post_url)

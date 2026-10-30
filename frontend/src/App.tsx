@@ -1319,6 +1319,8 @@ export default function App() {
 
   const saveRoster = async () => {
     if (!token || !selectedTournament || !selectedRosterTeam) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
     const currentTeamId = selectedRosterTeam.team_id;
@@ -1340,10 +1342,16 @@ export default function App() {
           method: "PUT",
           body: JSON.stringify(payload),
         },
-        token
+        startingToken
       );
 
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       if (rosterTeamVersion.current !== currentTeamVersion || activeRosterTeamIdRef.current !== currentTeamId) return;
 
       setRosterData(updated);
@@ -1413,6 +1421,8 @@ export default function App() {
 
   const handleLockRoster = async () => {
     if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     const currentTournamentId = selectedTournament.tournament_id;
     const currentTournamentVersion = tournamentViewVersion.current;
 
@@ -1428,10 +1438,16 @@ export default function App() {
       const res = await request<RosterLockRead>(
         `/tournaments/${currentTournamentId}/roster-lock`,
         { method: "POST" },
-        token
+        startingToken
       );
 
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
 
       setRosterLock(res);
       setLockNotice("Đã khóa đội hình giải đấu thành công! Snapshot đội hình đã được cố định.");
@@ -1561,6 +1577,12 @@ export default function App() {
   const submitRegistration = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTourneyId = selectedTournament.tournament_id;
+    const currentGameId = selectedTournament.game_id;
+    const currentTourneyVersion = tournamentViewVersion.current;
+
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
@@ -1571,49 +1593,97 @@ export default function App() {
       return;
     }
     try {
-      await request<TournamentRegistrationItem>(`/tournaments/${selectedTournament.tournament_id}/registrations`, {
+      await request<TournamentRegistrationItem>(`/tournaments/${currentTourneyId}/registrations`, {
         method: "POST",
         body: JSON.stringify({ team_id: teamId }),
-      }, token);
+      }, startingToken);
+
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
+
       setRegistrationNotice("Đã gửi đơn đăng ký thành công.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
-        loadManagedTeamsForTournament(selectedTournament.game_id, token, tournamentViewVersion.current, sessionVersion.current),
+        loadTournamentRegistrations(currentTourneyId, registrationStatusFilter, startingToken, currentTourneyVersion, undefined, registrationPage, startingSession),
+        loadManagedTeamsForTournament(currentGameId, startingToken, currentTourneyVersion, startingSession),
       ]);
     } catch (reason) {
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setRegistrationError((reason as Error).message);
     } finally {
-      setRegistrationLoading(false);
+      if (
+        sessionVersion.current === startingSession &&
+        tournamentViewVersion.current === currentTourneyVersion
+      ) {
+        setRegistrationLoading(false);
+      }
     }
   };
 
   const cancelRegistration = async (registrationId: number) => {
     if (!token || !selectedTournament) return;
     if (!window.confirm("Bạn có chắc chắn muốn hủy đơn đăng ký này?")) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTourneyId = selectedTournament.tournament_id;
+    const currentGameId = selectedTournament.game_id;
+    const currentTourneyVersion = tournamentViewVersion.current;
+
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
     try {
-      await request<TournamentRegistrationItem>(`/tournaments/${selectedTournament.tournament_id}/registrations/${registrationId}/cancel`, {
+      await request<TournamentRegistrationItem>(`/tournaments/${currentTourneyId}/registrations/${registrationId}/cancel`, {
         method: "POST",
-      }, token);
+      }, startingToken);
+
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
+
       setRegistrationNotice("Đã hủy đơn đăng ký.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
-        loadManagedTeamsForTournament(selectedTournament.game_id, token, tournamentViewVersion.current, sessionVersion.current),
+        loadTournamentRegistrations(currentTourneyId, registrationStatusFilter, startingToken, currentTourneyVersion, undefined, registrationPage, startingSession),
+        loadManagedTeamsForTournament(currentGameId, startingToken, currentTourneyVersion, startingSession),
       ]);
     } catch (reason) {
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setRegistrationError((reason as Error).message);
     } finally {
-      setRegistrationLoading(false);
+      if (
+        sessionVersion.current === startingSession &&
+        tournamentViewVersion.current === currentTourneyVersion
+      ) {
+        setRegistrationLoading(false);
+      }
     }
   };
 
@@ -1625,33 +1695,65 @@ export default function App() {
       if (reason === null) return;
       if (reason.trim()) rejectionReason = reason.trim().slice(0, 500);
     }
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTourneyId = selectedTournament.tournament_id;
+    const currentTourneyVersion = tournamentViewVersion.current;
+
     setRegistrationLoading(true);
     setRegistrationError("");
     setRegistrationNotice("");
     try {
       const body: { status: "APPROVED" | "REJECTED"; rejection_reason?: string } = { status };
       if (rejectionReason) body.rejection_reason = rejectionReason;
-      await request<TournamentRegistrationItem>(`/tournaments/${selectedTournament.tournament_id}/registrations/${registrationId}/decision`, {
+      await request<TournamentRegistrationItem>(`/tournaments/${currentTourneyId}/registrations/${registrationId}/decision`, {
         method: "POST",
         body: JSON.stringify(body),
-      }, token);
+      }, startingToken);
+
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
+
       setRegistrationNotice(status === "APPROVED" ? "Đã duyệt đơn đăng ký." : "Đã từ chối đơn đăng ký.");
       const [, approvedData, caps] = await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
-        loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, tournamentViewVersion.current),
-        loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current),
+        loadTournamentRegistrations(currentTourneyId, registrationStatusFilter, startingToken, currentTourneyVersion, undefined, registrationPage, startingSession),
+        loadApprovedTeams(currentTourneyId, approvedTeamsPage, currentTourneyVersion),
+        loadTournamentCapabilities(currentTourneyId, startingToken, currentTourneyVersion, startingSession),
       ]);
-      if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, tournamentViewVersion.current, sessionVersion.current);
+      if (
+        sessionVersion.current === startingSession &&
+        token === startingToken &&
+        tournamentViewVersion.current === currentTourneyVersion &&
+        approvedData?.list &&
+        (caps?.can_manage || caps?.can_lock_roster)
+      ) {
+        void loadApprovedTeamRosterStatuses(currentTourneyId, approvedData.list, startingToken, currentTourneyVersion, startingSession);
       }
     } catch (reason) {
+      if (
+        sessionVersion.current !== startingSession ||
+        token !== startingToken ||
+        tournamentViewVersion.current !== currentTourneyVersion
+      ) {
+        return;
+      }
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
       setRegistrationError((reason as Error).message);
     } finally {
-      setRegistrationLoading(false);
+      if (
+        sessionVersion.current === startingSession &&
+        tournamentViewVersion.current === currentTourneyVersion
+      ) {
+        setRegistrationLoading(false);
+      }
     }
   };
 
