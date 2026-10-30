@@ -1631,7 +1631,7 @@ export default function App() {
       loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version),
       loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, currentSession),
       loadRosterLock(tournament.tournament_id, version),
-      loadTournamentStages(tournament.tournament_id, version),
+      loadTournamentStages(tournament.tournament_id, version, currentSession),
     ]);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
     if (token && approvedData?.list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
@@ -1674,7 +1674,7 @@ export default function App() {
         loadTournamentCapabilities(selectedTournament.tournament_id, token, version, sessionV),
         loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
         loadRosterLock(selectedTournament.tournament_id, version),
-        loadTournamentStages(selectedTournament.tournament_id, version),
+        loadTournamentStages(selectedTournament.tournament_id, version, sessionV),
       ]);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
@@ -1916,7 +1916,7 @@ export default function App() {
       const capsPromise = loadTournamentCapabilities(tournamentId, token, version, sessionV);
       const approvedPromise = loadApprovedTeams(tournamentId, 0, version);
       const lockPromise = loadRosterLock(tournamentId, version);
-      const stagesPromise = loadTournamentStages(tournamentId, version);
+      const stagesPromise = loadTournamentStages(tournamentId, version, sessionV);
 
       const [managedTeams, caps, approvedData] = await Promise.all([
         managedTeamsPromise,
@@ -2238,7 +2238,7 @@ export default function App() {
               <button
                 type="button"
                 className="button secondary small"
-                onClick={() => void loadTournamentStages(selectedTournament.tournament_id, tournamentViewVersion.current)}
+                onClick={() => void loadTournamentStages(selectedTournament.tournament_id, tournamentViewVersion.current, sessionVersion.current)}
               >
                 Thử lại
               </button>

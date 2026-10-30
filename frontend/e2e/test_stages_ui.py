@@ -1,3 +1,4 @@
+import json
 import re
 from playwright.sync_api import Browser, Page, expect
 
@@ -401,4 +402,100 @@ def test_stage_mutation_session_switch_guard(
         expect(stages_b.get_by_role("button", name="+ Thêm vòng đấu")).to_have_count(0)
     finally:
         page.unroute(stage_post_url)
+
+
+def test_stage_load_session_switch_anti_stale_guard(
+    page: Page, browser: Browser, app_base_url: str, demo_password: str
+):
+    # 1. Organizer A creates tournament and adds a stage
+    tournament_name, tournament_id = create_tournament(page, demo_password)
+    open_tournament(page, tournament_id, tournament_name)
+    stages_section = page.locator('[data-testid="tournament-stages-section"]')
+    expect(stages_section).to_be_visible()
+    stages_section.get_by_role("button", name="+ Thêm vòng đấu").click()
+    create_form = page.locator('[data-testid="stage-create-form"]')
+    create_form.get_by_label(re.compile("Tên vòng đấu")).fill("Vòng Bảng Thật")
+    create_form.get_by_label(re.compile("Thứ tự")).fill("1")
+    create_form.get_by_role("button", name="Lưu vòng đấu").click()
+    expect(stages_section.locator(".stage-card .stage-name")).to_have_text("Vòng Bảng Thật")
+
+    # 2. Register regular user B on separate page
+    user_b = unique_username("userb")
+    reg_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    try:
+        reg_page.goto(app_base_url)
+        register_user(reg_page, user_b, demo_password)
+    finally:
+        reg_page.close()
+
+    # 3. Intercept GET /stages requests: only hold the first GET (from Organizer A)
+    held_stage_gets = []
+    intercept_active = True
+
+    def intercept_stage_get(route):
+        nonlocal intercept_active
+        if route.request.method == "GET" and intercept_active:
+            intercept_active = False
+            held_stage_gets.append(route)
+            return
+        route.continue_()
+
+    stage_get_url = f"**/api/v1/tournaments/{tournament_id}/stages*"
+    page.route(stage_get_url, intercept_stage_get)
+
+    try:
+        # 4. Trigger data reload under Organizer A by closing and reopening tournament detail
+        page.locator(".tournament-detail .detail-header button").filter(has_text=re.compile("Đóng|Close")).click()
+        expect(page.locator(".tournament-detail")).to_have_count(0)
+        page.locator(f'.tournament-card[data-tournament-id="{tournament_id}"]').get_by_role(
+            "button", name=re.compile("Xem chi tiết")
+        ).click()
+
+        # Wait until Organizer A's GET /stages request is captured
+        page.wait_for_timeout(300)
+        assert len(held_stage_gets) == 1
+
+        # 5. While Organizer A's GET request is in-flight, Organizer A logs out
+        page.get_by_role("button", name="Đăng xuất").click()
+        expect(page.get_by_role("heading", name="Đăng nhập")).to_be_visible()
+
+        # 6. User B logs in
+        login(page, user_b, demo_password)
+
+        # Open tournament for User B if not open
+        if page.locator(".tournament-detail").count() == 0:
+            open_tournament(page, tournament_id, tournament_name)
+
+        # User B's own stage load completed and shows "Vòng Bảng Thật"
+        stages_b = page.locator('[data-testid="tournament-stages-section"]')
+        expect(stages_b).to_be_visible()
+        expect(stages_b.locator(".stage-card .stage-name")).to_have_text("Vòng Bảng Thật")
+
+        # 7. Release Organizer A's held GET request with a mocked stale payload
+        for r in held_stage_gets:
+            stale_body = json.dumps([
+                {
+                    "stage_id": 99999,
+                    "tournament_id": tournament_id,
+                    "name": "Vòng Bị Hủy Bỏ Của Phiên Cũ",
+                    "sequence_order": 99,
+                }
+            ])
+            r.fulfill(
+                status=200,
+                content_type="application/json",
+                body=stale_body,
+                headers={"X-Total-Count": "1"},
+            )
+        held_stage_gets.clear()
+
+        # 8. Verify that the session guard in loadTournamentStages dropped Organizer A's stale response
+        page.wait_for_timeout(500)
+        # User B must NOT see the stale stage
+        expect(page.locator(".stage-card").filter(has_text="Vòng Bị Hủy Bỏ Của Phiên Cũ")).to_have_count(0)
+        # User B MUST STILL see the legitimate stage
+        expect(stages_b.locator(".stage-card .stage-name")).to_have_text("Vòng Bảng Thật")
+    finally:
+        page.unroute(stage_get_url)
+
 
