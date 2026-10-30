@@ -58,6 +58,14 @@ type TournamentRegistrationItem = {
   cancelled_by: number | null; cancelled_at: string | null;
 };
 type ApprovedTeam = { team_id: number; name: string; tag: string; game_id: number };
+type Stage = {
+  stage_id: number;
+  tournament_id: number;
+  name: string;
+  sequence_order: number;
+};
+const APPROVED_TEAMS_PER_PAGE = 10;
+const REGISTRATIONS_PER_PAGE = 10;
 type GlobalCapabilities = { can_manage_catalog: boolean; can_create_tournament: boolean };
 type TeamCapabilities = { team_id: number; can_manage_members: boolean; can_register_for_tournament: boolean };
 type AuthMode = "login" | "register";
@@ -145,10 +153,45 @@ export default function App() {
   const [lockNotice, setLockNotice] = useState("");
   const [approvedRosterStatuses, setApprovedRosterStatuses] = useState<Record<number, { loaded: boolean; hasPlayer: boolean }>>({});
   const [rosterStatusWarning, setRosterStatusWarning] = useState("");
+
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [stagesLoading, setStagesLoading] = useState(false);
+  const [stagesError, setStagesError] = useState("");
+  const [stagesNotice, setStagesNotice] = useState("");
+  const [stageActionLoading, setStageActionLoading] = useState(false);
+  const [isCreatingStage, setIsCreatingStage] = useState(false);
+  const [newStageName, setNewStageName] = useState("");
+  const [newStageOrder, setNewStageOrder] = useState("");
+  const [stageFormError, setStageFormError] = useState("");
+  const [editingStageId, setEditingStageId] = useState<number | null>(null);
+  const [editingStageName, setEditingStageName] = useState("");
+  const [editingStageOrder, setEditingStageOrder] = useState("");
+
+  const [approvedTeamsTotal, setApprovedTeamsTotal] = useState(0);
+  const [approvedTeamsPage, setApprovedTeamsPage] = useState(0);
+
+  const [registrationTotal, setRegistrationTotal] = useState(0);
+  const [registrationPage, setRegistrationPage] = useState(0);
+
   const sessionVersion = useRef(0);
   const tournamentViewVersion = useRef(0);
   const rosterTeamVersion = useRef(0);
   const activeRosterTeamIdRef = useRef<number | null>(null);
+
+  const resetStagesState = () => {
+    setStages([]);
+    setStagesLoading(false);
+    setStagesError("");
+    setStagesNotice("");
+    setStageActionLoading(false);
+    setIsCreatingStage(false);
+    setNewStageName("");
+    setNewStageOrder("");
+    setStageFormError("");
+    setEditingStageId(null);
+    setEditingStageName("");
+    setEditingStageOrder("");
+  };
 
   const resetRosterState = () => {
     activeRosterTeamIdRef.current = null;
@@ -179,10 +222,15 @@ export default function App() {
     setCapabilityError("");
     setRegistrations([]);
     setAllTournamentRegistrations([]);
+    setRegistrationTotal(0);
+    setRegistrationPage(0);
+    setApprovedTeamsTotal(0);
+    setApprovedTeamsPage(0);
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
     resetRosterState();
+    resetStagesState();
     setRosterLock(null);
     setLockError("");
     setLockNotice("");
@@ -338,10 +386,15 @@ export default function App() {
     setCapabilityError("");
     setRegistrations([]);
     setAllTournamentRegistrations([]);
+    setRegistrationTotal(0);
+    setRegistrationPage(0);
+    setApprovedTeamsTotal(0);
+    setApprovedTeamsPage(0);
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
     resetRosterState();
+    resetStagesState();
     setRosterLock(null);
     setLockError("");
     setLockNotice("");
@@ -601,13 +654,18 @@ export default function App() {
     setTournamentCapabilities(null);
     setCapabilityError("");
     setApprovedTeams([]);
+    setApprovedTeamsTotal(0);
+    setApprovedTeamsPage(0);
     setManagedTeamsForTournament([]);
     setRegistrations([]);
     setAllTournamentRegistrations([]);
+    setRegistrationTotal(0);
+    setRegistrationPage(0);
     setRegistrationError("");
     setRegistrationNotice("");
     setRegistrationStatusFilter("");
     resetRosterState();
+    resetStagesState();
     setRosterLock(null);
     setLockLoading(false);
     setLockError("");
@@ -645,21 +703,38 @@ export default function App() {
     }
   };
 
-  // Lưu ý: Endpoint /tournaments/{id}/teams mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
   const loadApprovedTeams = async (
     tournamentId: number,
+    page = approvedTeamsPage,
     expectedVersion?: number
-  ): Promise<ApprovedTeam[]> => {
+  ): Promise<{ list: ApprovedTeam[]; total: number }> => {
     try {
-      const list = await request<ApprovedTeam[]>(`/tournaments/${tournamentId}/teams`);
-      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return list;
+      const offset = page * APPROVED_TEAMS_PER_PAGE;
+      const res = await fetch(`${API}/tournaments/${tournamentId}/teams?offset=${offset}&limit=${APPROVED_TEAMS_PER_PAGE}`);
+      if (!res.ok) throw new RequestError("Không thể tải danh sách đội đã duyệt", res.status);
+      const total = Number(res.headers.get("X-Total-Count") ?? 0);
+      const list = (await res.json()) as ApprovedTeam[];
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list, total };
       setApprovedTeams(list);
-      return list;
+      setApprovedTeamsTotal(total);
+      return { list, total };
     } catch (reason) {
-      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
       setApprovedTeams([]);
+      setApprovedTeamsTotal(0);
       setRegistrationError((reason as Error).message);
-      return [];
+      return { list: [], total: 0 };
+    }
+  };
+
+  const handleApprovedTeamsPageChange = async (newPage: number) => {
+    if (!selectedTournament) return;
+    setApprovedTeamsPage(newPage);
+    const version = tournamentViewVersion.current;
+    const { list } = await loadApprovedTeams(selectedTournament.tournament_id, newPage, version);
+    if (tournamentViewVersion.current !== version) return;
+    if (token && list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
+      void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, list, token, version);
     }
   };
 
@@ -729,71 +804,305 @@ export default function App() {
     }
   };
 
-  // Lưu ý: Endpoint /tournaments/{id}/registrations mặc định limit 50, hỗ trợ tối đa 100 qua limit param.
   const loadTournamentRegistrations = async (
     tournamentId: number,
-    statusFilter?: string,
+    statusFilter = registrationStatusFilter,
     authToken = token,
     expectedVersion?: number,
     managedTeams?: Team[],
+    page = registrationPage,
   ) => {
     setRegistrationError("");
     if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       setRegistrations([]);
       setAllTournamentRegistrations([]);
+      setRegistrationTotal(0);
       return;
     }
     try {
-      const unfilteredPromise = request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?limit=100`, {}, authToken);
-      const filteredPromise = statusFilter
-        ? request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?status=${statusFilter}&limit=100`, {}, authToken)
-        : unfilteredPromise;
+      const offset = page * REGISTRATIONS_PER_PAGE;
+      const params = new URLSearchParams({ offset: String(offset), limit: String(REGISTRATIONS_PER_PAGE) });
+      if (statusFilter) params.set("status", statusFilter);
 
-      const [unfilteredList, fetchedFilteredList] = await Promise.all([unfilteredPromise, filteredPromise]);
-      // Không lọc thì hai promise trả cùng một mảng; sao chép để bổ sung bên dưới không nhân đôi đơn.
-      const filteredList = statusFilter ? fetchedFilteredList : [...fetchedFilteredList];
+      const paginatedResPromise = fetch(`${API}/tournaments/${tournamentId}/registrations?${params}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
 
-      // Nếu danh sách đủ limit 100 (có thể còn trang sau) và có đội người dùng quản lý:
-      // Kiểm tra thêm từng đội quản lý chưa có trong unfilteredList qua ?team_id= để đảm bảo không bị sót đơn ngoài trang
       const teamsToCheck = managedTeams ?? managedTeamsForTournament;
-      if (unfilteredList.length >= 100 && teamsToCheck.length > 0) {
-        const existingTeamIds = new Set(unfilteredList.map((r) => r.team_id));
-        const missingTeams = teamsToCheck.filter((t) => !existingTeamIds.has(t.team_id));
-        if (missingTeams.length > 0) {
-          const extraResults = await Promise.all(
-            missingTeams.map((t) =>
-              request<TournamentRegistrationItem[]>(`/tournaments/${tournamentId}/registrations?team_id=${t.team_id}`, {}, authToken).catch(() => [])
-            )
-          );
-          for (const extraList of extraResults) {
-            for (const item of extraList) {
-              if (!existingTeamIds.has(item.team_id)) {
-                unfilteredList.push(item);
-                existingTeamIds.add(item.team_id);
-                if (!statusFilter || item.status === statusFilter) {
-                  filteredList.push(item);
-                }
+      const managedRegistrationsPromise = teamsToCheck.length > 0
+        ? Promise.all(
+            teamsToCheck.map(async (t) => {
+              try {
+                const res = await request<TournamentRegistrationItem[]>(
+                  `/tournaments/${tournamentId}/registrations?team_id=${t.team_id}`,
+                  {},
+                  authToken
+                );
+                return res;
+              } catch {
+                return [];
               }
-            }
-          }
+            })
+          )
+        : Promise.resolve([]);
+
+      const [paginatedRes, managedRegArrays] = await Promise.all([
+        paginatedResPromise,
+        managedRegistrationsPromise,
+      ]);
+
+      if (!paginatedRes.ok) {
+        if (paginatedRes.status === 401) {
+          handleAuthExpired();
+          return;
         }
+        if (paginatedRes.status === 403) {
+          if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+          setRegistrations([]);
+          setAllTournamentRegistrations([]);
+          setRegistrationTotal(0);
+          return;
+        }
+        throw new RequestError("Không thể tải danh sách đơn đăng ký", paginatedRes.status);
       }
 
+      const total = Number(paginatedRes.headers.get("X-Total-Count") ?? 0);
+      const paginatedList = (await paginatedRes.json()) as TournamentRegistrationItem[];
+      const allManagedRegs = (managedRegArrays as TournamentRegistrationItem[][]).flat();
+
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
-      setAllTournamentRegistrations(unfilteredList);
-      setRegistrations(filteredList);
+      setRegistrations(paginatedList);
+      setRegistrationTotal(total);
+      setAllTournamentRegistrations(allManagedRegs);
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
       }
-      if ((reason as RequestError).status === 403) {
-        setRegistrations([]);
-        setAllTournamentRegistrations([]);
-      } else {
-        setRegistrationError((reason as Error).message);
+      setRegistrationError((reason as Error).message);
+    }
+  };
+
+  const handleRegistrationPageChange = async (newPage: number) => {
+    if (!selectedTournament || !token) return;
+    setRegistrationPage(newPage);
+    const version = tournamentViewVersion.current;
+    await loadTournamentRegistrations(
+      selectedTournament.tournament_id,
+      registrationStatusFilter,
+      token,
+      version,
+      undefined,
+      newPage
+    );
+  };
+
+  const fetchAllStages = async (tournamentId: number): Promise<Stage[]> => {
+    let all: Stage[] = [];
+    let offset = 0;
+    const limit = 100;
+    while (true) {
+      const res = await fetch(`${API}/tournaments/${tournamentId}/stages?offset=${offset}&limit=${limit}`);
+      if (!res.ok) {
+        throw new RequestError("Không thể tải danh sách vòng đấu", res.status);
+      }
+      const total = Number(res.headers.get("X-Total-Count") ?? 0);
+      const data = (await res.json()) as Stage[];
+      all = all.concat(data);
+      if (all.length >= total || data.length < limit) break;
+      offset += limit;
+    }
+    return all;
+  };
+
+  const loadTournamentStages = async (tournamentId: number, expectedVersion?: number): Promise<Stage[]> => {
+    setStagesLoading(true);
+    setStagesError("");
+    try {
+      const list = await fetchAllStages(tournamentId);
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return list;
+      setStages(list);
+      return list;
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      setStages([]);
+      setStagesError((reason as Error).message || "Không thể tải danh sách vòng đấu.");
+      return [];
+    } finally {
+      if (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) {
+        setStagesLoading(false);
+      }
+    }
+  };
+
+  const handleCreateStage = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    const trimmedName = newStageName.trim();
+    const orderNum = Number(newStageOrder);
+
+    if (!trimmedName) {
+      setStageFormError("Tên vòng đấu không được để trống.");
+      return;
+    }
+    if (!Number.isInteger(orderNum) || orderNum <= 0) {
+      setStageFormError("Thứ tự vòng đấu phải là số nguyên dương.");
+      return;
+    }
+
+    setStageActionLoading(true);
+    setStageFormError("");
+    setStagesNotice("");
+    try {
+      await request<Stage>(`/tournaments/${currentTournamentId}/stages`, {
+        method: "POST",
+        body: JSON.stringify({ name: trimmedName, sequence_order: orderNum }),
+      }, token);
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      setNewStageName("");
+      setNewStageOrder("");
+      setIsCreatingStage(false);
+      setStagesNotice("Đã thêm vòng đấu thành công.");
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+    } catch (reason) {
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setStageFormError((reason as Error).message || "Không thể tạo vòng đấu.");
+    } finally {
+      if (tournamentViewVersion.current === currentTournamentVersion) {
+        setStageActionLoading(false);
+      }
+    }
+  };
+
+  const handleUpdateStage = async (stageId: number, e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    const trimmedName = editingStageName.trim();
+    const orderNum = Number(editingStageOrder);
+
+    if (!trimmedName) {
+      setStageFormError("Tên vòng đấu không được để trống.");
+      return;
+    }
+    if (!Number.isInteger(orderNum) || orderNum <= 0) {
+      setStageFormError("Thứ tự vòng đấu phải là số nguyên dương.");
+      return;
+    }
+
+    setStageActionLoading(true);
+    setStageFormError("");
+    setStagesNotice("");
+    try {
+      await request<Stage>(`/tournaments/${currentTournamentId}/stages/${stageId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ name: trimmedName, sequence_order: orderNum }),
+      }, token);
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      setEditingStageId(null);
+      setStagesNotice("Đã cập nhật vòng đấu.");
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+    } catch (reason) {
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setStageFormError((reason as Error).message || "Không thể cập nhật vòng đấu.");
+    } finally {
+      if (tournamentViewVersion.current === currentTournamentVersion) {
+        setStageActionLoading(false);
+      }
+    }
+  };
+
+  const handleDeleteStage = async (stage: Stage) => {
+    if (!token || !selectedTournament) return;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa vòng đấu "${stage.name}"?`)) return;
+
+    setStageActionLoading(true);
+    setStagesError("");
+    setStagesNotice("");
+    try {
+      await request(`/tournaments/${currentTournamentId}/stages/${stage.stage_id}`, {
+        method: "DELETE",
+      }, token);
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      setStagesNotice("Đã xóa vòng đấu.");
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+    } catch (reason) {
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setStagesError((reason as Error).message || "Không thể xóa vòng đấu.");
+    } finally {
+      if (tournamentViewVersion.current === currentTournamentVersion) {
+        setStageActionLoading(false);
+      }
+    }
+  };
+
+  const handleMoveStage = async (stageIndex: number, direction: "up" | "down") => {
+    if (!token || !selectedTournament || stageActionLoading) return;
+    const targetIndex = direction === "up" ? stageIndex - 1 : stageIndex + 1;
+    if (targetIndex < 0 || targetIndex >= stages.length) return;
+
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    setStageActionLoading(true);
+    setStagesError("");
+    setStagesNotice("");
+
+    try {
+      const allStages = await fetchAllStages(currentTournamentId);
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+
+      const currentStageId = stages[stageIndex].stage_id;
+      const allIdx = allStages.findIndex((s) => s.stage_id === currentStageId);
+      if (allIdx === -1) {
+        throw new Error("Không tìm thấy vòng đấu để sắp xếp.");
+      }
+      const allTargetIdx = direction === "up" ? allIdx - 1 : allIdx + 1;
+      if (allTargetIdx < 0 || allTargetIdx >= allStages.length) return;
+
+      const updated = [...allStages];
+      const temp = updated[allIdx];
+      updated[allIdx] = updated[allTargetIdx];
+      updated[allTargetIdx] = temp;
+
+      const stageIds = updated.map((s) => s.stage_id);
+      const reordered = await request<Stage[]>(`/tournaments/${currentTournamentId}/stages/order`, {
+        method: "PUT",
+        body: JSON.stringify({ stage_ids: stageIds }),
+      }, token);
+
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      setStages(reordered);
+      setStagesNotice("Đã cập nhật thứ tự vòng đấu.");
+    } catch (reason) {
+      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setStagesError((reason as Error).message || "Không thể sắp xếp thứ tự vòng đấu.");
+      await loadTournamentStages(currentTournamentId, currentTournamentVersion);
+    } finally {
+      if (tournamentViewVersion.current === currentTournamentVersion) {
+        setStageActionLoading(false);
       }
     }
   };
@@ -1029,17 +1338,17 @@ export default function App() {
         if (reason.status === 409) {
           const conflictMsg =
             reason.message || "Xung đột: Giải đấu đã bị khóa hoặc trạng thái đội hình đã thay đổi.";
-          const [caps, , approvedList] = await Promise.all([
+          const [caps, , approvedData] = await Promise.all([
             loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
             loadRosterLock(currentTournamentId, currentTournamentVersion),
-            loadApprovedTeams(currentTournamentId, currentTournamentVersion),
+            loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
             loadTeamRosterData(currentTeamId, currentTournamentVersion, currentTeamVersion, true),
           ]);
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
-            token && approvedList && (caps?.can_manage || caps?.can_lock_roster)
+            token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)
           ) {
-            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedList, token, currentTournamentVersion);
+            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
           }
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
@@ -1087,16 +1396,16 @@ export default function App() {
       setRosterLock(res);
       setLockNotice("Đã khóa đội hình giải đấu thành công! Snapshot đội hình đã được cố định.");
 
-      const [caps, approvedList] = await Promise.all([
+      const [caps, approvedData] = await Promise.all([
         loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
-        loadApprovedTeams(currentTournamentId, currentTournamentVersion),
+        loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
         loadTournaments(),
       ]);
 
       if (tournamentViewVersion.current !== currentTournamentVersion) return;
 
-      if (token && approvedList && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(currentTournamentId, approvedList, token, currentTournamentVersion);
+      if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
+        void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
       }
 
       if (activeRosterTeamIdRef.current) {
@@ -1113,16 +1422,16 @@ export default function App() {
         if (reason.status === 409) {
           const conflictMsg =
             reason.message || "Xung đột khi khóa đội hình: Trạng thái giải đấu hoặc đội hình đã thay đổi.";
-          const [caps, , approvedList] = await Promise.all([
+          const [caps, , approvedData] = await Promise.all([
             loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
             loadRosterLock(currentTournamentId, currentTournamentVersion),
-            loadApprovedTeams(currentTournamentId, currentTournamentVersion),
+            loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
           ]);
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
-            token && approvedList && (caps?.can_manage || caps?.can_lock_roster)
+            token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)
           ) {
-            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedList, token, currentTournamentVersion);
+            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
           }
           if (activeRosterTeamIdRef.current) {
             await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current);
@@ -1145,12 +1454,17 @@ export default function App() {
     setRegistrationError("");
     const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, token, version);
     if (tournamentViewVersion.current !== version) return;
-    await Promise.all([
+    const [, approvedData] = await Promise.all([
       loadTournamentCapabilities(tournament.tournament_id, token, version),
-      loadApprovedTeams(tournament.tournament_id, version),
-      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
+      loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version),
+      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage),
       loadRosterLock(tournament.tournament_id, version),
+      loadTournamentStages(tournament.tournament_id, version),
     ]);
+    if (tournamentViewVersion.current !== version) return;
+    if (token && approvedData?.list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
+      void loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, token, version);
+    }
     if (activeRosterTeamIdRef.current) {
       await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current);
     }
@@ -1163,10 +1477,15 @@ export default function App() {
       setCapabilityError("");
       setRegistrations([]);
       setAllTournamentRegistrations([]);
+      setRegistrationTotal(0);
+      setRegistrationPage(0);
+      setApprovedTeamsTotal(0);
+      setApprovedTeamsPage(0);
       setManagedTeamsForTournament([]);
       setRegistrationError("");
       setRegistrationNotice("");
       resetRosterState();
+      resetStagesState();
       setRosterLock(null);
       setLockError("");
       setLockNotice("");
@@ -1177,15 +1496,16 @@ export default function App() {
     void (async () => {
       const managedTeams = await loadManagedTeamsForTournament(selectedTournament.game_id, token, version);
       if (tournamentViewVersion.current !== version) return;
-      const [, caps, approvedList] = await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams),
+      const [, caps, approvedData] = await Promise.all([
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage),
         loadTournamentCapabilities(selectedTournament.tournament_id, token, version),
-        loadApprovedTeams(selectedTournament.tournament_id, version),
+        loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
         loadRosterLock(selectedTournament.tournament_id, version),
+        loadTournamentStages(selectedTournament.tournament_id, version),
       ]);
       if (tournamentViewVersion.current !== version) return;
-      if (token && approvedList && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedList, token, version);
+      if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
+        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, version);
       }
       if (activeRosterTeamIdRef.current) {
         await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current);
@@ -1212,7 +1532,7 @@ export default function App() {
       }, token);
       setRegistrationNotice("Đã gửi đơn đăng ký thành công.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
         loadManagedTeamsForTournament(selectedTournament.game_id),
       ]);
     } catch (reason) {
@@ -1238,7 +1558,7 @@ export default function App() {
       }, token);
       setRegistrationNotice("Đã hủy đơn đăng ký.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
         loadManagedTeamsForTournament(selectedTournament.game_id),
       ]);
     } catch (reason) {
@@ -1271,13 +1591,13 @@ export default function App() {
         body: JSON.stringify(body),
       }, token);
       setRegistrationNotice(status === "APPROVED" ? "Đã duyệt đơn đăng ký." : "Đã từ chối đơn đăng ký.");
-      const [, approvedList, caps] = await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter),
-        loadApprovedTeams(selectedTournament.tournament_id),
-        loadTournamentCapabilities(selectedTournament.tournament_id),
+      const [, approvedData, caps] = await Promise.all([
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
+        loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, tournamentViewVersion.current),
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current),
       ]);
-      if (token && approvedList && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedList, token);
+      if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
+        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, tournamentViewVersion.current);
       }
     } catch (reason) {
       if (reason instanceof RequestError && reason.status === 401) {
@@ -1292,29 +1612,17 @@ export default function App() {
 
   const handleRegistrationFilterChange = async (status: string) => {
     setRegistrationStatusFilter(status);
+    setRegistrationPage(0);
     if (!selectedTournament || !token) return;
     const version = tournamentViewVersion.current;
-    try {
-      const query = status ? `?status=${status}&limit=100` : `?limit=100`;
-      const list = await request<TournamentRegistrationItem[]>(
-        `/tournaments/${selectedTournament.tournament_id}/registrations${query}`,
-        {},
-        token
-      );
-      if (tournamentViewVersion.current !== version) return;
-      setRegistrations(list);
-    } catch (reason) {
-      if (tournamentViewVersion.current !== version) return;
-      if (reason instanceof RequestError && reason.status === 401) {
-        handleAuthExpired();
-        return;
-      }
-      if ((reason as RequestError).status === 403) {
-        setRegistrations([]);
-      } else {
-        setRegistrationError((reason as Error).message);
-      }
-    }
+    await loadTournamentRegistrations(
+      selectedTournament.tournament_id,
+      status,
+      token,
+      version,
+      undefined,
+      0
+    );
   };
 
   const viewTournament = async (tournamentId: number) => {
@@ -1324,6 +1632,7 @@ export default function App() {
     setRegistrationError("");
     setRegistrationNotice("");
     resetRosterState();
+    resetStagesState();
     setTournamentCapabilities(null);
     setCapabilityError("");
     setRosterLock(null);
@@ -1332,6 +1641,10 @@ export default function App() {
     setLockNotice("");
     setApprovedRosterStatuses({});
     setRosterStatusWarning("");
+    setApprovedTeamsPage(0);
+    setApprovedTeamsTotal(0);
+    setRegistrationPage(0);
+    setRegistrationTotal(0);
     try {
       const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
       if (tournamentViewVersion.current !== version) return;
@@ -1339,22 +1652,24 @@ export default function App() {
 
       const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version);
       const capsPromise = loadTournamentCapabilities(tournamentId, token, version);
-      const approvedPromise = loadApprovedTeams(tournamentId, version);
+      const approvedPromise = loadApprovedTeams(tournamentId, 0, version);
       const lockPromise = loadRosterLock(tournamentId, version);
+      const stagesPromise = loadTournamentStages(tournamentId, version);
 
-      const [managedTeams, caps, approvedList] = await Promise.all([
+      const [managedTeams, caps, approvedData] = await Promise.all([
         managedTeamsPromise,
         capsPromise,
         approvedPromise,
         lockPromise,
+        stagesPromise,
       ]);
       if (tournamentViewVersion.current !== version) return;
 
-      if (token && approvedList && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(tournamentId, approvedList, token, version);
+      if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
+        void loadApprovedTeamRosterStatuses(tournamentId, approvedData.list, token, version);
       }
 
-      await loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams);
+      await loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams, 0);
     } catch (reason) {
       if (tournamentViewVersion.current !== version) return;
       setError((reason as Error).message);
@@ -1632,36 +1947,271 @@ export default function App() {
           </form>
         )}</div>}
 
+        <div className="stages-section" data-testid="tournament-stages-section">
+          <div className="section-header">
+            <div>
+              <h4>Vòng đấu / Giai đoạn ({stages.length})</h4>
+              <p className="muted small-text">Các vòng đấu theo thứ tự diễn ra trong giải.</p>
+            </div>
+            {tournamentCapabilities?.can_manage_stages && !isCreatingStage && (
+              <button
+                type="button"
+                className="button small"
+                onClick={() => {
+                  setIsCreatingStage(true);
+                  setNewStageName("");
+                  setNewStageOrder(String(stages.length > 0 ? Math.max(...stages.map((s) => s.sequence_order)) + 1 : 1));
+                  setStageFormError("");
+                }}
+              >
+                + Thêm vòng đấu
+              </button>
+            )}
+          </div>
+
+          {stagesNotice && <div className="notice-banner">{stagesNotice}</div>}
+          {stagesError && (
+            <div className="error-banner">
+              <span>{stagesError}</span>
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() => void loadTournamentStages(selectedTournament.tournament_id, tournamentViewVersion.current)}
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {isCreatingStage && (
+            <form className="stage-form create-form" onSubmit={(e) => void handleCreateStage(e)} data-testid="stage-create-form">
+              <h5>Thêm vòng đấu mới</h5>
+              {stageFormError && <div className="error-banner">{stageFormError}</div>}
+              <div className="form-grid">
+                <label>
+                  Tên vòng đấu <span className="required">*</span>
+                  <input
+                    type="text"
+                    required
+                    maxLength={80}
+                    placeholder="Ví dụ: Vòng bảng, Tứ kết, Chung kết..."
+                    value={newStageName}
+                    onChange={(e) => setNewStageName(e.target.value)}
+                    disabled={stageActionLoading}
+                  />
+                </label>
+                <label>
+                  Thứ tự (#) <span className="required">*</span>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={newStageOrder}
+                    onChange={(e) => setNewStageOrder(e.target.value)}
+                    disabled={stageActionLoading}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="button small" disabled={stageActionLoading}>
+                  {stageActionLoading ? <><span className="spinner" /> Đang thêm...</> : "Lưu vòng đấu"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary small"
+                  disabled={stageActionLoading}
+                  onClick={() => {
+                    setIsCreatingStage(false);
+                    setStageFormError("");
+                  }}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          )}
+
+          {stagesLoading ? (
+            <div className="loading-state">
+              <span className="spinner" /> Đang tải danh sách vòng đấu...
+            </div>
+          ) : stages.length === 0 ? (
+            <p className="muted">Giải đấu chưa có vòng đấu nào được thiết lập.</p>
+          ) : (
+            <div className="stage-list" data-testid="stage-list">
+              {stages.map((stage, index) => {
+                const isEditing = editingStageId === stage.stage_id;
+                return (
+                  <div
+                    className={`stage-card ${isEditing ? "editing" : ""}`}
+                    key={stage.stage_id}
+                    data-stage-id={stage.stage_id}
+                    data-sequence-order={stage.sequence_order}
+                  >
+                    {isEditing ? (
+                      <form
+                        className="stage-inline-edit"
+                        onSubmit={(e) => void handleUpdateStage(stage.stage_id, e)}
+                        data-testid={`stage-edit-form-${stage.stage_id}`}
+                      >
+                        {stageFormError && <div className="error-banner">{stageFormError}</div>}
+                        <div className="form-grid">
+                          <label>
+                            Tên vòng đấu
+                            <input
+                              type="text"
+                              required
+                              maxLength={80}
+                              value={editingStageName}
+                              onChange={(e) => setEditingStageName(e.target.value)}
+                              disabled={stageActionLoading}
+                            />
+                          </label>
+                          <label>
+                            Thứ tự (#)
+                            <input
+                              type="number"
+                              required
+                              min="1"
+                              value={editingStageOrder}
+                              onChange={(e) => setEditingStageOrder(e.target.value)}
+                              disabled={stageActionLoading}
+                            />
+                          </label>
+                        </div>
+                        <div className="form-actions">
+                          <button type="submit" className="button small" disabled={stageActionLoading}>
+                            {stageActionLoading ? "Đang lưu..." : "Lưu"}
+                          </button>
+                          <button
+                            type="button"
+                            className="button secondary small"
+                            disabled={stageActionLoading}
+                            onClick={() => {
+                              setEditingStageId(null);
+                              setStageFormError("");
+                            }}
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="stage-row">
+                        <div className="stage-info">
+                          <span className="stage-badge">#{stage.sequence_order}</span>
+                          <strong className="stage-name">{stage.name}</strong>
+                        </div>
+                        {tournamentCapabilities?.can_manage_stages && (
+                          <div className="stage-actions">
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              title="Chuyển lên"
+                              disabled={index === 0 || stageActionLoading}
+                              onClick={() => void handleMoveStage(index, "up")}
+                            >
+                              ▲ Lên
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              title="Chuyển xuống"
+                              disabled={index === stages.length - 1 || stageActionLoading}
+                              onClick={() => void handleMoveStage(index, "down")}
+                            >
+                              ▼ Xuống
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              disabled={stageActionLoading}
+                              onClick={() => {
+                                setEditingStageId(stage.stage_id);
+                                setNewStageName("");
+                                setNewStageOrder("");
+                                setEditingStageName(stage.name);
+                                setEditingStageOrder(String(stage.sequence_order));
+                                setStageFormError("");
+                              }}
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary small danger-link"
+                              disabled={stageActionLoading}
+                              onClick={() => void handleDeleteStage(stage)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         <div className="approved-teams-section">
-          <h4>Đội tuyển tham gia ({approvedTeams.length}{approvedTeams.length >= 50 ? "+" : ""})</h4>
+          <h4>Đội tuyển tham gia ({approvedTeamsTotal})</h4>
           {approvedTeams.length === 0 ? (
             <p className="muted">Chưa có đội tuyển nào được nhận vào giải.</p>
           ) : (
-            <div className="approved-teams-grid">
-              {approvedTeams.map((team) => (
-                <div className="approved-team-card" data-team-id={team.team_id} key={team.team_id}>
-                  <div className="team-basic-info">
-                    <strong>{team.name}</strong>
-                    <span className="tag">#{team.tag}</span>
-                    {approvedRosterStatuses[team.team_id]?.loaded &&
-                      !(tournamentCapabilities?.roster_locked || rosterLock?.locked) && (
-                        approvedRosterStatuses[team.team_id]?.hasPlayer ? (
-                          <span className="status-badge ready">Đã có PLAYER</span>
-                        ) : (
-                          <span className="status-badge missing-player">Chưa có PLAYER</span>
-                        )
-                      )}
+            <>
+              <div className="approved-teams-grid">
+                {approvedTeams.map((team) => (
+                  <div className="approved-team-card" data-team-id={team.team_id} key={team.team_id}>
+                    <div className="team-basic-info">
+                      <strong>{team.name}</strong>
+                      <span className="tag">#{team.tag}</span>
+                      {approvedRosterStatuses[team.team_id]?.loaded &&
+                        !(tournamentCapabilities?.roster_locked || rosterLock?.locked) && (
+                          approvedRosterStatuses[team.team_id]?.hasPlayer ? (
+                            <span className="status-badge ready">Đã có PLAYER</span>
+                          ) : (
+                            <span className="status-badge missing-player">Chưa có PLAYER</span>
+                          )
+                        )}
+                    </div>
+                    <button
+                      type="button"
+                      className="link-button roster-btn"
+                      onClick={() => void openTeamRoster(team.team_id, team.name, team.tag)}
+                    >
+                      {selectedRosterTeam?.team_id === team.team_id ? "Đóng đội hình ▲" : "Đội hình ▼"}
+                    </button>
                   </div>
+                ))}
+              </div>
+
+              {approvedTeamsTotal > APPROVED_TEAMS_PER_PAGE && (
+                <div className="pagination-controls" data-testid="approved-teams-pagination">
                   <button
                     type="button"
-                    className="link-button roster-btn"
-                    onClick={() => void openTeamRoster(team.team_id, team.name, team.tag)}
+                    className="button secondary small"
+                    disabled={approvedTeamsPage === 0}
+                    onClick={() => void handleApprovedTeamsPageChange(approvedTeamsPage - 1)}
                   >
-                    {selectedRosterTeam?.team_id === team.team_id ? "Đóng đội hình ▲" : "Đội hình ▼"}
+                    ‹ Trước
+                  </button>
+                  <span className="pagination-info">
+                    Trang {approvedTeamsPage + 1} / {Math.max(1, Math.ceil(approvedTeamsTotal / APPROVED_TEAMS_PER_PAGE))} (Tổng {approvedTeamsTotal} đội)
+                  </span>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={approvedTeamsPage >= Math.ceil(approvedTeamsTotal / APPROVED_TEAMS_PER_PAGE) - 1}
+                    onClick={() => void handleApprovedTeamsPageChange(approvedTeamsPage + 1)}
+                  >
+                    Sau ›
                   </button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {selectedRosterTeam && (
@@ -1863,7 +2413,7 @@ export default function App() {
               </div>
             )}
             <div className="section-header">
-              <h4>Đơn đăng ký giải ({registrations.length})</h4>
+              <h4>Đơn đăng ký giải ({registrationTotal})</h4>
               {tournamentCapabilities?.can_review_registrations && (
                 <select
                   className="filter-select"
@@ -1890,7 +2440,8 @@ export default function App() {
             {registrations.length === 0 ? (
               <p className="muted">Không có đơn đăng ký nào.</p>
             ) : (
-              <div className="registration-list">
+              <>
+                <div className="registration-list">
                 {registrations.map((reg) => {
                   const teamName = teams.find((t) => t.team_id === reg.team_id)?.name ??
                                    managedTeamsForTournament.find((t) => t.team_id === reg.team_id)?.name ??
@@ -1945,7 +2496,32 @@ export default function App() {
                   );
                 })}
               </div>
-            )}
+
+              {registrationTotal > REGISTRATIONS_PER_PAGE && (
+                <div className="pagination-controls" data-testid="registrations-pagination">
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={registrationPage === 0 || registrationLoading}
+                    onClick={() => void handleRegistrationPageChange(registrationPage - 1)}
+                  >
+                    ‹ Trước
+                  </button>
+                  <span className="pagination-info">
+                    Trang {registrationPage + 1} / {Math.max(1, Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE))} (Tổng {registrationTotal} đơn)
+                  </span>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={registrationPage >= Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE) - 1 || registrationLoading}
+                    onClick={() => void handleRegistrationPageChange(registrationPage + 1)}
+                  >
+                    Sau ›
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           </div>
         )}
       </div>}
