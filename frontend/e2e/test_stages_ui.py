@@ -161,3 +161,90 @@ def test_dropdown_never_shows_already_registered_teams(
     finally:
         manager1_page.close()
         manager2_page.close()
+
+
+def test_session_switch_anti_stale_response_guard(
+    page: Page, browser: Browser, app_base_url: str, demo_password: str
+):
+    # 1. Organizer A creates tournament and verifies manage capabilities
+    tournament_name, tournament_id = create_tournament(page, demo_password)
+    open_tournament(page, tournament_id, tournament_name)
+    stages_section = page.locator('[data-testid="tournament-stages-section"]')
+    expect(stages_section).to_be_visible()
+    expect(stages_section.get_by_role("button", name="+ Thêm vòng đấu")).to_be_visible()
+
+    # 2. Register regular user B on separate page
+    user_b = unique_username("userb")
+    reg_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    try:
+        reg_page.goto(app_base_url)
+        register_user(reg_page, user_b, demo_password)
+    finally:
+        reg_page.close()
+
+    # 3. Intercept capabilities and registrations for this tournament
+    held_capabilities = []
+    held_registrations = []
+
+    def intercept_caps(route):
+        if not held_capabilities:
+            held_capabilities.append(route)
+            return
+        route.continue_()
+
+    def intercept_regs(route):
+        if not held_registrations:
+            held_registrations.append(route)
+            return
+        route.continue_()
+
+    cap_url = f"**/api/v1/tournaments/{tournament_id}/capabilities"
+    reg_url = f"**/api/v1/tournaments/{tournament_id}/registrations*"
+    page.route(cap_url, intercept_caps)
+    page.route(reg_url, intercept_regs)
+
+    try:
+        # Trigger data fetch for Organizer A while on the tournament view
+        page.get_by_role("button", name="Đóng chi tiết").click()
+        page.locator(f'.tournament-card[data-tournament-id="{tournament_id}"]').get_by_role(
+            "button", name=re.compile("Xem chi tiết")
+        ).click()
+
+        # Wait until Organizer A's capabilities request is captured in held_capabilities
+        page.wait_for_timeout(300)
+        assert len(held_capabilities) >= 1
+
+        # While Organizer A's requests are in-flight, Organizer A logs out
+        page.get_by_role("button", name="Đăng xuất").click()
+        expect(page.locator(".auth-card")).to_be_visible()
+
+        # User B (regular user, not organizer) logs in
+        login(page, user_b, demo_password)
+
+        # User B opens the tournament (subsequent requests proceed normally)
+        open_tournament(page, tournament_id, tournament_name)
+        stages_b = page.locator('[data-testid="tournament-stages-section"]')
+        expect(stages_b).to_be_visible()
+        # User B is NOT organizer: "+ Thêm vòng đấu" is not visible
+        expect(stages_b.get_by_role("button", name="+ Thêm vòng đấu")).to_have_count(0)
+        expect(page.locator(".manage-panel")).to_have_count(0)
+
+        # 4. Release Organizer A's held requests (which have can_manage=True)
+        for r in held_capabilities:
+            fetched = r.fetch()
+            r.fulfill(response=fetched)
+        held_capabilities.clear()
+
+        for r in held_registrations:
+            fetched = r.fetch()
+            r.fulfill(response=fetched)
+        held_registrations.clear()
+
+        # 5. Verify that Organizer A's stale responses were rejected by the session guard:
+        # User B MUST STILL NOT have "+ Thêm vòng đấu", manage panel, or organizer controls
+        page.wait_for_timeout(500)
+        expect(stages_b.get_by_role("button", name="+ Thêm vòng đấu")).to_have_count(0)
+        expect(page.locator(".manage-panel")).to_have_count(0)
+    finally:
+        page.unroute(cap_url)
+        page.unroute(reg_url)

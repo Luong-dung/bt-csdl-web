@@ -361,6 +361,7 @@ export default function App() {
           method: "POST",
           body: JSON.stringify({ username: form.get("username"), password: form.get("password") }),
         });
+        sessionVersion.current += 1;
         localStorage.setItem(TOKEN_KEY, result.access_token);
         setToken(result.access_token);
         setUser(result.user);
@@ -677,10 +678,13 @@ export default function App() {
   const loadTournamentCapabilities = async (
     tournamentId: number,
     authToken = token,
-    expectedVersion?: number
+    expectedVersion?: number,
+    expectedSessionVersion?: number
   ): Promise<TournamentCapabilities | null> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
     if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
       setTournamentCapabilities(null);
       setCapabilityError("");
       return null;
@@ -689,10 +693,12 @@ export default function App() {
       setCapabilityError("");
       const caps = await request<TournamentCapabilities>(`/tournaments/${tournamentId}/capabilities`, {}, authToken);
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
       setTournamentCapabilities(caps);
       return caps;
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return null;
@@ -731,10 +737,11 @@ export default function App() {
     if (!selectedTournament) return;
     setApprovedTeamsPage(newPage);
     const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     const { list } = await loadApprovedTeams(selectedTournament.tournament_id, newPage, version);
-    if (tournamentViewVersion.current !== version) return;
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
     if (token && list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
-      void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, list, token, version);
+      void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, list, token, version, sessionV);
     }
   };
 
@@ -742,10 +749,13 @@ export default function App() {
     tournamentId: number,
     teams: ApprovedTeam[],
     authToken: string,
-    expectedVersion?: number
+    expectedVersion?: number,
+    expectedSessionVersion?: number
   ) => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
     if (!authToken || teams.length === 0) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       setApprovedRosterStatuses({});
       setRosterStatusWarning("");
       return;
@@ -765,6 +775,7 @@ export default function App() {
         })
       );
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       const statusMap: Record<number, { loaded: boolean; hasPlayer: boolean }> = {};
       for (const res of results) {
         statusMap[res.teamId] = { loaded: res.loaded, hasPlayer: res.hasPlayer };
@@ -781,19 +792,28 @@ export default function App() {
   };
 
   // Lưu ý: Endpoint /teams/managed mặc định limit 50; trong phạm vi demo W44 danh sách hiển thị tối đa 50 đội.
-  const loadManagedTeamsForTournament = async (gameId: number, authToken = token, expectedVersion?: number): Promise<Team[]> => {
+  const loadManagedTeamsForTournament = async (
+    gameId: number,
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<Team[]> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
     if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      if (sessionVersion.current !== sessionV) return [];
       setManagedTeamsForTournament([]);
       return [];
     }
     try {
       const list = await request<Team[]>(`/teams/managed?game_id=${gameId}`, {}, authToken);
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      if (sessionVersion.current !== sessionV) return [];
       setManagedTeamsForTournament(list);
       return list;
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return [];
+      if (sessionVersion.current !== sessionV) return [];
       setManagedTeamsForTournament([]);
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
@@ -811,10 +831,13 @@ export default function App() {
     expectedVersion?: number,
     managedTeams?: Team[],
     page = registrationPage,
+    expectedSessionVersion?: number
   ) => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
     setRegistrationError("");
     if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       setRegistrations([]);
       setAllTournamentRegistrations([]);
       setRegistrationTotal(0);
@@ -859,6 +882,7 @@ export default function App() {
         }
         if (paginatedRes.status === 403) {
           if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+          if (sessionVersion.current !== sessionV) return;
           setRegistrations([]);
           setAllTournamentRegistrations([]);
           setRegistrationTotal(0);
@@ -872,11 +896,13 @@ export default function App() {
       const allManagedRegs = (managedRegArrays as TournamentRegistrationItem[][]).flat();
 
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       setRegistrations(paginatedList);
       setRegistrationTotal(total);
       setAllTournamentRegistrations(allManagedRegs);
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       if (reason instanceof RequestError && reason.status === 401) {
         handleAuthExpired();
         return;
@@ -889,13 +915,15 @@ export default function App() {
     if (!selectedTournament || !token) return;
     setRegistrationPage(newPage);
     const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     await loadTournamentRegistrations(
       selectedTournament.tournament_id,
       registrationStatusFilter,
       token,
       version,
       undefined,
-      newPage
+      newPage,
+      sessionV
     );
   };
 
@@ -1122,8 +1150,10 @@ export default function App() {
     teamId: number,
     expectedTournamentVersion?: number,
     expectedTeamVersion?: number,
-    preserveError = false
+    preserveError = false,
+    expectedSessionVersion?: number
   ) => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
     if (!selectedTournament) return;
     const currentTournamentId = selectedTournament.tournament_id;
     setRosterLoading(true);
@@ -1143,6 +1173,7 @@ export default function App() {
         } catch (reason) {
           if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
           if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+          if (sessionVersion.current !== sessionV) return;
           if (activeRosterTeamIdRef.current !== teamId) return;
 
           if (reason instanceof RequestError && reason.status === 401) {
@@ -1155,6 +1186,7 @@ export default function App() {
 
       if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
       if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       if (activeRosterTeamIdRef.current !== teamId) return;
 
       setRosterCapabilities(caps);
@@ -1167,6 +1199,7 @@ export default function App() {
 
       if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
       if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       if (activeRosterTeamIdRef.current !== teamId) return;
 
       setRosterData(roster);
@@ -1187,6 +1220,7 @@ export default function App() {
           );
           if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
           if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+          if (sessionVersion.current !== sessionV) return;
           if (activeRosterTeamIdRef.current !== teamId) return;
 
           const eligible = members.filter(
@@ -1196,6 +1230,7 @@ export default function App() {
         } catch (reason) {
           if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
           if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+          if (sessionVersion.current !== sessionV) return;
           if (activeRosterTeamIdRef.current !== teamId) return;
 
           if (reason instanceof RequestError && reason.status === 401) {
@@ -1212,6 +1247,7 @@ export default function App() {
     } catch (reason) {
       if (expectedTournamentVersion !== undefined && tournamentViewVersion.current !== expectedTournamentVersion) return;
       if (expectedTeamVersion !== undefined && rosterTeamVersion.current !== expectedTeamVersion) return;
+      if (sessionVersion.current !== sessionV) return;
       if (activeRosterTeamIdRef.current !== teamId) return;
 
       setRosterData(null);
@@ -1234,6 +1270,7 @@ export default function App() {
       if (
         (expectedTournamentVersion === undefined || tournamentViewVersion.current === expectedTournamentVersion) &&
         (expectedTeamVersion === undefined || rosterTeamVersion.current === expectedTeamVersion) &&
+        sessionVersion.current === sessionV &&
         activeRosterTeamIdRef.current === teamId
       ) {
         setRosterLoading(false);
@@ -1255,7 +1292,7 @@ export default function App() {
     setRosterDraftMembers([]);
     setRosterError("");
     setRosterNotice("");
-    await loadTeamRosterData(teamId, tournamentViewVersion.current, currentTeamVersion);
+    await loadTeamRosterData(teamId, tournamentViewVersion.current, currentTeamVersion, false, sessionVersion.current);
   };
 
   const addMemberToRosterDraft = (userId: number) => {
@@ -1338,20 +1375,23 @@ export default function App() {
         if (reason.status === 409) {
           const conflictMsg =
             reason.message || "Xung đột: Giải đấu đã bị khóa hoặc trạng thái đội hình đã thay đổi.";
+          const currentSession = sessionVersion.current;
           const [caps, , approvedData] = await Promise.all([
-            loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
+            loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion, currentSession),
             loadRosterLock(currentTournamentId, currentTournamentVersion),
             loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
-            loadTeamRosterData(currentTeamId, currentTournamentVersion, currentTeamVersion, true),
+            loadTeamRosterData(currentTeamId, currentTournamentVersion, currentTeamVersion, true, currentSession),
           ]);
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
+            sessionVersion.current === currentSession &&
             token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)
           ) {
-            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
+            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion, currentSession);
           }
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
+            sessionVersion.current === currentSession &&
             rosterTeamVersion.current === currentTeamVersion
           ) {
             setRosterError(conflictMsg);
@@ -1396,20 +1436,21 @@ export default function App() {
       setRosterLock(res);
       setLockNotice("Đã khóa đội hình giải đấu thành công! Snapshot đội hình đã được cố định.");
 
+      const currentSession = sessionVersion.current;
       const [caps, approvedData] = await Promise.all([
-        loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
+        loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion, currentSession),
         loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
         loadTournaments(),
       ]);
 
-      if (tournamentViewVersion.current !== currentTournamentVersion) return;
+      if (tournamentViewVersion.current !== currentTournamentVersion || sessionVersion.current !== currentSession) return;
 
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
+        void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion, currentSession);
       }
 
       if (activeRosterTeamIdRef.current) {
-        await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current);
+        await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current, false, currentSession);
       }
     } catch (reason) {
       if (tournamentViewVersion.current !== currentTournamentVersion) return;
@@ -1422,21 +1463,23 @@ export default function App() {
         if (reason.status === 409) {
           const conflictMsg =
             reason.message || "Xung đột khi khóa đội hình: Trạng thái giải đấu hoặc đội hình đã thay đổi.";
+          const currentSession = sessionVersion.current;
           const [caps, , approvedData] = await Promise.all([
-            loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion),
+            loadTournamentCapabilities(currentTournamentId, token, currentTournamentVersion, currentSession),
             loadRosterLock(currentTournamentId, currentTournamentVersion),
             loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
           ]);
           if (
             tournamentViewVersion.current === currentTournamentVersion &&
+            sessionVersion.current === currentSession &&
             token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)
           ) {
-            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion);
+            void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion, currentSession);
           }
           if (activeRosterTeamIdRef.current) {
-            await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current);
+            await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current, false, currentSession);
           }
-          if (tournamentViewVersion.current === currentTournamentVersion) {
+          if (tournamentViewVersion.current === currentTournamentVersion && sessionVersion.current === currentSession) {
             setLockError(conflictMsg);
           }
           return;
@@ -1451,22 +1494,23 @@ export default function App() {
   };
   const reloadTournamentDetailsData = async (tournament: Tournament) => {
     const version = tournamentViewVersion.current;
+    const currentSession = sessionVersion.current;
     setRegistrationError("");
-    const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, token, version);
-    if (tournamentViewVersion.current !== version) return;
+    const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, token, version, currentSession);
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
     const [, approvedData] = await Promise.all([
-      loadTournamentCapabilities(tournament.tournament_id, token, version),
+      loadTournamentCapabilities(tournament.tournament_id, token, version, currentSession),
       loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version),
-      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage),
+      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, currentSession),
       loadRosterLock(tournament.tournament_id, version),
       loadTournamentStages(tournament.tournament_id, version),
     ]);
-    if (tournamentViewVersion.current !== version) return;
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
     if (token && approvedData?.list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
-      void loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, token, version);
+      void loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, token, version, currentSession);
     }
     if (activeRosterTeamIdRef.current) {
-      await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current);
+      await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current, false, currentSession);
     }
   };
 
@@ -1493,22 +1537,23 @@ export default function App() {
       return;
     }
     const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     void (async () => {
-      const managedTeams = await loadManagedTeamsForTournament(selectedTournament.game_id, token, version);
-      if (tournamentViewVersion.current !== version) return;
+      const managedTeams = await loadManagedTeamsForTournament(selectedTournament.game_id, token, version, sessionV);
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       const [, caps, approvedData] = await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage),
-        loadTournamentCapabilities(selectedTournament.tournament_id, token, version),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, sessionV),
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, version, sessionV),
         loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
         loadRosterLock(selectedTournament.tournament_id, version),
         loadTournamentStages(selectedTournament.tournament_id, version),
       ]);
-      if (tournamentViewVersion.current !== version) return;
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, version);
+        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, version, sessionV);
       }
       if (activeRosterTeamIdRef.current) {
-        await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current);
+        await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current, false, sessionV);
       }
     })();
   }, [token]);
@@ -1532,8 +1577,8 @@ export default function App() {
       }, token);
       setRegistrationNotice("Đã gửi đơn đăng ký thành công.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
-        loadManagedTeamsForTournament(selectedTournament.game_id),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
+        loadManagedTeamsForTournament(selectedTournament.game_id, token, tournamentViewVersion.current, sessionVersion.current),
       ]);
     } catch (reason) {
       if (reason instanceof RequestError && reason.status === 401) {
@@ -1558,8 +1603,8 @@ export default function App() {
       }, token);
       setRegistrationNotice("Đã hủy đơn đăng ký.");
       await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
-        loadManagedTeamsForTournament(selectedTournament.game_id),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
+        loadManagedTeamsForTournament(selectedTournament.game_id, token, tournamentViewVersion.current, sessionVersion.current),
       ]);
     } catch (reason) {
       if (reason instanceof RequestError && reason.status === 401) {
@@ -1592,12 +1637,12 @@ export default function App() {
       }, token);
       setRegistrationNotice(status === "APPROVED" ? "Đã duyệt đơn đăng ký." : "Đã từ chối đơn đăng ký.");
       const [, approvedData, caps] = await Promise.all([
-        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage),
+        loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, tournamentViewVersion.current, undefined, registrationPage, sessionVersion.current),
         loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, tournamentViewVersion.current),
-        loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current),
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current),
       ]);
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, tournamentViewVersion.current);
+        void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, approvedData.list, token, tournamentViewVersion.current, sessionVersion.current);
       }
     } catch (reason) {
       if (reason instanceof RequestError && reason.status === 401) {
@@ -1615,18 +1660,21 @@ export default function App() {
     setRegistrationPage(0);
     if (!selectedTournament || !token) return;
     const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     await loadTournamentRegistrations(
       selectedTournament.tournament_id,
       status,
       token,
       version,
       undefined,
-      0
+      0,
+      sessionV
     );
   };
 
   const viewTournament = async (tournamentId: number) => {
     const version = ++tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     setError("");
     setNotice("");
     setRegistrationError("");
@@ -1647,11 +1695,11 @@ export default function App() {
     setRegistrationTotal(0);
     try {
       const tournament = await request<Tournament>(`/tournaments/${tournamentId}`);
-      if (tournamentViewVersion.current !== version) return;
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       setSelectedTournament(tournament);
 
-      const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version);
-      const capsPromise = loadTournamentCapabilities(tournamentId, token, version);
+      const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version, sessionV);
+      const capsPromise = loadTournamentCapabilities(tournamentId, token, version, sessionV);
       const approvedPromise = loadApprovedTeams(tournamentId, 0, version);
       const lockPromise = loadRosterLock(tournamentId, version);
       const stagesPromise = loadTournamentStages(tournamentId, version);
@@ -1663,15 +1711,15 @@ export default function App() {
         lockPromise,
         stagesPromise,
       ]);
-      if (tournamentViewVersion.current !== version) return;
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
 
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
-        void loadApprovedTeamRosterStatuses(tournamentId, approvedData.list, token, version);
+        void loadApprovedTeamRosterStatuses(tournamentId, approvedData.list, token, version, sessionV);
       }
 
-      await loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams, 0);
+      await loadTournamentRegistrations(tournamentId, registrationStatusFilter, token, version, managedTeams, 0, sessionV);
     } catch (reason) {
-      if (tournamentViewVersion.current !== version) return;
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       setError((reason as Error).message);
     }
   };
@@ -1711,7 +1759,7 @@ export default function App() {
         method: "POST", body: JSON.stringify({ status }),
       }, token);
       setSelectedTournament(updated);
-      await loadTournamentCapabilities(updated.tournament_id);
+      await loadTournamentCapabilities(updated.tournament_id, token, tournamentViewVersion.current, sessionVersion.current);
       await loadRosterLock(updated.tournament_id);
       await loadTournaments();
       setNotice(`Đã chuyển trạng thái giải sang ${status}.`);
@@ -1743,7 +1791,7 @@ export default function App() {
         method: "PATCH", body: JSON.stringify(body),
       }, token);
       setSelectedTournament(updated);
-      await loadTournamentCapabilities(updated.tournament_id);
+      await loadTournamentCapabilities(updated.tournament_id, token, tournamentViewVersion.current, sessionVersion.current);
       await loadTournaments();
       setNotice("Đã cập nhật thông tin giải đấu.");
     } catch (reason) {
@@ -1839,7 +1887,7 @@ export default function App() {
           <div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div>
         </div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
-        {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id)}>Thử lại</button></div>}
+        {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current)}>Thử lại</button></div>}
                 {tournamentCapabilities?.can_manage && <div className="manage-panel">
           <div className="panel-title"><h4>Điều hành giải</h4><span>CAPABILITY VERIFIED</span></div>
           {selectedTournament.status === "UPCOMING" && (
