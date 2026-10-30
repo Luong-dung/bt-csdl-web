@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -18,7 +18,7 @@ from middleware.auth import can_manage_tournament, ensure_team_manager, get_curr
 from modules.identity.models import User
 from modules.teams.models import Team
 from modules.tournaments.models import TournamentRegistration
-from routes.tournaments import INT_MAX, TournamentId
+from routes.tournaments import INT_MAX, TournamentId, paginate
 
 router = APIRouter(prefix="/api/v1/tournaments/{tournament_id}/registrations", tags=["Tournament registrations"])
 RegistrationStatus = Literal["PENDING", "APPROVED", "REJECTED", "CANCELLED"]
@@ -90,6 +90,7 @@ def commit_registration(db: Session, registration: TournamentRegistration, user:
 @router.get("", response_model=list[RegistrationRead])
 def list_registrations(
     tournament_id: TournamentId,
+    response: Response,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
     status: RegistrationStatus | None = None,
@@ -112,7 +113,7 @@ def list_registrations(
     if status is not None:
         query = query.where(TournamentRegistration.status == status)
     query = query.order_by(TournamentRegistration.submitted_at, TournamentRegistration.registration_id)
-    return db.scalars(query.offset(offset).limit(limit)).all()
+    return paginate(db, query, response, offset, limit)
 
 
 @router.post("", response_model=RegistrationRead, status_code=201)
