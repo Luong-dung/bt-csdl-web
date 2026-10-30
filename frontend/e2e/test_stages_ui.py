@@ -204,8 +204,9 @@ def test_session_switch_anti_stale_response_guard(
     page.route(reg_url, intercept_regs)
 
     try:
-        # Trigger data fetch for Organizer A while on the tournament view
-        page.get_by_role("button", name="Đóng chi tiết").click()
+        # Trigger data fetch for Organizer A by closing and reopening the tournament
+        page.locator(".tournament-detail .detail-header button").filter(has_text=re.compile("Đóng|Close")).click()
+        expect(page.locator(".tournament-detail")).to_have_count(0)
         page.locator(f'.tournament-card[data-tournament-id="{tournament_id}"]').get_by_role(
             "button", name=re.compile("Xem chi tiết")
         ).click()
@@ -221,8 +222,9 @@ def test_session_switch_anti_stale_response_guard(
         # User B (regular user, not organizer) logs in
         login(page, user_b, demo_password)
 
-        # User B opens the tournament (subsequent requests proceed normally)
-        open_tournament(page, tournament_id, tournament_name)
+        # Ensure tournament detail is open for User B
+        if page.locator(".tournament-detail").count() == 0:
+            open_tournament(page, tournament_id, tournament_name)
         stages_b = page.locator('[data-testid="tournament-stages-section"]')
         expect(stages_b).to_be_visible()
         # User B is NOT organizer: "+ Thêm vòng đấu" is not visible
