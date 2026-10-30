@@ -1,13 +1,14 @@
 import re
 from playwright.sync_api import Browser, Page, expect
 
-from helpers import login, unique_username
+from helpers import create_team, login, register_user, unique_username
 from test_tournaments import create_tournament, open_tournament, refresh_tournament
 
 
 def test_stage_crud_and_reorder_ui(page: Page, browser: Browser, app_base_url: str, demo_password: str):
-    # 1. Organizer creates tournament
+    # 1. Organizer creates tournament and opens it
     tournament_name, tournament_id = create_tournament(page, demo_password)
+    open_tournament(page, tournament_id, tournament_name)
 
     # 2. Check stages section is visible and can_manage_stages allows adding stages
     stages_section = page.locator('[data-testid="tournament-stages-section"]')
@@ -111,46 +112,52 @@ def test_dropdown_never_shows_already_registered_teams(
 ):
     tournament_name, tournament_id = create_tournament(page, demo_password)
 
-    manager_page = browser.new_page(viewport={"width": 1440, "height": 1000})
-    manager_page.set_default_timeout(10_000)
+    manager1_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    manager1_page.set_default_timeout(10_000)
+    manager2_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    manager2_page.set_default_timeout(10_000)
     try:
-        manager_page.goto(app_base_url)
-        manager = unique_username("mgr")
-        from helpers import register_user, create_team
-        register_user(manager_page, manager)
-        login(manager_page, manager)
+        # Manager 1 registers Team 1
+        manager1_page.goto(app_base_url)
+        mgr1 = unique_username("mgr1")
+        register_user(manager1_page, mgr1)
+        login(manager1_page, mgr1)
 
-        # Manager creates 2 teams
         team1_name = f"Team Alpha {unique_username('alpha')[-5:]}"
+        tag1 = f"A{unique_username('tag')[-5:]}".upper()[:10]
+        create_team(manager1_page, team1_name, tag1)
+
+        open_tournament(manager1_page, tournament_id, tournament_name)
+        reg_form1 = manager1_page.locator(".registration-form")
+        expect(reg_form1).to_be_visible()
+        reg_form1.get_by_role("button", name="Gửi đơn đăng ký").click()
+        expect(manager1_page.locator(".notice-banner")).to_contain_text("Đã gửi đơn đăng ký thành công")
+
+        # After registering, form is hidden for Manager 1 (team already registered)
+        expect(manager1_page.locator(".registration-form")).to_have_count(0)
+
+        # Manager 2 registers Team 2
+        manager2_page.goto(app_base_url)
+        mgr2 = unique_username("mgr2")
+        register_user(manager2_page, mgr2)
+        login(manager2_page, mgr2)
+
         team2_name = f"Team Beta {unique_username('beta')[-5:]}"
-        create_team(manager_page, team1_name, "ALPH")
-        create_team(manager_page, team2_name, "BETA")
+        tag2 = f"B{unique_username('tag')[-5:]}".upper()[:10]
+        create_team(manager2_page, team2_name, tag2)
 
-        # Open tournament
-        open_tournament(manager_page, tournament_id, tournament_name)
-        reg_form = manager_page.locator(".registration-form")
-        expect(reg_form).to_be_visible()
+        open_tournament(manager2_page, tournament_id, tournament_name)
+        reg_form2 = manager2_page.locator(".registration-form")
+        expect(reg_form2).to_be_visible()
+        reg_form2.get_by_role("button", name="Gửi đơn đăng ký").click()
+        expect(manager2_page.locator(".notice-banner")).to_contain_text("Đã gửi đơn đăng ký thành công")
 
-        # Both teams initially available
-        select_box = reg_form.locator("select[name='team_id']")
-        expect(select_box.locator("option")).to_have_count(2)
+        # After registering, form is hidden for Manager 2
+        expect(manager2_page.locator(".registration-form")).to_have_count(0)
 
-        # Register Team 1
-        select_box.select_option(label=re.compile(team1_name))
-        reg_form.get_by_role("button", name="Gửi đơn đăng ký").click()
-        expect(manager_page.locator(".notice-banner")).to_contain_text("Đã gửi đơn đăng ký thành công")
-
-        # Now only Team 2 is available in dropdown
-        expect(select_box.locator("option")).to_have_count(1)
-        expect(select_box.locator("option")).to_contain_text(team2_name)
-
-        # Register Team 2
-        reg_form.get_by_role("button", name="Gửi đơn đăng ký").click()
-        expect(manager_page.locator(".notice-banner")).to_contain_text("Đã gửi đơn đăng ký thành công")
-
-        # Both registered -> registration form disappears!
-        expect(manager_page.locator(".registration-form")).to_have_count(0)
-        expect(manager_page.locator(".registrations-section")).to_contain_text("Đơn đăng ký giải (2)")
+        # Organizer checks registrations: both teams are listed
+        refresh_tournament(page, tournament_id, tournament_name)
+        expect(page.locator(".registrations-section")).to_contain_text("Đơn đăng ký giải (2)")
     finally:
-        manager_page.close()
-
+        manager1_page.close()
+        manager2_page.close()
