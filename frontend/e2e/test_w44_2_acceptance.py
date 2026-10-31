@@ -143,8 +143,31 @@ def test_large_registration_and_approved_team_ui_pagination(
         )
         seen_teams.update(approved_teams.evaluate_all("items => items.map(item => item.dataset.teamId)"))
         if page_index < 5:
+            previous_registration_ids = registrations.evaluate_all(
+                "items => items.map(item => item.dataset.registrationId)"
+            )
+            previous_team_ids = approved_teams.evaluate_all(
+                "items => items.map(item => item.dataset.teamId)"
+            )
             registration_pages.get_by_role("button", name="Sau ›").click()
             team_pages.get_by_role("button", name="Sau ›").click()
+            page.wait_for_function(
+                """previous => {
+                    const registrationIds = Array.from(
+                        document.querySelectorAll(".registration-card[data-registration-id]")
+                    ).map(item => item.dataset.registrationId);
+                    const teamIds = Array.from(
+                        document.querySelectorAll(".approved-team-card[data-team-id]")
+                    ).map(item => item.dataset.teamId);
+                    return registrationIds.length > 0 && teamIds.length > 0
+                        && JSON.stringify(registrationIds) !== JSON.stringify(previous.registrationIds)
+                        && JSON.stringify(teamIds) !== JSON.stringify(previous.teamIds);
+                }""",
+                arg={
+                    "registrationIds": previous_registration_ids,
+                    "teamIds": previous_team_ids,
+                },
+            )
 
     assert seen_registrations == registration_ids
     assert seen_teams == team_ids
