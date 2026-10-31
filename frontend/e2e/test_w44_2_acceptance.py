@@ -2,8 +2,8 @@ from datetime import date, timedelta
 
 from playwright.sync_api import Page, expect
 
-from database_support import assign_tournament_organizer
-from helpers import TEST_PASSWORD, login, register_user, unique_username
+from database_support import assign_tournament_organizer, seed_large_tournament_pagination
+from helpers import login, register_user, unique_username
 from test_tournaments import create_tournament, open_tournament
 
 
@@ -55,10 +55,7 @@ def test_scoped_organizer_assignment_controls_tournament_ui(
             has_text="Đóng"
         ).click()
         expect(scoped_page.locator(".tournament-detail")).to_have_count(0)
-        other_card = scoped_page.locator(
-            f'.tournament-card[data-tournament-id="{other["tournament_id"]}"]'
-        )
-        other_card.get_by_role("button", name="Xem chi tiết").click()
+        open_tournament(scoped_page, str(other["tournament_id"]), other["name"])
         other_stages = scoped_page.locator('[data-testid="tournament-stages-section"]')
         expect(other_stages).to_be_visible()
         expect(other_stages.get_by_role("button", name="+ Thêm vòng đấu")).to_have_count(0)
@@ -67,62 +64,32 @@ def test_scoped_organizer_assignment_controls_tournament_ui(
 
 
 def test_large_registration_and_approved_team_ui_pagination(
-    page: Page, demo_password: str, api_base_url: str
+    page: Page, browser, app_base_url: str, demo_password: str
 ):
     tournament_name, tournament_id = create_tournament(page, demo_password)
-    organizer_token = page.evaluate("localStorage.getItem('esports_access_token')")
-    assert organizer_token
-    games = _api_json(page, "GET", f"{api_base_url}/catalog/games")
-    game_id = next(game["game_id"] for game in games if game["slug"] == "valorant")
+    manager_username = unique_username("w44-2-08-pagination-manager")
+    manager_page = browser.new_page(viewport={"width": 1440, "height": 1000})
+    manager_page.set_default_timeout(10_000)
+    try:
+        manager_page.goto(app_base_url)
+        register_user(manager_page, manager_username)
+        login(manager_page, manager_username)
+        fixture = seed_large_tournament_pagination(int(tournament_id), manager_username)
 
-    registration_ids: set[str] = set()
-    team_ids: set[str] = set()
-    for index in range(51):
-        username = unique_username(f"w44-2-08-{index}")
-        _api_json(
-            page,
-            "POST",
-            f"{api_base_url}/auth/register",
-            data={
-                "username": username,
-                "email": f"{username}@example.com",
-                "password": TEST_PASSWORD,
-                "real_name": username,
-            },
-        )
-        manager_token = _api_json(
-            page,
-            "POST",
-            f"{api_base_url}/auth/login",
-            data={"username": username, "password": TEST_PASSWORD},
-        )["access_token"]
-        team = _api_json(
-            page,
-            "POST",
-            f"{api_base_url}/teams",
-            token=manager_token,
-            data={
-                "name": f"W44-2-08 Team {index:02d} {username[-5:]}",
-                "tag": f"E{index:02d}{username[-5:]}"[:10],
-                "game_id": game_id,
-            },
-        )
-        registration = _api_json(
-            page,
-            "POST",
-            f"{api_base_url}/tournaments/{tournament_id}/registrations",
-            token=manager_token,
-            data={"team_id": team["team_id"]},
-        )
-        _api_json(
-            page,
-            "POST",
-            f"{api_base_url}/tournaments/{tournament_id}/registrations/{registration['registration_id']}/decision",
-            token=organizer_token,
-            data={"status": "APPROVED"},
-        )
-        registration_ids.add(str(registration["registration_id"]))
-        team_ids.add(str(team["team_id"]))
+        # This team's registration is deliberately on page 3; the other scoped team is unregistered.
+        open_tournament(manager_page, tournament_id, tournament_name)
+        registration_form = manager_page.locator(".registration-form")
+        expect(registration_form).to_be_visible()
+        team_picker = registration_form.locator('select[name="team_id"]')
+        expect(team_picker.locator(f'option[value="{fixture["registered_team_id"]}"]')).to_have_count(0)
+        expect(team_picker.locator(f'option[value="{fixture["available_team_id"]}"]')).to_have_count(1)
+        expect(team_picker).to_have_value(str(fixture["available_team_id"]))
+    finally:
+        manager_page.close()
+
+    registration_ids = {str(value) for value in fixture["registration_ids"]}
+    team_ids = {str(value) for value in fixture["team_ids"]}
+    target_registration_id = str(fixture["registered_registration_id"])
 
     page.reload()
     open_tournament(page, tournament_id, tournament_name)
@@ -138,9 +105,12 @@ def test_large_registration_and_approved_team_ui_pagination(
     for page_index in range(6):
         expect(registration_pages.locator(".pagination-info")).to_contain_text(f"Trang {page_index + 1} / 6")
         expect(team_pages.locator(".pagination-info")).to_contain_text(f"Trang {page_index + 1} / 6")
-        seen_registrations.update(
-            registrations.evaluate_all("items => items.map(item => item.dataset.registrationId)")
+        current_registration_ids = registrations.evaluate_all(
+            "items => items.map(item => item.dataset.registrationId)"
         )
+        if target_registration_id in current_registration_ids:
+            assert page_index == 2
+        seen_registrations.update(current_registration_ids)
         seen_teams.update(approved_teams.evaluate_all("items => items.map(item => item.dataset.teamId)"))
         if page_index < 5:
             previous_registration_ids = registrations.evaluate_all(
@@ -171,3 +141,4 @@ def test_large_registration_and_approved_team_ui_pagination(
 
     assert seen_registrations == registration_ids
     assert seen_teams == team_ids
+    assert target_registration_id in seen_registrations

@@ -24,7 +24,27 @@ def create_tournament(page: Page, demo_password: str) -> tuple[str, str]:
 
 
 def open_tournament(page: Page, tournament_id: str, name: str) -> None:
-    page.locator(f'.tournament-card[data-tournament-id="{tournament_id}"]').get_by_role(
+    expect(page.locator(".tournament-grid .tournament-card").first).to_be_visible()
+    card = page.locator(f'.tournament-card[data-tournament-id="{tournament_id}"]')
+    while card.count() == 0:
+        pagination = page.locator(".tournament-zone .pagination")
+        next_page = pagination.get_by_role("button", name="Sau →")
+        if pagination.count() == 0 or not next_page.is_enabled():
+            break
+        previous_ids = page.locator(".tournament-grid .tournament-card").evaluate_all(
+            "cards => cards.map(card => card.dataset.tournamentId)"
+        )
+        next_page.click()
+        page.wait_for_function(
+            """previous => {
+                if (document.querySelector(".tournament-zone .loading-state")) return false;
+                const ids = Array.from(document.querySelectorAll(".tournament-grid .tournament-card"))
+                    .map(card => card.dataset.tournamentId);
+                return ids.length > 0 && JSON.stringify(ids) !== JSON.stringify(previous);
+            }""",
+            arg=previous_ids,
+        )
+    card.get_by_role(
         "button", name=re.compile("Xem chi tiết")
     ).click()
     expect(page.locator(".tournament-detail").get_by_role("heading", name=name)).to_be_visible()

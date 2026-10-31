@@ -66,7 +66,7 @@ Remove-Item Env:E2E_DB_NAME,Env:E2E_DATABASE_URL,Env:E2E_API_BASE_URL -ErrorActi
 deactivate
 ```
 
-The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. The scoped-role test adds one tournament assignment directly to the database; its helper refuses to run unless the connected database exactly matches `E2E_DB_NAME` and that name ends in `_test`. Set `E2E_DATABASE_URL` to the same disposable database as the backend. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
+The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. The scoped-role test adds a tournament assignment directly to the database. The large-pagination test seeds 51 approved teams and registrations plus a scoped manager's available team directly into the disposable E2E database, avoiding dozens of password hashes and HTTP setup calls while exercising the real UI and pagination API. Database helpers refuse to run unless the connected database exactly matches `E2E_DB_NAME` and that name ends in `_test`. Set `E2E_DATABASE_URL` to the same disposable database as the backend. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
 
 ## CI
 
