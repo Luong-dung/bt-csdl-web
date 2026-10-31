@@ -55,15 +55,19 @@ cd backend
 .\.venv\Scripts\Activate.ps1
 cd ..\frontend
 $env:E2E_BROWSER_PATH = 'C:\Program Files\Google\Chrome\Application\chrome.exe' # Optional when Chromium download is unavailable
+$env:E2E_DB_NAME = 'esports_tournament_w44_08_e2e_test'
+$env:E2E_DATABASE_URL = 'postgresql://<user>:<password>@127.0.0.1:5432/esports_tournament_w44_08_e2e_test'
+$env:E2E_API_BASE_URL = 'http://127.0.0.1:8000/api/v1'
 $env:E2E_DEMO_PASSWORD = Read-Host 'Test-only demo password'
 npm run test:e2e
 Remove-Item Env:E2E_DEMO_PASSWORD -ErrorAction SilentlyContinue
 Remove-Item Env:E2E_BROWSER_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:E2E_DB_NAME,Env:E2E_DATABASE_URL,Env:E2E_API_BASE_URL -ErrorAction SilentlyContinue
 deactivate
 ```
 
-The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
+The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. The scoped-role test adds a tournament assignment directly to the database. The large-pagination test seeds 51 approved teams and registrations plus a scoped manager's available team directly into the disposable E2E database, avoiding dozens of password hashes and HTTP setup calls while exercising the real UI and pagination API. Database helpers refuse to run unless the connected database exactly matches `E2E_DB_NAME` and that name ends in `_test`. Set `E2E_DATABASE_URL` to the same disposable database as the backend. It writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
 
 ## CI
 
-The `Browser E2E (Playwright)` job creates its own PostgreSQL service database, seeds a separate `_test` database, starts the API and Vite, and runs `npm run test:e2e` across auth, membership, catalog, and tournament flows. JUnit, screenshots, traces, and server logs are uploaded as the `browser-e2e-results` artifact even when the job fails. The demo password is fixed only inside that disposable, job-scoped database and is not used outside CI.
+The `Browser E2E (Playwright)` job creates its own PostgreSQL service database, seeds a separate `_test` database, starts the API and Vite, and runs `npm run test:e2e` across auth, membership, catalog, tournament, roster snapshot, stage, assignment-scope, and large-list flows. JUnit, screenshots, traces, and server logs are uploaded as the `browser-e2e-results` artifact even when the job fails. The demo password is fixed only inside that disposable, job-scoped database and is not used outside CI.
