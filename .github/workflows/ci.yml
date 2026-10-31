@@ -101,6 +101,8 @@ jobs:
       E2E_DB_NAME: esports_tournament_w44_08_e2e_test
       E2E_DEMO_PASSWORD: browser-e2e-only-password
       E2E_BASE_URL: http://127.0.0.1:5173
+      E2E_API_BASE_URL: http://127.0.0.1:8000/api/v1
+      E2E_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/esports_tournament_w44_08_e2e_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

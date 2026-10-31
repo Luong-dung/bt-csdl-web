@@ -165,6 +165,23 @@ def test_approved_team_roster_selection_and_organizer_lock(
         expect(roster_panel.get_by_role("button", name="Lưu đội hình")).to_have_count(0)
         expect(roster_panel.locator(".roster-members-grid")).to_contain_text(player)
 
+        # Membership may change after lock, but the tournament snapshot must remain intact.
+        manager_page.locator(".team-list article").filter(has_text=team_name).get_by_role(
+            "button", name="Xem đội"
+        ).click()
+        team_detail = manager_page.locator(".team-detail")
+        member_row = team_detail.locator(".member-row").filter(has_text=player)
+        expect(member_row).to_contain_text("PLAYER · Đang hoạt động")
+        manager_page.once("dialog", lambda dialog: dialog.accept())
+        member_row.get_by_role("button", name="Kết thúc").click()
+        expect(member_row).to_contain_text("PLAYER · Đã rời đội")
+
+        refresh_tournament(manager_page, tournament_id, tournament_name, username=manager)
+        manager_page.locator(f'.approved-team-card[data-team-id="{team_id}"] .roster-btn').click()
+        locked_roster_panel = manager_page.locator(f'.team-roster-panel[data-team-id="{team_id}"]')
+        expect(locked_roster_panel).to_contain_text("Đã khóa (Snapshot)")
+        expect(locked_roster_panel.locator(".roster-members-grid")).to_contain_text(player)
+
         # 5b. E2E ca đổi giải / reset lockLoading: đóng chi tiết giải và mở lại -> không bị kẹt spinner lockLoading
         page.locator(".tournament-detail .detail-header button").filter(has_text=re.compile("Đóng|Close")).click()
         expect(page.locator(".tournament-detail")).to_have_count(0)
