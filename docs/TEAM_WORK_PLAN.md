@@ -157,10 +157,10 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W06-01 | Snapshot tournament roster | `DOANH` | `DUNG` | Roster service/API | `TODO` |
-| W06-02 | Khóa roster theo trạng thái giải | `DOANH` | `DUC` | Business rules | `TODO` |
-| W06-03 | CRUD stage và thứ tự stage | `DUNG` | `DOANH` | Migration/API | `TODO` |
-| W06-04 | Giao diện khóa đội hình | `DUONG` | `DUNG` | Roster UI | `TODO` |
+| W06-01 | Snapshot tournament roster | `DOANH` | `DUNG` | Roster service/API (W44-2-01/03; DUNG làm nền tảng) | `DONE` |
+| W06-02 | Khóa roster theo trạng thái giải | `DOANH` | `DUC` | Business rules (W44-2-04) | `DONE` |
+| W06-03 | CRUD stage và thứ tự stage | `DUNG` | `DOANH` | Migration/API (W44-2-02) | `DONE` |
+| W06-04 | Giao diện khóa đội hình | `DUONG` | `DUNG` | Roster UI (W44-2-05; UI stage W44-2-06) | `DONE` |
 
 **Nghiệm thu tuần:** thay đổi membership sau khi khóa giải không làm thay đổi roster snapshot.
 
