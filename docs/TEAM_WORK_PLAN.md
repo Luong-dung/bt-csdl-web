@@ -32,7 +32,9 @@ Mỗi tuần phải có đủ bốn phần:
 
 ## Tuần đang thực hiện
 
-Kế hoạch chi tiết của tuần hiện tại được tách riêng để dễ cập nhật và giữ lịch sử:
+Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và giữ lịch sử. W44 đã chốt; tuần kế tiếp W45 bắt đầu ngày 02/11:
+
+- [2026-W45 — 02/11/2026 đến 08/11/2026](./weeks/2026-W45.md): kế hoạch lập ngày 01/11, **`0/8 DONE`, `8 TODO`**, mỗi người hai task. Mục tiêu: lịch trận thủ công, vòng đời/nhập kết quả, quyền trọng tài theo giải, API/UI và integration/E2E; tiếp nhận retry badge roster và test đổi giải khi đang khóa từ W44(2). Bracket tự sinh và standings theo dõi sau W45.
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
 - [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): cập nhật 23/10/2026, `8/8 DONE`, `0 IN PROGRESS`, `0 TODO`; backend/PostgreSQL, frontend build và kiểm thử trình duyệt đạt. Chi tiết bằng chứng và giới hạn xác minh CI/review ghi trong W43.
