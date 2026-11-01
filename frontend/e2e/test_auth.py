@@ -7,6 +7,8 @@ def test_registration_login_session_and_logout(page: Page):
     username = unique_username("auth")
     password = "Browser-test-password-43"
 
+    if not page.get_by_label("Tên đăng nhập").is_visible():
+        page.locator(".sidebar-login, [data-testid='sidebar-login']").first.click()
     page.get_by_label("Tên đăng nhập").fill("demo_viewer")
     page.get_by_label("Mật khẩu").fill("wrong-browser-password")
     page.get_by_role("button", name="Đăng nhập").click()

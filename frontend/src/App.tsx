@@ -1,10 +1,55 @@
+import { LangCode, LANGUAGES, TRANSLATIONS, getLocalizedGameName, getLocalizedRegionCountry, getLocalizedAreaDesc, getLocalizedNews } from "./i18n";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
 type Game = { game_id: number; name: string; slug: string; publisher_id: number };
 type Publisher = { publisher_id: number; name: string };
-type Area = { area_id: number; name: string; code: string; parent_id: number | null };
+export type Area = {
+  area_id: number;
+  code: string;
+  name: string;
+  country?: string;
+  gameSlug?: string;
+  flag?: string;
+  parent_id?: number | null;
+};
+
+export const DEFAULT_AREAS: Area[] = [
+  { area_id: 1, code: "GLOBAL", name: "Global Championship", country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
+
+  // 1. League of Legends (LoL) - 6 khu vực chuyên nghiệp
+  { area_id: 2, code: "LCK", name: "League of Legends Champions Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
+  { area_id: 3, code: "LPL", name: "League of Legends Pro League (LPL)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
+  { area_id: 4, code: "LEC", name: "League of Legends EMEA Championship (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
+  { area_id: 5, code: "LCS", name: "League Championship Series (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
+  { area_id: 6, code: "CBLOL", name: "Campeonato Brasileiro de LoL (CBLOL)", country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
+  { area_id: 7, code: "LCP", name: "League of Legends Championship Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
+
+  // 2. Teamfight Tactics (TFT) - 4 khu vực
+  { area_id: 8, code: "TFT AMER", name: "TFT Americas Circuit", country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
+  { area_id: 9, code: "TFT EMEA", name: "TFT EMEA Championship", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
+  { area_id: 10, code: "TFT APAC", name: "TFT APAC Circuit", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
+  { area_id: 11, code: "TFT CN", name: "TFT China Circuit (TOC/JOC)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
+
+  // 3. VALORANT (VLR) - 4 khu vực
+  { area_id: 12, code: "VCT Americas", name: "VCT Americas League", country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
+  { area_id: 13, code: "VCT EMEA", name: "VCT EMEA League", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
+  { area_id: 14, code: "VCT Pacific", name: "VCT Pacific League", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
+  { area_id: 15, code: "VCT CN", name: "VCT China League", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
+
+  // 4. Liên Quân Mobile (LQM / Arena of Valor) - 4 khu vực
+  { area_id: 16, code: "RPL", name: "RoV Pro League (RPL)", country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
+  { area_id: 17, code: "AOG", name: "Đấu Trường Danh Vọng (AOG)", country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
+  { area_id: 18, code: "GCS", name: "Garena Challenger Series (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
+  { area_id: 19, code: "ASL", name: "AOV Star League (ASL)", country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
+
+  // 5. Free Fire - 4 khu vực
+  { area_id: 20, code: "FFWS SEA", name: "Free Fire World Series SEA", country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
+  { area_id: 21, code: "FFWS BR", name: "Free Fire World Series Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
+  { area_id: 22, code: "FFWS LATAM", name: "Free Fire World Series LATAM", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
+  { area_id: 23, code: "FFWS MEA", name: "Free Fire World Series MEA", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
+];
 type Team = { team_id: number; name: string; tag: string; game_id: number };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
 type TeamDetail = Team & { members: TeamMember[] };
@@ -100,17 +145,326 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return response.json() as Promise<T>;
 }
 
+const DEFAULT_PUBLISHERS: Publisher[] = [
+  { publisher_id: 1, name: "Riot Games" },
+  { publisher_id: 2, name: "Garena" },
+];
+
+const DEFAULT_GAMES: Game[] = [
+  { game_id: 1, name: "Đấu Trường Chân Lý", slug: "teamfight-tactics", publisher_id: 1 },
+  { game_id: 2, name: "Liên Minh Huyền Thoại", slug: "league-of-legends", publisher_id: 1 },
+  { game_id: 3, name: "VALORANT", slug: "valorant", publisher_id: 1 },
+  { game_id: 4, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
+  { game_id: 5, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
+];
+
+function isRemovedGame(nameOrSlug?: string | null): boolean {
+  if (!nameOrSlug) return false;
+  const lower = nameOrSlug.toLowerCase();
+  return (
+    lower.includes("counter") ||
+    lower.includes("strike") ||
+    lower.includes("cs2") ||
+    lower.includes("cs:go") ||
+    lower.includes("csgo") ||
+    lower.includes("dota") ||
+    lower.includes("valve")
+  );
+}
+
+function getGameBadge(name: string): string {
+  const lower = name.toLowerCase().replace(/[-_]/g, " ");
+  if (lower.includes("liên quân") || lower.includes("lien quan") || lower.includes("arena of valor") || lower.includes("arena") || lower.includes("aov") || lower === "lq") return "AOV";
+  if (lower.includes("teamfight") || lower.includes("tft") || lower.includes("chân lý") || lower.includes("chan ly")) return "TFT";
+  if (lower.includes("league") || lower.includes("huyền thoại") || lower.includes("huyen thoai") || lower.includes("lol")) return "LoL";
+  if (lower.includes("valorant") || lower === "val" || lower.startsWith("val ")) return "VAL";
+  if (lower.includes("free fire") || lower.includes("freefire") || lower === "ff") return "FF";
+  return name.slice(0, 3).toUpperCase();
+}
+
+function gameMatchesPublisher(game: Game, publisherId: number | null, publisherList: Publisher[]): boolean {
+  if (publisherId === null) return true;
+  const targetPublisher = publisherList.find((p) => p.publisher_id === publisherId);
+  if (!targetPublisher) return true;
+  const targetName = targetPublisher.name.toLowerCase();
+
+  if (game.publisher_id === publisherId) return true;
+  const gameName = game.name.toLowerCase();
+  if (targetName.includes("riot")) {
+    return gameName.includes("league") || gameName.includes("huyền thoại") || gameName.includes("valorant") || gameName.includes("teamfight") || gameName.includes("chân lý") || gameName.includes("tft");
+  }
+  if (targetName.includes("garena")) {
+    return gameName.includes("liên quân") || gameName.includes("free fire") || gameName.includes("arena of valor") || gameName.includes("fc online") || gameName.includes("fifa");
+  }
+  return false;
+}
+
+function getPublisherLogo(nameOrId?: string | number | null): string | null {
+  if (nameOrId === null || nameOrId === undefined) return null;
+  const str = String(nameOrId).toLowerCase();
+  if (str.includes("riot") || str === "1") return "/publishers/riot-games.png";
+  if (str.includes("garena") || str === "2") return "/publishers/garena.png";
+  return null;
+}
+
+function getGameLogo(slugOrName?: string | null): string | null {
+  if (!slugOrName) return null;
+  const lower = slugOrName.toLowerCase().replace(/[-_]/g, " ");
+
+  // 1. Liên Quân Mobile / Arena of Valor
+  if (
+    lower.includes("liên quân") ||
+    lower.includes("lien quan") ||
+    lower.includes("arena of valor") ||
+    lower.includes("arena") ||
+    lower.includes("aov") ||
+    lower.includes("lqmb") ||
+    lower.split(" ").includes("lq") ||
+    lower === "lq"
+  ) {
+    return "/game-logos/lien-quan-mobile.png?v=2";
+  }
+
+  // 2. Teamfight Tactics / ĐTCL
+  if (
+    lower.includes("teamfight") ||
+    lower.includes("chân lý") ||
+    lower.includes("chan ly") ||
+    lower.split(" ").includes("tft") ||
+    lower === "tft"
+  ) {
+    return "/game-logos/teamfight-tactics.png";
+  }
+
+  // 3. League of Legends / LMHT
+  if (
+    lower.includes("league") ||
+    lower.includes("huyền thoại") ||
+    lower.includes("huyen thoai") ||
+    lower.split(" ").includes("lol") ||
+    lower === "lol"
+  ) {
+    return "/game-logos/league-of-legends.png";
+  }
+
+  // 4. VALORANT (careful: do NOT use substring "val" which matches "valor" in Arena of Valor!)
+  if (
+    lower.includes("valorant") ||
+    lower.split(" ").includes("val") ||
+    lower === "val"
+  ) {
+    return "/game-logos/valorant.png";
+  }
+
+  // 5. Free Fire
+  if (
+    lower.includes("free fire") ||
+    lower.includes("freefire") ||
+    lower.split(" ").includes("ff") ||
+    lower === "ff"
+  ) {
+    return "/game-logos/free-fire-naruto.png?v=2";
+  }
+
+  return null;
+}
+
+
+type NewsArticle = {
+  id: number;
+  category: string;
+  categorySlug: string;
+  title: string;
+  summary: string;
+  content: string;
+  date: string;
+  author: string;
+  image: string;
+};
+
+const NEWS_ARTICLES: NewsArticle[] = [
+  {
+    id: 1,
+    category: "ĐẤU TRƯỜNG CHÂN LÝ",
+    categorySlug: "tft",
+    title: "Chính thức khởi tranh Vòng loại Cúp Thế Giới ĐTCL Mùa 18: 32 cờ thủ tranh tài",
+    summary: "Khu vực APAC và Việt Nam sẵn sàng bước vào vòng chung kết nảy lửa với tổng giải thưởng kỷ lục cùng 4 tấm vé trực tiếp tới giải Vô Địch Thế Giới.",
+    content: "Sau nhiều tuần thi đấu căng thẳng ở vòng bảng, 32 cờ thủ xuất sắc nhất đã chính thức ghi tên mình vào Vòng Chung Kết Đấu Trường Chân Lý Mùa 18. Giải đấu sẽ diễn ra theo thể thức tính điểm Checkpoint 18 điểm đầy kịch tính. Các kỳ thủ sẽ phải thể hiện sự am hiểu sâu sắc về meta, khả năng xoay bài linh hoạt và bản lĩnh thép để giành chức vô địch cùng tấm vé đại diện khu vực tham dự CKTG.",
+    date: "01/11/2026",
+    author: "Nexus Newsroom",
+    image: "/games/teamfight-tactics.png",
+  },
+  {
+    id: 2,
+    category: "LIÊN MINH HUYỀN THOẠI",
+    categorySlug: "lol",
+    title: "Thị trường chuyển nhượng VCS & LCK nóng bỏng trước thềm mùa giải mới 2027",
+    summary: "Hàng loạt bản hợp đồng bom tấn được kích hoạt khi các chiến đội tái cơ cấu đội hình nhằm chinh phục chiếc cúp danh giá.",
+    content: "Kỳ chuyển nhượng trước thềm mùa giải 2027 đang chứng kiến những biến động lớn chưa từng có. Nhiều tuyển thủ ngôi sao đã quyết định tìm kiếm thử thách mới tại các đội tuyển cạnh tranh chức vô địch. Ban tổ chức cũng thông báo sẽ áp dụng thể thức Fearless Draft mới, hứa hẹn mang đến những trận đối đầu chiến thuật đỉnh cao và đa dạng tướng hơn bao giờ hết.",
+    date: "31/10/2026",
+    author: "Esports Insider",
+    image: "/games/league-of-legends.png",
+  },
+  {
+    id: 3,
+    category: "VALORANT",
+    categorySlug: "valorant",
+    title: "Lộ trình VALORANT Champions Tour 2027: Cập nhật thể thức Masters & Champions",
+    summary: "Riot Games công bố thể thức thi đấu mới với hệ thống điểm Championship Points cải tiến và các giải Masters quốc tế.",
+    content: "Mùa giải VCT 2027 sẽ mang đến sự đột phá về cơ chế tranh vé với hệ thống điểm Championship Points hoàn toàn mới. Các đội tuyển thuộc 4 giải đấu quốc tế sẽ phải nỗ lực xuyên suốt cả năm để tích lũy điểm số, tránh việc bị loại sớm. Hai giải đấu Masters quốc tế sẽ là thước đo phong độ trước khi bước vào đấu trường đỉnh cao VALORANT Champions.",
+    date: "30/10/2026",
+    author: "Tactical Reporter",
+    image: "/games/valorant.png",
+  },
+  {
+    id: 4,
+    category: "LIÊN QUÂN MOBILE",
+    categorySlug: "aov",
+    title: "Đấu Trường Danh Vọng Mùa Xuân 2027 công bố lịch thi đấu chính thức",
+    summary: "8 đội tuyển hàng đầu Việt Nam sẽ chính thức tranh tài với thể thức vòng bảng Bo5 và Playoffs Bo7 nghẹt thở.",
+    content: "ĐTDV Mùa Xuân 2027 hứa hẹn sẽ là mùa giải hấp dẫn nhất lịch sử với sự trở lại của các huyền thoại cùng làn sóng tài năng trẻ triển vọng. Tất cả các trận đấu sẽ được trực tiếp với công nghệ hình ảnh 4K HDR và sự tham gia bình luận của dàn Caster được yêu thích nhất. Đội vô địch sẽ đại diện Việt Nam tham dự giải đấu quốc tế APL danh giá.",
+    date: "29/10/2026",
+    author: "Garena Arena",
+    image: "/games/arena-of-valor.png",
+  },
+];
+
+type GameMeta = {
+  title: string;
+  subtitle: string;
+  tagline: string;
+  coverImage: string;
+  badge: string;
+  publisherName: string;
+};
+
+const GAME_METAS: Record<string, GameMeta> = {
+  "teamfight-tactics": {
+    title: "ĐẤU TRƯỜNG CHÂN LÝ",
+    subtitle: "TEAMFIGHT TACTICS",
+    tagline: "Chiến đấu để vươn lên dẫn đầu trong khu rừng tràn ngập ma thuật hoang dã trong ĐTCL Mùa 18. Dự đoán kết quả và chinh phục bảng xếp hạng.",
+    coverImage: "/games/teamfight-tactics.png",
+    badge: "TFT",
+    publisherName: "Riot Games",
+  },
+  "league-of-legends": {
+    title: "LIÊN MINH HUYỀN THOẠI",
+    subtitle: "LEAGUE OF LEGENDS",
+    tagline: "Những cuộc đối đầu nảy lửa trong đấu trường 5v5 đỉnh cao. Tham gia các giải đấu chuyên nghiệp và ghi dấu ấn lịch sử.",
+    coverImage: "/games/league-of-legends.png",
+    badge: "LoL",
+    publisherName: "Riot Games",
+  },
+  "valorant": {
+    title: "VALORANT",
+    subtitle: "BẮN SÚNG CHIẾN THUẬT 5V5",
+    tagline: "Lấn át đối thủ trong trò chơi bắn súng chiến thuật 5v5 này. Viết lại luật chơi trên chiến trường cùng các Đặc Vụ Đối Đầu.",
+    coverImage: "/games/valorant.png",
+    badge: "VAL",
+    publisherName: "Riot Games",
+  },
+  "arena-of-valor": {
+    title: "LIÊN QUÂN MOBILE",
+    subtitle: "ARENA OF VALOR",
+    tagline: "Thao tác tay đỉnh cao, so tài 5v5 đỉnh cao di động. Khám phá các giải đấu thể thao điện tử quy mô hàng đầu khu vực.",
+    coverImage: "/games/arena-of-valor.png",
+    badge: "AOV",
+    publisherName: "Garena",
+  },
+  "lien-quan-mobile": {
+    title: "LIÊN QUÂN MOBILE",
+    subtitle: "ARENA OF VALOR",
+    tagline: "Thao tác tay đỉnh cao, so tài 5v5 đỉnh cao di động. Khám phá các giải đấu thể thao điện tử quy mô hàng đầu khu vực.",
+    coverImage: "/games/arena-of-valor.png",
+    badge: "AOV",
+    publisherName: "Garena",
+  },
+  "lien-quan": {
+    title: "LIÊN QUÂN MOBILE",
+    subtitle: "ARENA OF VALOR",
+    tagline: "Thao tác tay đỉnh cao, so tài 5v5 đỉnh cao di động. Khám phá các giải đấu thể thao điện tử quy mô hàng đầu khu vực.",
+    coverImage: "/games/arena-of-valor.png",
+    badge: "AOV",
+    publisherName: "Garena",
+  },
+  "free-fire": {
+    title: "FREE FIRE MAX",
+    subtitle: "BATTLE ROYALE ĐỈNH CAO",
+    tagline: "Đấu trường sinh tồn tốc độ cao. Sẵn sàng so tài và giành vị trí Top 1 danh giá cùng các chiến đội hàng đầu thế giới.",
+    coverImage: "/games/free-fire.png",
+    badge: "FF",
+    publisherName: "Garena",
+  },
+};
+
+function getGameMeta(game: Game, publisherList: Publisher[]): GameMeta {
+  if (GAME_METAS[game.slug]) return GAME_METAS[game.slug];
+  // check by name
+  for (const [key, meta] of Object.entries(GAME_METAS)) {
+    if (game.slug.includes(key) || game.name.toLowerCase().includes(meta.title.toLowerCase()) || game.name.toLowerCase().includes(meta.subtitle.toLowerCase())) {
+      return meta;
+    }
+  }
+  const pub = publisherList.find((p) => p.publisher_id === game.publisher_id);
+  return {
+    title: game.name.toUpperCase(),
+    subtitle: game.name,
+    tagline: `Khám phá đấu trường giải đấu chuyên nghiệp và bảng xếp hạng chính thức cho ${game.name}.`,
+    coverImage: "/games/teamfight-tactics.png",
+    badge: getGameBadge(game.name),
+    publisherName: pub?.name ?? "Esports",
+  };
+}
+
 export default function App() {
+  const [lang, setLang] = useState<LangCode>(() => {
+    const saved = localStorage.getItem("app_lang");
+    if (saved && (saved === "vi" || saved === "en" || saved === "ko" || saved === "ja" || saved === "zh")) {
+      return saved as LangCode;
+    }
+    return "vi";
+  });
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const t = TRANSLATIONS[lang] || TRANSLATIONS.vi;
+  const currentLang = LANGUAGES.find((l) => l.code === lang) || LANGUAGES[0];
+  const newsArticles = getLocalizedNews(lang);
+
+
+  const handleSelectLang = (code: LangCode) => {
+    setLang(code);
+    localStorage.setItem("app_lang", code);
+    setLangDropdownOpen(false);
+  };
+
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => {
+    return typeof window !== "undefined" && window.location.hash === "#login";
+  });
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [activeNav, setActiveNav] = useState<"home" | "play" | "team" | "areas" | "news">("home");
+  const [selectedNewsArticle, setSelectedNewsArticle] = useState<NewsArticle | null>(null);
+  const [showGamesBar, setShowGamesBar] = useState(false);
+  const [selectedPublisherId, setSelectedPublisherId] = useState<number | null>(null);
+  const [publisherMenuOpen, setPublisherMenuOpen] = useState(false);
+  const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
+  const [hoveredGameSlug, setHoveredGameSlug] = useState<string>("teamfight-tactics");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
-  const [games, setGames] = useState<Game[]>([]);
-  const [publishers, setPublishers] = useState<Publisher[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
+  const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
+  const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
+  const [areas, setAreas] = useState<Area[]>(DEFAULT_AREAS);
+  const [circuitTabGameSlug, setCircuitTabGameSlug] = useState<string>("all");
+  const activeSelectedGame = games.find((g) => g.game_id === selectedGameId);
+  const currentCircuitAreas = activeSelectedGame
+    ? areas.filter((a) => a.gameSlug === activeSelectedGame.slug || a.code === "GLOBAL")
+    : circuitTabGameSlug === "all"
+    ? areas
+    : areas.filter((a) => a.gameSlug === circuitTabGameSlug || a.code === "GLOBAL");
+
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const [teamCapabilities, setTeamCapabilities] = useState<TeamCapabilities | null>(null);
@@ -133,6 +487,7 @@ export default function App() {
   const [tournamentPage, setTournamentPage] = useState(0);
   const [tournamentGameFilter, setTournamentGameFilter] = useState("");
   const [tournamentStatusFilter, setTournamentStatusFilter] = useState("");
+  const [tournamentAreaFilter, setTournamentAreaFilter] = useState("");
   const [globalCapabilities, setGlobalCapabilities] = useState<GlobalCapabilities | null>(null);
   const [globalCapabilityError, setGlobalCapabilityError] = useState("");
   const [memberLoading, setMemberLoading] = useState(false);
@@ -238,14 +593,66 @@ export default function App() {
     setError(customMessage || "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
   };
 
+  const handleSelectPublisher = (pubId: number | null) => {
+    setSelectedPublisherId(pubId);
+    if (selectedGameId !== null && pubId !== null) {
+      const currentGame = games.find((g) => g.game_id === selectedGameId);
+      if (currentGame && !gameMatchesPublisher(currentGame, pubId, publishers)) {
+        setSelectedGameId(null);
+        setTournamentGameFilter("");
+        setTournamentPage(0);
+      }
+    }
+    const matching = games.filter(
+      (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug) && gameMatchesPublisher(g, pubId, publishers)
+    );
+    if (matching.length > 0 && !matching.some((g) => g.slug === hoveredGameSlug)) {
+      setHoveredGameSlug(matching[0].slug);
+    }
+  };
+
+  const displayedGames = games.filter(
+    (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug) && gameMatchesPublisher(g, selectedPublisherId, publishers)
+  );
+  const activePreviewGame = displayedGames.find((g) => g.slug === hoveredGameSlug) ?? displayedGames[0];
+  const activePreviewMeta = activePreviewGame
+    ? getGameMeta(activePreviewGame, publishers)
+    : {
+        title: "NEXUS ARENA",
+        subtitle: "ĐẤU TRƯỜNG ESPORTS",
+        tagline: "Chọn tựa game để khám phá các giải đấu và bảng đấu tương ứng.",
+        coverImage: "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg",
+        badge: "NEXUS",
+        publisherName: "ESPORTS",
+      };
+
   const loadTeams = async () => {
     try {
       const [loadedGames, loadedTeams] = await Promise.all([
         request<Game[]>("/catalog/games"),
         request<Team[]>("/teams"),
       ]);
-      setGames(loadedGames);
-      setTeams(loadedTeams);
+      let activeGames = [...DEFAULT_GAMES];
+      if (loadedGames && loadedGames.length > 0) {
+        const filteredGames = loadedGames.filter(
+          (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
+        );
+        const mergedGames = [...filteredGames];
+        for (const def of DEFAULT_GAMES) {
+          if (!mergedGames.some((g) => g.slug === def.slug || g.name.toLowerCase() === def.name.toLowerCase())) {
+            mergedGames.push(def);
+          }
+        }
+        activeGames = mergedGames;
+        setGames(mergedGames);
+      }
+      const validTeams = (loadedTeams || []).filter((t) => {
+        if (isRemovedGame(t.name) || isRemovedGame(t.tag)) return false;
+        const g = activeGames.find((item) => item.game_id === t.game_id);
+        if (g && (isRemovedGame(g.name) || isRemovedGame(g.slug))) return false;
+        return true;
+      });
+      setTeams(validTeams);
     } catch (reason) {
       setError((reason as Error).message);
     }
@@ -257,22 +664,57 @@ export default function App() {
       request<Game[]>("/catalog/games"),
       request<Area[]>("/catalog/areas"),
     ]);
-    setPublishers(loadedPublishers);
-    setGames(loadedGames);
-    setAreas(loadedAreas);
+    const filteredPublishers = (loadedPublishers || []).filter(
+      (p) => !isRemovedGame(p.name)
+    );
+    const mergedPublishers = [...filteredPublishers];
+    for (const def of DEFAULT_PUBLISHERS) {
+      if (!mergedPublishers.some((p) => p.name.toLowerCase().includes(def.name.toLowerCase()))) {
+        mergedPublishers.push(def);
+      }
+    }
+    setPublishers(mergedPublishers);
+
+    const filteredGames = (loadedGames || []).filter(
+      (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
+    );
+    const mergedGames = [...filteredGames];
+    for (const def of DEFAULT_GAMES) {
+      if (!mergedGames.some((g) => g.slug === def.slug || g.name.toLowerCase() === def.name.toLowerCase())) {
+        mergedGames.push(def);
+      }
+    }
+    setGames(mergedGames);
+    const mergedAreas = [...DEFAULT_AREAS];
+    if (loadedAreas && loadedAreas.length > 0) {
+      for (const la of loadedAreas) {
+        if (!mergedAreas.some((a) => a.code === la.code)) {
+          mergedAreas.push(la);
+        }
+      }
+    }
+    setAreas(mergedAreas);
   };
 
-  const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter) => {
+  const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter, areaId = tournamentAreaFilter) => {
     setTournamentLoading(true);
     setTournamentError("");
     try {
       const params = new URLSearchParams({ offset: String(page * 6), limit: "6" });
       if (gameId) params.set("game_id", gameId);
       if (status) params.set("status", status);
+      if (areaId) params.set("area_id", areaId);
       const response = await fetch(`${API}/tournaments?${params}`);
       if (!response.ok) throw new RequestError("Không thể tải danh sách giải đấu", response.status);
-      setTournaments(await response.json() as Tournament[]);
-      setTournamentTotal(Number(response.headers.get("X-Total-Count") ?? 0));
+      const allTournaments = (await response.json()) as Tournament[];
+      const validTournaments = allTournaments.filter((t) => {
+        if (isRemovedGame(t.name)) return false;
+        const g = games.find((item) => item.game_id === t.game_id);
+        if (g && (isRemovedGame(g.name) || isRemovedGame(g.slug))) return false;
+        return true;
+      });
+      setTournaments(validTournaments);
+      setTournamentTotal(validTournaments.length);
     } catch (reason) {
       setTournamentError((reason as Error).message);
     } finally {
@@ -290,7 +732,7 @@ export default function App() {
 
   useEffect(() => {
     void loadTournaments();
-  }, [tournamentPage, tournamentGameFilter, tournamentStatusFilter]);
+  }, [tournamentPage, tournamentGameFilter, tournamentStatusFilter, tournamentAreaFilter]);
 
   useEffect(() => {
     if (!token) return;
@@ -316,6 +758,35 @@ export default function App() {
       controller.abort();
     };
   }, [token, authCheckAttempt]);
+
+  useEffect(() => {
+    const handleHash = () => {
+      if (window.location.hash === "#login") {
+        setIsAuthModalOpen(true);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsAuthModalOpen(false);
+        setUserMenuOpen(false);
+        setShowGamesBar(false);
+        setPublisherMenuOpen(false);
+      }
+    };
+    window.addEventListener("hashchange", handleHash);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("hashchange", handleHash);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const closeAuthModal = () => {
+    setIsAuthModalOpen(false);
+    if (window.location.hash === "#login") {
+      history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  };
 
   const loadGlobalCapabilities = async () => {
     if (!token) {
@@ -366,6 +837,7 @@ export default function App() {
         setToken(result.access_token);
         setUser(result.user);
         setNotice("Đăng nhập thành công.");
+        closeAuthModal();
       }
     } catch (reason) {
       setError((reason as Error).message);
@@ -379,6 +851,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUser(null);
+    setUserMenuOpen(false);
     setTeamCapabilities(null);
     setTeamCapabilityError("");
     setGlobalCapabilities(null);
@@ -401,6 +874,7 @@ export default function App() {
     setLockNotice("");
     setApprovedRosterStatuses({});
     setNotice("Bạn đã đăng xuất.");
+    setIsAuthModalOpen(true);
   };
 
   const createTeam = async (event: FormEvent<HTMLFormElement>) => {
@@ -2015,107 +2489,967 @@ export default function App() {
     }
   };
 
-  return <main className="shell">
-    <header className="hero">
-      <div>
-        <div className="brand-lockup"><span className="brand-mark">N</span><span>NEXUS<span>ARENA</span></span></div>
-        <span className="eyebrow">W44 · COMPETITIVE GAMING PLATFORM</span>
-        <h1>Build your legacy.<br /><em>Own the arena.</em></h1>
-        <p>Quản lý đội tuyển, khám phá giải đấu và đưa đội của bạn lên bảng xếp hạng.</p>
-      </div>
-      {user && <div className="account"><span>Xin chào, <strong>{user.username}</strong></span><button className="button secondary" onClick={logout}>Đăng xuất</button></div>}
-    </header>
+  return (
+    <>
+      {/* Horizontal Top Navigation Bar */}
+      <header className="ewc-navbar" aria-label="Thanh điều hướng chính">
+        <div className="ewc-nav-left">
+          <a className="ewc-logo-wrap navbar-brand-logo" href="#top" title="Nexus Arena">
+            <span className="brand-mark">N</span>
+            <span className="brand-text">
+              <strong>NEXUS</strong>
+              <span>ARENA</span>
+            </span>
+          </a>
+        </div>
 
-    {(error || notice) && <div className={error ? "message error" : "message success"}>
-      <p>{error || notice}</p>
-      {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
-        setError("");
-        setAuthCheckAttempt((attempt) => attempt + 1);
-      }}>Thử lại</button>}
-    </div>}
-
-    <section className="auth-layout">
-      <section className="panel auth-panel">
-        <div className="panel-title"><h2>{user ? "Tài khoản đã xác thực" : authMode === "login" ? "Đăng nhập" : "Đăng ký"}</h2><span>AUTH API</span></div>
-        {user ? <div className="profile">
-          <p><strong>{user.username}</strong></p>
-          <p>{user.email ?? "Email đã được xác thực"} · Vai trò: {user.role}</p>
-          <p className="muted">JWT đang được lưu trong trình duyệt và dùng cho các request cần xác thực.</p>
-        </div> : <form onSubmit={submitAuth}>
-          {authMode === "register" && <>
-            <label>Họ và tên<input name="real_name" maxLength={100} /></label>
-            <label>Email<input name="email" type="email" required /></label>
-          </>}
-          <label>Tên đăng nhập<input name="username" minLength={3} maxLength={50} required /></label>
-          <label>Mật khẩu<input name="password" type="password" minLength={8} maxLength={128} required /></label>
-          <button className="button" disabled={loading}>{loading ? "Đang xử lý..." : authMode === "login" ? "Đăng nhập" : "Tạo tài khoản"}</button>
-          <button type="button" className="link-button" onClick={() => { setError(""); setNotice(""); setAuthMode(authMode === "login" ? "register" : "login"); }}>
-            {authMode === "login" ? "Chưa có tài khoản? Đăng ký" : "Đã có tài khoản? Đăng nhập"}
+        <nav className="ewc-nav-center">
+          <button
+            type="button"
+            className={`ewc-item ${activeNav === "home" ? "active" : ""}`}
+            onClick={() => {
+              setActiveNav("home");
+              setShowGamesBar(false);
+              setSelectedGameId(null);
+              setTournamentGameFilter("");
+              setTournamentPage(0);
+              const el = document.getElementById("top");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            title="Trang chủ"
+          >
+            <span className="ewc-icon"><img src="/ewc/icon-home.png" alt="Home" /></span>
+            <strong>{t.navHome}</strong>
           </button>
-        </form>}
-      </section>
-      <aside className="panel checklist">
-        <span className="eyebrow">PHẠM VI W42-06</span>
-        <h2>Luồng quản lý đội</h2>
-        <ul>
-          <li>Tải game qua <code>GET /catalog/games</code></li>
-          <li>Tải đội qua <code>GET /teams</code></li>
-          <li>Tạo đội qua <code>POST /teams</code></li>
-          <li>Người tạo tự động là MANAGER</li>
-        </ul>
-      </aside>
-    </section>
-    <section className="tournament-zone">
+
+          <button
+            type="button"
+            className={`ewc-item ${activeNav === "play" || showGamesBar ? "active" : ""}`}
+            onClick={() => {
+              setActiveNav("play");
+              setShowGamesBar((prev) => !prev);
+            }}
+            title="Play / Giải đấu"
+          >
+            <span className="ewc-icon"><img src="/ewc/icon-play.png" alt="Play" /></span>
+            <strong>{t.navPlay}</strong>
+            <span className="nav-chevron">{showGamesBar || activeNav === "play" ? "▴" : "▾"}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`ewc-item ${activeNav === "team" ? "active" : ""}`}
+            onClick={() => {
+              setActiveNav("team");
+              setShowGamesBar(false);
+              const el = document.getElementById("teams");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            title="Team / Đội tuyển"
+          >
+            <span className="ewc-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+              </svg>
+            </span>
+            <strong>{t.navTeam}</strong>
+          </button>
+
+          <button
+            type="button"
+            className={`ewc-item ${activeNav === "areas" ? "active" : ""}`}
+            onClick={() => {
+              setActiveNav("areas");
+              setShowGamesBar(false);
+              const el = document.getElementById("areas");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            title="Areas / Khu vực"
+          >
+            <span className="ewc-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
+            </span>
+            <strong>{t.navAreas}</strong>
+          </button>
+
+          <button
+            type="button"
+            className={`ewc-item ${activeNav === "news" ? "active" : ""}`}
+            onClick={() => {
+              setActiveNav("news");
+              setShowGamesBar(false);
+              const el = document.getElementById("news");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            title="News / Tin tức"
+          >
+            <span className="ewc-icon">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2" />
+                <path d="M18 14h-8" />
+                <path d="M15 18h-5" />
+                <path d="M10 6h8v4h-8V6Z" />
+              </svg>
+            </span>
+            <strong>{t.navNews}</strong>
+          </button>
+        </nav>
+
+        <div className="ewc-nav-right">
+          <div className="ewc-lang-dropdown-wrapper">
+            <button
+              className="ewc-lang-block"
+              type="button"
+              title="Chọn ngôn ngữ / Select Language"
+              onClick={() => setLangDropdownOpen((prev) => !prev)}
+            >
+              <span className="ewc-lang-flag">{currentLang.flag}</span>
+              <strong>{currentLang.label}</strong>
+              <span className="ewc-lang-caret">▾</span>
+            </button>
+            {langDropdownOpen && (
+              <div className="ewc-lang-menu">
+                {LANGUAGES.map((item) => (
+                  <button
+                    key={item.code}
+                    type="button"
+                    className={`ewc-lang-item ${lang === item.code ? "is-active" : ""}`}
+                    onClick={() => handleSelectLang(item.code)}
+                  >
+                    <span className="ewc-lang-flag">{item.flag}</span>
+                    <span className="ewc-lang-label">{item.label}</span>
+                    {lang === item.code && <span className="ewc-lang-check">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {user ? (
+            <div
+              className="ewc-user-block is-authenticated"
+              title={`Tài khoản: ${user.username}`}
+              onClick={() => setUserMenuOpen((prev) => !prev)}
+              tabIndex={0}
+              role="button"
+              aria-label="Tài khoản người dùng"
+            >
+              <span className="ewc-avatar-wrap">
+                <img src="/ewc/avatar.png" alt={user.username} className="ewc-avatar-img" />
+              </span>
+              <strong className="ewc-username">{user.username}</strong>
+
+              {userMenuOpen && (
+                <div className="ewc-user-dropdown" onClick={(e) => e.stopPropagation()}>
+                  <div className="dropdown-user-info">
+                    <strong>{user.username}</strong>
+                    <span className="dropdown-role">{user.role}</span>
+                    {user.email && <span className="dropdown-email">{user.email}</span>}
+                  </div>
+                  <hr className="dropdown-divider" />
+                  <button
+                    type="button"
+                    className="dropdown-logout-btn"
+                    onClick={() => {
+                      setUserMenuOpen(false);
+                      logout();
+                    }}
+                  >
+                    {t.navLogout}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              className="ewc-user-block sidebar-login"
+              data-testid="sidebar-login"
+              type="button"
+              title="Đăng nhập"
+              onClick={() => {
+                setError("");
+                setNotice("");
+                setAuthMode("login");
+                setIsAuthModalOpen(true);
+              }}
+            >
+              <span className="ewc-avatar-wrap">
+                <img src="/ewc/avatar.png" alt="Đăng nhập" className="ewc-avatar-img" />
+              </span>
+              <strong>{t.navLogin}</strong>
+            </button>
+          )}
+        </div>
+      </header>
+
+      {/* Backdrop for Play Mega Menu */}
+      {showGamesBar && (
+        <div
+          className="mega-menu-backdrop"
+          onClick={() => {
+            setShowGamesBar(false);
+            setPublisherMenuOpen(false);
+          }}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Play Mega Menu (As shown in the video) */}
+      {showGamesBar && (
+        <aside className="play-mega-menu" aria-label="Mega menu tựa game và nhà phát hành">
+          {/* Top Bar: Publisher Switcher & Close button */}
+          <div className="mega-menu-top">
+            <div className="mega-publisher-select-box">
+              <span className="mega-pub-label">{t.megaPublisher}</span>
+              <div className="mega-pub-dropdown-wrapper">
+                <button
+                  type="button"
+                  className={`mega-pub-btn-trigger ${publisherMenuOpen ? "active" : ""}`}
+                  onClick={() => setPublisherMenuOpen((prev) => !prev)}
+                  aria-haspopup="listbox"
+                  aria-expanded={publisherMenuOpen}
+                  aria-label="Chọn nhà phát hành"
+                >
+                  <span className="mega-pub-current-icon">
+                    {selectedPublisherId === null ? (
+                      <span className="mega-pub-globe">🌐</span>
+                    ) : getPublisherLogo(selectedPublisherId) ? (
+                      <img
+                        src={getPublisherLogo(selectedPublisherId)!}
+                        alt="Logo"
+                        className="mega-pub-logo-img"
+                      />
+                    ) : (
+                      "🎮"
+                    )}
+                  </span>
+                  <span className="mega-pub-current-name">
+                    {selectedPublisherId === null
+                      ? t.megaAllPublishers
+                      : publishers.find((p) => p.publisher_id === selectedPublisherId)?.name ?? "Chọn NPH"}
+                  </span>
+                  <span className="mega-pub-caret">{publisherMenuOpen ? "▲" : "▼"}</span>
+                </button>
+
+                {publisherMenuOpen && (
+                  <div className="mega-pub-dropdown-popover" role="listbox">
+                    <button
+                      type="button"
+                      className={`mega-pub-option ${selectedPublisherId === null ? "selected" : ""}`}
+                      onClick={() => {
+                        handleSelectPublisher(null);
+                        setPublisherMenuOpen(false);
+                      }}
+                      role="option"
+                      aria-selected={selectedPublisherId === null}
+                    >
+                      <span className="option-icon">🌐</span>
+                      <div className="option-body">
+                        <strong>Tất cả Nhà phát hành</strong>
+                        <small>{t.megaAllGamesCount} ({games.length})</small>
+                      </div>
+                      {selectedPublisherId === null && <span className="option-check">✓</span>}
+                    </button>
+
+                    {publishers.map((pub) => {
+                      const isSelected = selectedPublisherId === pub.publisher_id;
+                      const count = games.filter((g) => gameMatchesPublisher(g, pub.publisher_id, publishers)).length;
+                      const logo = getPublisherLogo(pub.name);
+                      return (
+                        <button
+                          key={pub.publisher_id}
+                          type="button"
+                          className={`mega-pub-option ${isSelected ? "selected" : ""}`}
+                          onClick={() => {
+                            handleSelectPublisher(pub.publisher_id);
+                            setPublisherMenuOpen(false);
+                          }}
+                          role="option"
+                          aria-selected={isSelected}
+                        >
+                          <span className="option-icon">
+                            {logo ? (
+                              <img src={logo} alt={pub.name} className="mega-pub-popover-logo" />
+                            ) : (
+                              "🎮"
+                            )}
+                          </span>
+                          <div className="option-body">
+                            <strong>{pub.name}</strong>
+                            <small>{count} {t.megaGamesSuffix}</small>
+                          </div>
+                          {isSelected && <span className="option-check">✓</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="mega-menu-close"
+              onClick={() => {
+            setShowGamesBar(false);
+            setPublisherMenuOpen(false);
+          }}
+              aria-label="Đóng menu"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Body: Multi-column navigation + Right showcase card */}
+          <div className="mega-menu-body">
+            {/* Column 1: TRÒ CHƠI */}
+            <div className="mega-col mega-col-games">
+              <span className="mega-col-title">{t.megaGames}</span>
+              <div className="mega-items-list">
+                {displayedGames.map((game) => {
+                  const isHovered = activePreviewGame?.slug === game.slug;
+                  const isSelected = selectedGameId === game.game_id;
+                  return (
+                    <button
+                      key={game.game_id}
+                      type="button"
+                      className={`mega-game-item ${isHovered ? "is-hovered" : ""} ${isSelected ? "is-selected" : ""}`}
+                      onMouseEnter={() => setHoveredGameSlug(game.slug)}
+                      onClick={() => {
+                        if (game.publisher_id) {
+                          handleSelectPublisher(game.publisher_id);
+                        }
+                        setSelectedGameId(game.game_id);
+                        setTournamentGameFilter(String(game.game_id));
+                        setTournamentPage(0);
+                        setShowGamesBar(false);
+                        const el = document.getElementById("tournaments");
+                        if (el) el.scrollIntoView({ behavior: "smooth" });
+                      }}
+                    >
+                      <span className="mega-game-item-left">
+                        {(getGameLogo(game.slug) || getGameLogo(game.name)) ? (
+                          <span className="mega-game-logo-wrap">
+                            <img
+                              src={(getGameLogo(game.slug) || getGameLogo(game.name))!}
+                              alt={game.name}
+                              className="mega-game-logo"
+                            />
+                          </span>
+                        ) : (
+                          <span className="mega-item-badge">{getGameBadge(game.name)}</span>
+                        )}
+                        <span className="mega-item-name">{game.name}</span>
+                      </span>
+                      <span className="mega-item-arrow">→</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Column 2: ESPORTS & GIẢI ĐẤU */}
+            <div className="mega-col mega-col-esports">
+              <span className="mega-col-title">{t.megaEsports}</span>
+              <div className="mega-items-list">
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setSelectedGameId(null);
+                    setTournamentGameFilter("");
+                    setTournamentPage(0);
+                    setShowGamesBar(false);
+                    const el = document.getElementById("tournaments");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaAllTournaments}</span>
+                  <span className="mega-tag-mini">LIVE</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setTournamentStatusFilter("ONGOING");
+                    setShowGamesBar(false);
+                    const el = document.getElementById("tournaments");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaOngoing}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setTournamentStatusFilter("UPCOMING");
+                    setShowGamesBar(false);
+                    const el = document.getElementById("tournaments");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaUpcoming}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setTournamentStatusFilter("COMPLETED");
+                    setShowGamesBar(false);
+                    const el = document.getElementById("tournaments");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaCompleted}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Column 3: HỆ THỐNG / VẬN HÀNH */}
+            <div className="mega-col mega-col-system">
+              <span className="mega-col-title">{t.megaSystem}</span>
+              <div className="mega-items-list">
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setShowGamesBar(false);
+                    setActiveNav("team");
+                    const el = document.getElementById("teams");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaManageTeams}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setShowGamesBar(false);
+                    setActiveNav("areas");
+                    const el = document.getElementById("areas");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaAreas}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setShowGamesBar(false);
+                    setActiveNav("news");
+                    const el = document.getElementById("news");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaNews}</span>
+                  <span className="mega-tag-mini" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80", borderColor: "rgba(34, 197, 94, 0.4)" }}>MỚI</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setShowGamesBar(false);
+                    const el = document.getElementById("catalog");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <span>{t.megaCatalog}</span>
+                </button>
+                <button
+                  type="button"
+                  className="mega-link-item"
+                  onClick={() => {
+                    setShowGamesBar(false);
+                    setNotice("Hệ thống giải đấu Nexus Arena phiên bản 2.0.");
+                  }}
+                >
+                  <span>{t.megaRules}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Column 4: Dynamic Showcase Card (Video Reference) */}
+            <div className="mega-col-preview">
+              <div
+                className="mega-preview-card"
+                onClick={() => {
+                  if (activePreviewGame) {
+                    if (activePreviewGame.publisher_id) {
+                      handleSelectPublisher(activePreviewGame.publisher_id);
+                    }
+                    setSelectedGameId(activePreviewGame.game_id);
+                    setTournamentGameFilter(String(activePreviewGame.game_id));
+                    setTournamentPage(0);
+                  }
+                  setShowGamesBar(false);
+                  const el = document.getElementById("tournaments");
+                  if (el) el.scrollIntoView({ behavior: "smooth" });
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`${t.megaExploreNow} ${getLocalizedGameName(activePreviewMeta.title, lang)}`}
+              >
+                <img
+                  src={activePreviewMeta.coverImage}
+                  alt={activePreviewMeta.title}
+                  className="mega-preview-img"
+                />
+                <div className="mega-preview-card-overlay">
+                  <div className="mega-preview-top">
+                    <span className="mega-preview-pub">
+                      {getPublisherLogo(activePreviewMeta.publisherName) && (
+                        <img
+                          src={getPublisherLogo(activePreviewMeta.publisherName)!}
+                          alt={activePreviewMeta.publisherName}
+                          className="preview-pub-logo"
+                        />
+                      )}
+                      {activePreviewMeta.publisherName}
+                    </span>
+                    <span className="mega-preview-badge">{activePreviewMeta.badge}</span>
+                  </div>
+                  <div className="mega-preview-bottom">
+                    <button
+                      type="button"
+                      className="button hero-cta mega-preview-cta"
+                    >
+                      {t.megaExploreNow} <span>↗</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      )}
+
+      <main className="shell">
+        <header className="hero" id="top">
+          <div className="hero-content">
+            <span className="eyebrow">{t.heroEyebrow}</span>
+            <h1>{t.heroTitle1}<br /><em>{t.heroTitle2}</em></h1>
+            <p>{t.heroDesc}</p>
+            <div className="hero-actions">
+              <a className="button hero-cta" href="#tournaments">
+                {t.heroCta} <span>↗</span>
+              </a>
+              <span className="hero-date">{t.heroDate}</span>
+            </div>
+          </div>
+        </header>
+
+        {(error || notice) && !isAuthModalOpen && <div className={`${error ? "message error" : "message success"}${error?.startsWith("Không thể tải catalog") ? " catalog-error" : ""}`}>
+          <p>{error || notice}</p>
+          {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
+            setError("");
+            setAuthCheckAttempt((attempt) => attempt + 1);
+          }}>Thử lại</button>}
+        </div>}
+
+        {user && (
+          <section className="auth-layout user-profile-layout">
+            <section className="panel auth-panel">
+              <div className="auth-kicker"><span className="auth-status-dot" /> NEXUS IDENTITY <span>SECURE ACCESS</span></div>
+              <div className="panel-title"><div><span className="auth-overline">PLAYER PROFILE</span><h2>{t.profileTitle}</h2></div><span>AUTH API</span></div>
+              <div className="profile">
+                <p><strong>{user.username}</strong></p>
+                <p>{user.email ?? "{t.profileVerifiedEmail}"} · {t.profileRole}: {user.role}</p>
+                <p className="muted">{t.profileSessionNote}</p>
+                <div style={{ marginTop: "14px" }}>
+                  <button type="button" className="button secondary small" onClick={logout}>Đăng xuất</button>
+                </div>
+              </div>
+            </section>
+            <aside className="panel checklist">
+              <span className="eyebrow">HỆ THỐNG GIẢI ĐẤU</span>
+              <h2>{t.profileWorkflowTitle}</h2>
+              <ul>
+                <li>{t.profileWorkflowItem1}</li>
+                <li>{t.profileWorkflowItem2}</li>
+                <li>{t.profileWorkflowItem3}</li>
+                <li>{t.profileWorkflowItem4}</li>
+              </ul>
+            </aside>
+          </section>
+        )}
+    <section id="tournaments" className="tournament-zone">
       <div className="section-heading">
-        <div><span className="eyebrow">W44-05 · ARENA CONTROL</span><h2>Giải đấu đang diễn ra</h2><p>Khám phá lịch thi đấu, theo dõi trạng thái và vận hành giải từ một command center.</p></div>
-        <span className="section-count">{tournamentTotal} giải</span>
+        <div>
+          <span className="eyebrow">
+            {selectedGameId
+              ? `${t.tournamentsEyebrowGame} ${getLocalizedGameName(games.find((g) => g.game_id === selectedGameId)?.name ?? "", lang).toUpperCase()}`
+              : t.tournamentsEyebrowAll}
+          </span>
+          <h2>
+            {selectedGameId
+              ? `${t.tournamentsHeadingGame} ${getLocalizedGameName(games.find((g) => g.game_id === selectedGameId)?.name ?? "", lang)}`
+              : t.tournamentsHeadingOngoing}
+          </h2>
+          <p>
+            {selectedGameId
+              ? `${t.tournamentsSubGame} (${getLocalizedGameName(games.find((g) => g.game_id === selectedGameId)?.name ?? "", lang)})`
+              : t.tournamentsSubAll}
+          </p>
+        </div>
+        <span className="section-count">{tournamentTotal} {t.tournamentCountBadge}</span>
       </div>
+
+      {/* When in Play and no game is selected yet, show Game Picker Cards */}
+      {activeNav === "play" && selectedGameId === null && (
+        <div className="play-game-picker">
+          <div className="picker-header">
+            <div className="picker-header-text">
+              <span className="eyebrow">{t.pickerHeaderEyebrow}</span>
+              <h3>{t.pickerTitle}</h3>
+              <p>
+                {selectedPublisherId !== null
+                  ? `Đang hiển thị các tựa game của nhà phát hành: ${publishers.find((p) => p.publisher_id === selectedPublisherId)?.name}`
+                  : t.pickerSub}
+              </p>
+            </div>
+
+            {/* Publisher Filter in Picker */}
+            <div className="picker-publisher-filter">
+              <span className="picker-filter-label">{t.pickerPublisherLabel}</span>
+              <div className="picker-pub-select-wrapper">
+                {selectedPublisherId !== null && getPublisherLogo(selectedPublisherId) && (
+                  <img
+                    src={getPublisherLogo(selectedPublisherId)!}
+                    alt="Logo NPH"
+                    className="picker-select-current-logo"
+                  />
+                )}
+                <select
+                  className="picker-pub-select"
+                  aria-label="Lọc theo nhà phát hành"
+                  value={selectedPublisherId ?? ""}
+                  onChange={(e) => handleSelectPublisher(e.target.value ? Number(e.target.value) : null)}
+                >
+                  <option value="">{t.pickerAllPubOption} ({games.length} game)</option>
+                  {publishers.map((pub) => {
+                    const count = games.filter((g) => gameMatchesPublisher(g, pub.publisher_id, publishers)).length;
+                    return (
+                      <option key={pub.publisher_id} value={pub.publisher_id}>
+                        {pub.name} ({count} game)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="picker-grid">
+            {displayedGames.map((g) => {
+              const pub = publishers.find((p) => p.publisher_id === g.publisher_id);
+              return (
+                <button
+                  key={g.game_id}
+                  type="button"
+                  className="picker-card"
+                  onClick={() => {
+                    if (g.publisher_id) {
+                      handleSelectPublisher(g.publisher_id);
+                    }
+                    setSelectedGameId(g.game_id);
+                    setTournamentGameFilter(String(g.game_id));
+                    setTournamentPage(0);
+                    const el = document.getElementById("tournaments");
+                    if (el) el.scrollIntoView({ behavior: "smooth" });
+                  }}
+                >
+                  <div className="picker-badge">
+                    {(getGameLogo(g.slug) || getGameLogo(g.name)) ? (
+                      <span className="picker-game-logo-wrap">
+                        <img
+                          src={(getGameLogo(g.slug) || getGameLogo(g.name))!}
+                          alt={g.name}
+                          className="picker-game-logo"
+                        />
+                      </span>
+                    ) : (
+                      getGameBadge(g.name)
+                    )}
+                  </div>
+                  <div className="picker-info">
+                    <strong>
+                      {(getGameLogo(g.slug) || getGameLogo(g.name)) && (
+                        <img
+                          src={(getGameLogo(g.slug) || getGameLogo(g.name))!}
+                          alt=""
+                          className="picker-title-logo"
+                        />
+                      )}
+                      {g.name}
+                    </strong>
+                    <span className="picker-pub-tag">
+                      {getPublisherLogo(pub?.name) && (
+                        <img
+                          src={getPublisherLogo(pub?.name)!}
+                          alt={pub?.name}
+                          className="picker-pub-tag-logo"
+                        />
+                      )}
+                      NPH: {pub?.name ?? "Esports"}
+                    </span>
+                    <span className="picker-action-link">{t.pickerViewTournaments}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Selected Game Banner */}
+      {selectedGameId !== null && (
+        <div className="active-game-banner">
+          <div className="active-game-badge">
+            {(getGameLogo(games.find((g) => g.game_id === selectedGameId)?.slug) || getGameLogo(games.find((g) => g.game_id === selectedGameId)?.name)) ? (
+              <span className="active-game-logo-wrap">
+                <img
+                  src={(getGameLogo(games.find((g) => g.game_id === selectedGameId)?.slug) || getGameLogo(games.find((g) => g.game_id === selectedGameId)?.name))!}
+                  alt="Active game logo"
+                  className="active-game-banner-logo"
+                />
+              </span>
+            ) : (
+              getGameBadge(games.find((g) => g.game_id === selectedGameId)?.name ?? "")
+            )}
+          </div>
+          <div className="active-game-meta">
+            <span className="active-game-label">
+              {getPublisherLogo(games.find((g) => g.game_id === selectedGameId)?.publisher_id) && (
+                <img
+                  src={getPublisherLogo(games.find((g) => g.game_id === selectedGameId)?.publisher_id)!}
+                  alt="Publisher logo"
+                  className="active-game-pub-logo"
+                />
+              )}
+              {t.pickerActiveDiscipline} · {publishers.find((p) => p.publisher_id === games.find((g) => g.game_id === selectedGameId)?.publisher_id)?.name?.toUpperCase() ?? "PLAY ARENA"}
+            </span>
+            <h3>
+              {(getGameLogo(games.find((g) => g.game_id === selectedGameId)?.slug) || getGameLogo(games.find((g) => g.game_id === selectedGameId)?.name)) && (
+                <img
+                  src={(getGameLogo(games.find((g) => g.game_id === selectedGameId)?.slug) || getGameLogo(games.find((g) => g.game_id === selectedGameId)?.name))!}
+                  alt=""
+                  className="active-game-heading-logo"
+                />
+              )}
+              {getLocalizedGameName(games.find((g) => g.game_id === selectedGameId)?.name ?? "", lang)}
+            </h3>
+            <p>
+              {t.pickerShowingTournamentsFor} ({publishers.find((p) => p.publisher_id === games.find((g) => g.game_id === selectedGameId)?.publisher_id)?.name ?? "NPH"}).
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button secondary small active-game-reset"
+            onClick={() => {
+              setSelectedGameId(null);
+              setTournamentGameFilter("");
+              setCircuitTabGameSlug("all");
+              setTournamentAreaFilter("");
+              setTournamentPage(0);
+            }}
+          >
+            {t.pickerResetBtn}
+          </button>
+        </div>
+      )}
+      {/* Integrated Game-Specific Competition Regions */}
+      <div className="tournament-circuit-zone" id="areas">
+        <div className="circuit-header">
+          <div className="circuit-header-info">
+            <span className="eyebrow">
+              {activeSelectedGame
+                ? `${t.areasBadge} — ${getLocalizedGameName(activeSelectedGame.name, lang).toUpperCase()}`
+                : t.areasBadge}
+            </span>
+            <h3>
+              {activeSelectedGame
+                ? `${t.areasTitle} · ${getLocalizedGameName(activeSelectedGame.name, lang)}`
+                : t.circuitHeaderTitle}
+            </h3>
+            <p className="circuit-subtext">
+              {activeSelectedGame
+                ? `Hệ thống khu vực và giải đấu chuyên nghiệp chính thức của bộ môn ${getLocalizedGameName(activeSelectedGame.name, lang)}.`
+                : t.circuitHeaderDesc}
+            </p>
+          </div>
+          <div className="circuit-game-tabs">
+            <button
+              type="button"
+              className={`circuit-tab-btn ${selectedGameId === null && circuitTabGameSlug === "all" ? "active" : ""}`}
+              onClick={() => {
+                setCircuitTabGameSlug("all");
+                setSelectedGameId(null);
+                setTournamentGameFilter("");
+                setTournamentAreaFilter("");
+                setTournamentPage(0);
+              }}
+            >
+              {t.circuitAllTabs}
+            </button>
+            {games.map((g) => {
+              const isTabActive = (selectedGameId === g.game_id) || (selectedGameId === null && circuitTabGameSlug === g.slug);
+              return (
+                <button
+                  key={g.game_id}
+                  type="button"
+                  className={`circuit-tab-btn ${isTabActive ? "active" : ""}`}
+                  onClick={() => {
+                    setCircuitTabGameSlug(g.slug);
+                    setSelectedGameId(g.game_id);
+                    setTournamentGameFilter(String(g.game_id));
+                    if (g.publisher_id) {
+                      handleSelectPublisher(g.publisher_id);
+                    }
+                    setTournamentPage(0);
+                  }}
+                >
+                  {getLocalizedGameName(g.name, lang)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="circuit-grid">
+          {currentCircuitAreas.map((area) => {
+            const isSelected = tournamentAreaFilter === String(area.area_id) || tournamentAreaFilter === area.code;
+            const count = tournaments.filter(
+              (tourn) => tourn.area_id === area.area_id || tourn.name.toLowerCase().includes(area.code.toLowerCase())
+            ).length;
+            return (
+              <div
+                key={area.area_id}
+                className={`circuit-card ${isSelected ? "is-selected-circuit" : ""}`}
+                onClick={() => {
+                  const newFilter = isSelected ? "" : String(area.area_id);
+                  setTournamentAreaFilter(newFilter);
+                  setTournamentPage(0);
+
+                  // Switch game below to match this area's game!
+                  if (area.gameSlug && area.gameSlug !== "all") {
+                    const matchedGame = games.find((g) => g.slug === area.gameSlug);
+                    if (matchedGame) {
+                      setSelectedGameId(matchedGame.game_id);
+                      setTournamentGameFilter(String(matchedGame.game_id));
+                      setCircuitTabGameSlug(matchedGame.slug);
+                      if (matchedGame.publisher_id) {
+                        handleSelectPublisher(matchedGame.publisher_id);
+                      }
+                    }
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label={`Khu vực ${area.code} - ${area.country ?? area.name}`}
+              >
+                <div className="circuit-card-header">
+                  <span className="circuit-flag">{area.flag ?? "🌐"}</span>
+                  <strong className="circuit-code">{area.code}</strong>
+                  <span className="circuit-tournaments-badge">{count} {t.areasTournamentCountSuffix}</span>
+                </div>
+                <div className="circuit-country">
+                  {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}
+                </div>
+                <div className="circuit-full-name">{area.name}</div>
+                <div className="circuit-footer">
+                  <span className="circuit-action-indicator">
+                    {isSelected ? `✓ ${t.areasSelectedAction}` : `${t.areasViewTournaments}`}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="tournament-toolbar">
-        <label>Tựa game<select aria-label="Bộ lọc giải đấu" value={tournamentGameFilter} onChange={(event) => { setTournamentPage(0); setTournamentGameFilter(event.target.value); }}><option value="">Tất cả tựa game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
-        <label>Trạng thái<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">Tất cả trạng thái</option><option value="UPCOMING">Sắp diễn ra</option><option value="ONGOING">Đang diễn ra</option><option value="COMPLETED">Đã kết thúc</option><option value="CANCELLED">Đã hủy</option></select></label>
-        <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ Làm mới</button>
+        <label>{t.allGamesFilter}<select
+            aria-label="Bộ lọc giải đấu"
+            value={tournamentGameFilter}
+            onChange={(event) => {
+              setTournamentPage(0);
+              const val = event.target.value;
+              setTournamentGameFilter(val);
+              if (val) {
+                const found = games.find((g) => String(g.game_id) === val);
+                setSelectedGameId(found ? found.game_id : null);
+                if (found) {
+                  setCircuitTabGameSlug(found.slug);
+                  if (found.publisher_id) handleSelectPublisher(found.publisher_id);
+                }
+              } else {
+                setSelectedGameId(null);
+                setCircuitTabGameSlug("all");
+              }
+            }}
+          ><option value="">{t.allGamesFilter}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
+        <label>{t.allStatusesFilter}<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">{t.allStatusesFilter}</option><option value="UPCOMING">{t.statusUpcoming}</option><option value="ONGOING">{t.statusOngoing}</option><option value="COMPLETED">{t.statusCompleted}</option><option value="CANCELLED">{t.statusCancelled}</option></select></label>
+        <label>{t.allAreasFilter}<select value={tournamentAreaFilter} onChange={(event) => { setTournamentPage(0); setTournamentAreaFilter(event.target.value); }}><option value="">{t.allAreasFilter}</option>{currentCircuitAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.flag ? `${area.flag} ` : ""}{area.code} — {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}</option>)}</select></label>
+        <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ {t.btnRefresh}</button>
       </div>
       {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>Thử lại</button></div>}
-      {tournamentLoading && <div className="loading-state"><span className="spinner" /> Đang đồng bộ dữ liệu giải đấu...</div>}
-      {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>Chưa có giải đấu phù hợp</strong><span>Thử thay đổi bộ lọc hoặc tạo giải đấu đầu tiên.</span></div>}
-      <div className="tournament-grid">{tournaments.map((tournament) => {
+      {tournamentLoading && <div className="loading-state"><span className="spinner" /> {t.loadingTournaments}</div>}
+      {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>{t.emptyTournamentsTitle}</strong><span>{t.emptyTournamentsSub}</span></div>}
+      <div className="tournament-grid">{tournaments
+        .filter((tournament) => {
+          if (isRemovedGame(tournament.name)) return false;
+          const game = games.find((item) => item.game_id === tournament.game_id);
+          if (game && (isRemovedGame(game.name) || isRemovedGame(game.slug))) return false;
+          return true;
+        })
+        .map((tournament) => {
         const game = games.find((item) => item.game_id === tournament.game_id);
         return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
-          <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? "SẮP DIỄN RA" : tournament.status === "ONGOING" ? "LIVE NOW" : tournament.status === "COMPLETED" ? "ĐÃ KẾT THÚC" : "ĐÃ HỦY"}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
-          <h3>{tournament.name}</h3><p className="game-label">{game?.name ?? "Unknown title"} <span>·</span> {tournament.format.replace("_", " ")}</p>
-          <div className="card-meta"><span>◷ {new Date(tournament.start_date).toLocaleDateString("vi-VN")}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString("vi-VN")}` : "Open end"}</span></div>
-          <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>Xem chi tiết <span>→</span></button>
+          <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? t.statusCardUpcoming : tournament.status === "ONGOING" ? t.statusCardOngoing : tournament.status === "COMPLETED" ? t.statusCardCompleted : t.statusCardCancelled}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
+          <h3>{tournament.name}</h3><p className="game-label">{game ? getLocalizedGameName(game.name, lang) : "Esports"} <span>·</span> {tournament.format.replace("_", " ")}</p>
+          <div className="card-meta"><span>{t.cardDatePrefix} {new Date(tournament.start_date).toLocaleDateString(t.locale)}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString(t.locale)}` : t.cardOpenEnd}</span></div>
+          <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>{t.cardViewDetails}</button>
         </article>;
       })}</div>
-      {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← Trước</button><span>Trang {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>Sau →</button></div>}
+      {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← {t.pagePrev}</button><span>{t.pageLabel} {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>{t.pageNext} →</button></div>}
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>Thử lại</button></div>}
-      {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> Tạo giải đấu mới</summary><form onSubmit={submitTournament} className="tournament-form">
-        <label>Tên giải đấu<input name="name" placeholder="VCT Vietnam — Stage 1" minLength={3} maxLength={150} required /></label><label>Tựa game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn tựa game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label><label>Thể thức<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>Bắt đầu<input name="start_date" type="date" required /></label><label>Kết thúc<input name="end_date" type="date" /></label><label>Khu vực<select name="area_id" defaultValue=""><option value="">Toàn cầu</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">Mô tả<textarea name="description" maxLength={2000} placeholder="Thông tin giải, luật thi đấu, phần thưởng..." /></label><button className="button" disabled={tournamentLoading}>Tạo giải đấu</button>
+      {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> {t.btnCreateTournament}</summary><form onSubmit={submitTournament} className="tournament-form">
+        <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.tcGameSelect}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
-        <div className="detail-header"><div><span className="eyebrow">TOURNAMENT PROFILE</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>Đóng ×</button></div>
+        <div className="detail-header"><div><span className="eyebrow">{t.detailTitle}</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>{t.detailClose}</button></div>
                 <div className="detail-stats">
-          <div><span>Trạng thái</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div>
-          <div><span>Đội hình</span><strong className={tournamentCapabilities?.roster_locked || rosterLock?.locked ? "status status-completed" : "status status-upcoming"}>{tournamentCapabilities?.roster_locked || rosterLock?.locked ? "Đã khóa" : "Chưa khóa"}</strong></div>
-          <div><span>Ngày bắt đầu</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString("vi-VN")}</strong></div>
-          <div><span>Khu vực</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? "Toàn cầu"}</strong></div>
+          <div><span>{t.detailStatus}</span><strong className={`status status-${selectedTournament.status.toLowerCase()}`}>{selectedTournament.status}</strong></div>
+          <div><span>{t.detailRoster}</span><strong className={tournamentCapabilities?.roster_locked || rosterLock?.locked ? "status status-completed" : "status status-upcoming"}>{tournamentCapabilities?.roster_locked || rosterLock?.locked ? t.detailRosterLocked : t.detailRosterUnlocked}</strong></div>
+          <div><span>{t.detailStartDate}</span><strong>{new Date(selectedTournament.start_date).toLocaleDateString(t.locale)}</strong></div>
+          <div><span>{t.detailArea}</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? t.detailGlobalArea}</strong></div>
         </div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
         {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current)}>Thử lại</button></div>}
                 {tournamentCapabilities?.can_manage && <div className="manage-panel">
-          <div className="panel-title"><h4>Điều hành giải</h4><span>CAPABILITY VERIFIED</span></div>
+          <div className="panel-title"><h4>{t.detailOpsTitle}</h4><span>CAPABILITY VERIFIED</span></div>
           {selectedTournament.status === "UPCOMING" && (
             <div className="start-conditions-box">
               {tournamentCapabilities.roster_locked || rosterLock?.locked ? (
                 <div className="condition-item met">
                   <span className="condition-icon">✓</span>
-                  <span>Đội hình giải đấu đã được khóa{rosterLock?.locked_at ? ` (${new Date(rosterLock.locked_at).toLocaleString("vi-VN")})` : ""}. Đã đủ điều kiện khóa để bắt đầu giải đấu.</span>
+                  <span>{t.detailRosterLockedNotice}{rosterLock?.locked_at ? ` (${new Date(rosterLock.locked_at).toLocaleString(t.locale)})` : ""}. Đã đủ điều kiện khóa để bắt đầu giải đấu.</span>
                 </div>
               ) : (
                 <div className="condition-item unmet">
                   <span className="condition-icon">⚠️</span>
                   <div>
-                    <strong>Điều kiện bắt đầu giải đấu (chuyển sang ONGOING):</strong>
+                    <strong>{t.detailConditionsTitle}</strong>
                     <p>Giải đấu cần phải khóa đội hình và mỗi đội đã duyệt phải có ít nhất một tuyển thủ (PLAYER). Nút "Chuyển sang ONGOING" sẽ tự động hiển thị sau khi khóa thành công.</p>
                     {rosterStatusWarning && (
                       <p className="condition-warning-detail text-warning">⚠️ {rosterStatusWarning}</p>
@@ -2130,7 +3464,7 @@ export default function App() {
                         if (missing.length > 0) {
                           return (
                             <p className="condition-warning-detail text-warning">
-                              ⚠️ Đội chưa có tuyển thủ PLAYER: <strong>{missing.map((t) => t.name).join(", ")}</strong>. Cần bổ sung PLAYER trước khi khóa.
+                              ⚠️ {t.detailMissingPlayersWarning}: <strong>{missing.map((t) => t.name).join(", ")}</strong>. Cần bổ sung PLAYER trước khi khóa.
                             </p>
                           );
                         }
@@ -2138,7 +3472,7 @@ export default function App() {
                         if (allLoaded && approvedTeams.length > 0) {
                           return (
                             <p className="condition-warning-detail text-success">
-                              ✓ Tất cả {approvedTeams.length} đội đã có PLAYER. Sẵn sàng để khóa đội hình!
+                              {t.detailRosterReady}
                             </p>
                           );
                         }
@@ -2160,7 +3494,7 @@ export default function App() {
                     disabled={lockLoading || tournamentLoading}
                     onClick={() => void handleLockRoster()}
                   >
-                    {lockLoading ? <><span className="spinner" /> Đang khóa đội hình...</> : "🔒 Khóa đội hình giải đấu"}
+                    {lockLoading ? <><span className="spinner" /> {t.detailLockingRoster}</> : t.detailLockRosterBtn}
                   </button>
                 </div>
               )}
@@ -2173,14 +3507,14 @@ export default function App() {
               {lockNotice && <div className="notice-banner">{lockNotice}</div>}
             </div>
           )}
-          <div className="status-actions">{tournamentCapabilities.allowed_status_transitions.map((status) => <button className="button secondary" key={status} disabled={tournamentLoading} onClick={() => void changeTournamentStatus(status)}>Chuyển sang {status}</button>)}</div>{tournamentCapabilities.can_update && tournamentCapabilities.editable_fields.length > 0 && (
+          <div className="status-actions">{tournamentCapabilities.allowed_status_transitions.map((status) => <button className="button secondary" key={status} disabled={tournamentLoading} onClick={() => void changeTournamentStatus(status)}>{t.statusChangeTo} {status}</button>)}</div>{tournamentCapabilities.can_update && tournamentCapabilities.editable_fields.length > 0 && (
           <form className="tournament-form edit-form" onSubmit={updateTournament}>
             {tournamentCapabilities.editable_fields.includes("name") && (
               <label>Tên giải đấu<input name="name" defaultValue={selectedTournament.name} minLength={3} maxLength={150} required /></label>
             )}
             {tournamentCapabilities.editable_fields.includes("game_id") && (
               <label>Tựa game<select name="game_id" defaultValue={selectedTournament.game_id} required>
-                {games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}
+                {games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}
               </select></label>
             )}
             {tournamentCapabilities.editable_fields.includes("format") && (
@@ -2458,7 +3792,7 @@ export default function App() {
                     disabled={approvedTeamsPage === 0}
                     onClick={() => void handleApprovedTeamsPageChange(approvedTeamsPage - 1)}
                   >
-                    ‹ Trước
+                    ‹ {t.pagePrev}
                   </button>
                   <span className="pagination-info">
                     Trang {approvedTeamsPage + 1} / {Math.max(1, Math.ceil(approvedTeamsTotal / APPROVED_TEAMS_PER_PAGE))} (Tổng {approvedTeamsTotal} đội)
@@ -2469,7 +3803,7 @@ export default function App() {
                     disabled={approvedTeamsPage >= Math.ceil(approvedTeamsTotal / APPROVED_TEAMS_PER_PAGE) - 1}
                     onClick={() => void handleApprovedTeamsPageChange(approvedTeamsPage + 1)}
                   >
-                    Sau ›
+                    {t.pageNext} ›
                   </button>
                 </div>
               )}
@@ -2642,7 +3976,7 @@ export default function App() {
             );
             return availableTeams.length > 0 ? (
               <form className="registration-form" onSubmit={submitRegistration}>
-                <h4>Đăng ký đội tham gia giải</h4>
+                <h4>{t.regFormTitle}</h4>
                 <div className="form-row">
                   <label>
                     Chọn đội tuyển
@@ -2654,7 +3988,7 @@ export default function App() {
                       ))}
                     </select>
                   </label>
-                  <button className="button" disabled={registrationLoading}>Gửi đơn đăng ký</button>
+                  <button className="button" disabled={registrationLoading}>{t.regSubmitBtn}</button>
                 </div>
               </form>
             ) : null;
@@ -2663,7 +3997,7 @@ export default function App() {
 
         {selectedTournament.status === "UPCOMING" && (tournamentCapabilities?.roster_locked || rosterLock?.locked) && token && (
           <div className="info-banner" style={{ marginTop: "16px" }}>
-            🔒 Đội hình giải đấu đã khóa — Không thể gửi đơn đăng ký mới.
+            {t.regRosterLockedNotice}
           </div>
         )}
 
@@ -2671,22 +4005,22 @@ export default function App() {
           <div className="registrations-section">
             {(tournamentCapabilities?.roster_locked || rosterLock?.locked) && selectedTournament.status === "UPCOMING" && (
               <div className="info-banner">
-                🔒 Đội hình giải đấu đã khóa — Thao tác duyệt đơn mới bị tạm dừng. Người quản lý giải vẫn có thể từ chối và quản lý đội vẫn có thể hủy đơn đang chờ.
+                {t.regRosterLockedReviewNotice}
               </div>
             )}
             <div className="section-header">
-              <h4>Đơn đăng ký giải ({registrationTotal})</h4>
+              <h4>{t.regListTitle} ({registrationTotal})</h4>
               {tournamentCapabilities?.can_review_registrations && (
                 <select
                   className="filter-select"
                   value={registrationStatusFilter}
                   onChange={(e) => handleRegistrationFilterChange(e.target.value)}
                 >
-                  <option value="">Tất cả trạng thái</option>
-                  <option value="PENDING">Chờ duyệt (PENDING)</option>
-                  <option value="APPROVED">Đã duyệt (APPROVED)</option>
-                  <option value="REJECTED">Từ chối (REJECTED)</option>
-                  <option value="CANCELLED">Đã hủy (CANCELLED)</option>
+                  <option value="">{t.allStatusesFilter}</option>
+                  <option value="PENDING">{t.regStatusPending} (PENDING)</option>
+                  <option value="APPROVED">{t.regStatusApproved} (APPROVED)</option>
+                  <option value="REJECTED">{t.regStatusRejected} (REJECTED)</option>
+                  <option value="CANCELLED">{t.regStatusCancelled} (CANCELLED)</option>
                 </select>
               )}
             </div>
@@ -2700,7 +4034,7 @@ export default function App() {
             {registrationNotice && <div className="notice-banner">{registrationNotice}</div>}
 
             {registrations.length === 0 ? (
-              <p className="muted">Không có đơn đăng ký nào.</p>
+              <p className="muted">{t.regEmpty}</p>
             ) : (
               <>
                 <div className="registration-list">
@@ -2719,8 +4053,8 @@ export default function App() {
                         <strong>{teamName} {teamTag && <span className="tag">#{teamTag}</span>}</strong>
                         <span className={`reg-badge reg-badge-${reg.status.toLowerCase()}`}>{reg.status}</span>
                         <p className="reg-meta">
-                          Gửi: {new Date(reg.submitted_at).toLocaleString("vi-VN")}
-                          {reg.rejection_reason && <span className="reg-reason"> · Lý do: {reg.rejection_reason}</span>}
+                          {t.regSubmittedPrefix}: {new Date(reg.submitted_at).toLocaleString(t.locale)}
+                          {reg.rejection_reason && <span className="reg-reason"> · {t.regReasonPrefix}: {reg.rejection_reason}</span>}
                         </p>
                       </div>
                       <div className="reg-actions">
@@ -2767,10 +4101,10 @@ export default function App() {
                     disabled={registrationPage === 0 || registrationLoading}
                     onClick={() => void handleRegistrationPageChange(registrationPage - 1)}
                   >
-                    ‹ Trước
+                    ‹ {t.pagePrev}
                   </button>
                   <span className="pagination-info">
-                    Trang {registrationPage + 1} / {Math.max(1, Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE))} (Tổng {registrationTotal} đơn)
+                    Trang {registrationPage + 1} / {Math.max(1, Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE))} ({registrationTotal} {t.regTotalSuffix})
                   </span>
                   <button
                     type="button"
@@ -2778,7 +4112,7 @@ export default function App() {
                     disabled={registrationPage >= Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE) - 1 || registrationLoading}
                     onClick={() => void handleRegistrationPageChange(registrationPage + 1)}
                   >
-                    Sau ›
+                    {t.pageNext} ›
                   </button>
                 </div>
               )}
@@ -2788,8 +4122,54 @@ export default function App() {
         )}
       </div>}
     </section>
+
+    {/* Competition Regions Section */}
+    
+
+    {/* News & Updates Section */}
+    <section className="panel news-panel" id="news">
+      <div className="panel-title">
+        <div>
+          <span className="auth-overline">{t.newsBadge}</span>
+          <h2>{t.newsTitle}</h2>
+        </div>
+        <span>{t.newsLiveUpdates}</span>
+      </div>
+      <p className="section-subtext">
+        {t.newsSub}
+      </p>
+
+      <div className="news-grid">
+        {newsArticles.map((article) => (
+          <article
+            key={article.id}
+            className="news-card"
+            onClick={() => setSelectedNewsArticle(article)}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="news-thumb-wrap">
+              <img src={article.image} alt={article.title} className="news-thumb-img" />
+              <span className={`news-category-badge tag-${article.categorySlug}`}>
+                {article.category}
+              </span>
+              <span className="news-date-badge">{article.date}</span>
+            </div>
+            <div className="news-body">
+              <h3 className="news-title">{article.title}</h3>
+              <p className="news-summary">{article.summary}</p>
+              <div className="news-footer">
+                <span className="news-author">{t.newsBy} {article.author}</span>
+                <span className="news-read-more">{t.newsReadMore}</span>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+
     <section className="panel catalog-panel">
-      <div className="panel-title"><h2>Quản trị catalog</h2><span>CAPABILITY</span></div>
+      <div className="panel-title"><h2>{t.catalogTitle}</h2><span>CAPABILITY</span></div>
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>Thử lại</button></div>}
       {!globalCapabilityError && !globalCapabilities?.can_manage_catalog && <p className="muted">Bạn chưa được cấp quyền quản lý publisher, game và khu vực.</p>}
       {globalCapabilities?.can_manage_catalog && <>
@@ -2797,60 +4177,82 @@ export default function App() {
           <form onSubmit={submitPublisher}>
             <h3>Publisher</h3>
             <label>Tên publisher<input name="name" minLength={2} maxLength={120} required /></label>
-            <button className="button" disabled={catalogLoading}>Thêm publisher</button>
+            <button className="button" disabled={catalogLoading}>{t.catalogAddPub}</button>
           </form>
           <form onSubmit={submitGame}>
             <h3>Game</h3>
             <label>Tên game<input name="name" maxLength={120} required /></label>
             <label>Slug<input name="slug" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" maxLength={120} required /></label>
             <label>Publisher<select name="publisher_id" defaultValue="" required><option value="" disabled>Chọn publisher</option>{publishers.map((publisher) => <option key={publisher.publisher_id} value={publisher.publisher_id}>{publisher.name}</option>)}</select></label>
-            <button className="button" disabled={catalogLoading}>Thêm game</button>
+            <button className="button" disabled={catalogLoading}>{t.catalogAddGame}</button>
           </form>
           <form onSubmit={submitArea}>
             <h3>Khu vực</h3>
             <label>Tên khu vực<input name="name" minLength={2} maxLength={120} required /></label>
             <label>Mã<input name="code" minLength={2} pattern="[A-Z0-9]+(?:-[A-Z0-9]+)*" maxLength={30} required /></label>
             <label>Khu vực cha<select name="parent_id" defaultValue=""><option value="">Không có</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.code} · {area.name}</option>)}</select></label>
-            <button className="button" disabled={catalogLoading}>Thêm khu vực</button>
+            <button className="button" disabled={catalogLoading}>{t.catalogAddArea}</button>
           </form>
         </div>
       </>}
       {catalogReloadError && <div className="catalog-reload">
-        <p>Danh sách catalog có thể chưa phản ánh thao tác gần nhất.</p>
+        <p>{t.catalogSubtext}</p>
         <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>
       </div>}
       <div className="catalog-lists">
-        <div><h3>Publishers</h3>{publishers.map((publisher) => <p className="catalog-item" key={publisher.publisher_id}><span>{publisher.name}</span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>Xóa</button></span>}</p>)}</div>
-        <div><h3>Games</h3>{games.map((game) => <p className="catalog-item" key={game.game_id}><span>{game.name} <small>({game.slug})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>Xóa</button></span>}</p>)}</div>
-        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>Sửa</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>Xóa</button></span>}</p>)}</div>
+        <div><h3>Publishers</h3>{publishers.map((publisher) => {
+          const logo = getPublisherLogo(publisher.name);
+          return (
+            <p className="catalog-item" key={publisher.publisher_id}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                {logo && <img src={logo} alt={publisher.name} className="catalog-pub-logo" />}
+                {publisher.name}
+              </span>
+              {globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>{t.stageDeleteBtn}</button></span>}
+            </p>
+          );
+        })}</div>
+        <div><h3>Games</h3>{games.map((game) => {
+          const gLogo = getGameLogo(game.slug || game.name);
+          return (
+            <p className="catalog-item" key={game.game_id}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                {gLogo && <img src={gLogo} alt="" className="catalog-game-logo" />}
+                {game.name} <small>({game.slug})</small>
+              </span>
+              {globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>{t.stageDeleteBtn}</button></span>}
+            </p>
+          );
+        })}</div>
+        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>{t.stageDeleteBtn}</button></span>}</p>)}</div>
       </div>
     </section>
-    <section className="panel teams-panel">
-      <div className="panel-title"><h2>Đội tuyển</h2><span>{teams.length} đội</span></div>
+    <section className="panel teams-panel" id="teams">
+      <div className="panel-title"><h2>{t.teamsTitle}</h2><span>{teams.length} {t.teamsCount}</span></div>
       {user ? <form className="team-form" onSubmit={createTeam}>
-        <label>Tên đội<input name="name" placeholder="Phoenix Gaming" minLength={2} maxLength={100} required /></label>
-        <label>Tag<input name="tag" placeholder="PHX" minLength={2} maxLength={10} pattern="[A-Za-z0-9]+" required /></label>
-        <label>Game<select name="game_id" defaultValue="" required><option value="" disabled>Chọn game</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{game.name}</option>)}</select></label>
-        <button className="button" disabled={loading}>Tạo đội</button>
-      </form> : <p className="muted">Đăng nhập để tạo đội mới. Danh sách đội vẫn được xem công khai.</p>}
-      {teams.length === 0 ? <p className="muted">Chưa có đội tuyển.</p> : <div className="team-list">{teams.map((team) => <article data-team-id={team.team_id} key={team.team_id}>
+        <label>{t.teamNameLabel}<input name="name" placeholder="Phoenix Gaming" minLength={2} maxLength={100} required /></label>
+        <label>{t.teamTagLabel}<input name="tag" placeholder="PHX" minLength={2} maxLength={10} pattern="[A-Za-z0-9]+" required /></label>
+        <label>{t.teamGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.teamGameSelectPlaceholder}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
+        <button className="button" disabled={loading}>{t.teamCreateBtn}</button>
+      </form> : <p className="muted">{t.teamLoginRequired}</p>}
+      {teams.length === 0 ? <p className="muted">{t.teamEmpty}</p> : <div className="team-list">{teams.map((team) => <article data-team-id={team.team_id} key={team.team_id}>
         <div><h3>{team.name}</h3><p>#{team.tag} · {games.find((game) => game.game_id === team.game_id)?.name ?? "Game"}</p></div>
-        <button className="link-button" onClick={() => viewTeam(team.team_id)}>Xem đội</button>
+        <button className="link-button" onClick={() => viewTeam(team.team_id)}>{t.teamViewBtn}</button>
       </article>)}</div>}
       {selectedTeam && <div className="team-detail">
-      <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); setTeamCapabilityError(""); }}>Đóng</button></div>
+      <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); setTeamCapabilityError(""); }}>{t.teamCloseBtn}</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
         {teamCapabilityError && <div className="error-banner"><span>{teamCapabilityError}</span><button className="button secondary" onClick={() => void loadTeamCapabilities(selectedTeam.team_id)}>Thử lại</button></div>}
         {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
-          <label>Tên đăng nhập<input name="username" placeholder="username" maxLength={50} required /></label>
-          <label>Vị trí<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
-          <button className="button" disabled={memberLoading}>Thêm thành viên</button>
+          <label>{t.authUsername}<input name="username" placeholder={t.teamUsernamePlaceholder} maxLength={50} required /></label>
+          <label>{t.teamRoleLabel}<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
+          <button className="button" disabled={memberLoading}>{t.teamAddMemberBtn}</button>
         </form>}
-        <h4>Thành viên và lịch sử ({selectedTeam.members.length})</h4>
-        {selectedTeam.members.length === 0 ? <p className="muted">Chưa có thành viên.</p> : <div className="member-list">{selectedTeam.members.map((member) => <div className={`member-row ${member.status === "ENDED" ? "ended" : ""}`} key={member.membership_id}>
+        <h4>{t.teamMembersTitle} ({selectedTeam.members.length})</h4>
+        {selectedTeam.members.length === 0 ? <p className="muted">{t.teamNoMembers}</p> : <div className="member-list">{selectedTeam.members.map((member) => <div className={`member-row ${member.status === "ENDED" ? "ended" : ""}`} key={member.membership_id}>
           <div>
             <strong>{member.username}</strong>
-            <p>{member.role} · {member.status === "ACTIVE" ? "Đang hoạt động" : "Đã rời đội"} · Tham gia {member.joined_date}{member.left_date ? ` · Rời đội ${member.left_date}` : ""}</p>
+            <p>{member.role} · {member.status === "ACTIVE" ? t.teamActiveStatus : t.teamLeftStatus} · {t.teamJoinedPrefix} {member.joined_date}{member.left_date ? ` · Rời đội ${member.left_date}` : ""}</p>
           </div>
           {user && <div className="member-actions">
             {canManageSelectedTeam && member.status === "ACTIVE" && <select aria-label={`Vị trí của ${member.username}`} value={member.role} disabled={memberLoading} onChange={(event) => updateMemberRole(member.membership_id, event.target.value)}>
@@ -2861,5 +4263,168 @@ export default function App() {
         </div>)}</div>}
       </div>}
     </section>
-  </main>;
+  </main>
+
+  {/* Login / Register Modal Dialog */}
+  {isAuthModalOpen && (
+    <div
+      className="auth-modal-overlay"
+      onClick={closeAuthModal}
+    >
+      <div
+        className="auth-modal-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-title"
+      >
+        <button
+          type="button"
+          className="auth-modal-close"
+          onClick={closeAuthModal}
+          aria-label="Đóng giao diện đăng nhập"
+        >
+          ✕
+        </button>
+        <div className="auth-kicker">
+          <span className="auth-status-dot" /> NEXUS IDENTITY <span>SECURE ACCESS</span>
+        </div>
+        <div className="panel-title">
+          <div>
+            <span className="auth-overline">
+              {authMode === "login" ? t.authWelcomeBack : t.authJoinArena}
+            </span>
+            <h2 id="auth-modal-title">
+              {authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}
+            </h2>
+          </div>
+          <span>AUTH API</span>
+        </div>
+
+        {(error || notice) && (
+          <div className={`message ${error ? "error" : "success"}`}>
+            <p>{error || notice}</p>
+          </div>
+        )}
+
+        <form className="auth-form" onSubmit={submitAuth}>
+          <p className="auth-intro">
+            {authMode === "login"
+              ? t.authLoginDesc
+              : t.authRegisterDesc}
+          </p>
+          {authMode === "register" && (
+            <>
+              <label className="auth-field">
+                {t.authFullName}
+                <input name="real_name" maxLength={100} placeholder={t.authFullNamePlaceholder} />
+              </label>
+              <label className="auth-field">
+                {t.authEmail}
+                <input name="email" type="email" required placeholder="you@arena.gg" />
+              </label>
+            </>
+          )}
+          <label className="auth-field">
+            {t.authUsername}
+            <input
+              name="username"
+              minLength={3}
+              maxLength={50}
+              required
+              placeholder={t.authUsernamePlaceholder}
+              autoComplete="username"
+            />
+          </label>
+          <label className="auth-field">
+            {t.authPassword}
+            <input
+              name="password"
+              type="password"
+              minLength={8}
+              maxLength={128}
+              required
+              placeholder={t.authPasswordHint}
+              autoComplete={authMode === "login" ? "current-password" : "new-password"}
+            />
+          </label>
+          <div className="auth-submit-row">
+            <span className="auth-secure-note">✦ {t.authSecureConnection}</span>
+            <button className="button auth-submit" disabled={loading}>
+              {loading ? t.authProcessing : authMode === "login" ? t.authBtnLogin : t.authBtnRegister}
+              <span>↗</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            className="link-button auth-switch"
+            onClick={() => {
+              setError("");
+              setNotice("");
+              setAuthMode(authMode === "login" ? "register" : "login");
+            }}
+          >
+            {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
+          </button>
+        </form>
+      </div>
+    </div>
+  )}
+
+  {/* News Article Detail Modal */}
+  {selectedNewsArticle && (
+    <div
+      className="auth-modal-overlay"
+      onClick={() => setSelectedNewsArticle(null)}
+    >
+      <div
+        className="auth-modal-card news-modal-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="news-modal-title"
+      >
+        <button
+          type="button"
+          className="auth-modal-close"
+          onClick={() => setSelectedNewsArticle(null)}
+          aria-label="{t.newsClose}"
+        >
+          ✕
+        </button>
+        <div className="news-modal-header">
+          <div className="news-modal-badges">
+            <span className={`news-category-badge tag-${selectedNewsArticle.categorySlug}`}>
+              {selectedNewsArticle.category}
+            </span>
+            <span className="news-modal-date">{selectedNewsArticle.date} · {selectedNewsArticle.author}</span>
+          </div>
+          <h2 id="news-modal-title" className="news-modal-title">
+            {selectedNewsArticle.title}
+          </h2>
+        </div>
+        <div className="news-modal-hero">
+          <img
+            src={selectedNewsArticle.image}
+            alt={selectedNewsArticle.title}
+            className="news-modal-img"
+          />
+        </div>
+        <div className="news-modal-content">
+          <p className="news-modal-lead">{selectedNewsArticle.summary}</p>
+          <p className="news-modal-body">{selectedNewsArticle.content}</p>
+        </div>
+        <div className="news-modal-footer">
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => setSelectedNewsArticle(null)}
+          >
+            Đóng bài viết
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+  </>);
 }
