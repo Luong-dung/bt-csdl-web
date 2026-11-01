@@ -4156,7 +4156,7 @@ export default function App() {
                     ‹ {t.pagePrev}
                   </button>
                   <span className="pagination-info">
-                    Trang {registrationPage + 1} / {Math.max(1, Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE))} ({registrationTotal} {t.regTotalSuffix})
+                    Trang {registrationPage + 1} / {Math.max(1, Math.ceil(registrationTotal / REGISTRATIONS_PER_PAGE))} (Tổng {registrationTotal} {t.regTotalSuffix})
                   </span>
                   <button
                     type="button"
