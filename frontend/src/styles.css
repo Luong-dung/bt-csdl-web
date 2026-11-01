@@ -656,7 +656,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 .section-heading p { color: #ada4c8; }
 .section-count { border-radius: 0; border-color: rgba(220, 210, 255, .35); background: transparent; color: #eee8ff; }
 .tournament-toolbar { border-radius: 0; background: rgba(29, 19, 62, .72); border-color: rgba(220, 210, 255, .16); }
-.tournament-grid { gap: 4px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+.tournament-grid { gap: 16px; grid-template-columns: repeat(3, 1fr); }
 .tournament-card {
   min-height: 230px;
   border-radius: 0;
@@ -696,16 +696,10 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 .auth-panel {
   position: relative;
   padding: 30px 34px 32px;
-  background:
-    linear-gradient(145deg, rgba(42, 28, 79, .92), rgba(15, 8, 39, .96)),
-    var(--game-art) right center / 58% auto no-repeat;
+  background: linear-gradient(145deg, rgba(42, 28, 79, .95), rgba(15, 8, 39, .98));
 }
 .auth-panel::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 0 48%;
-  pointer-events: none;
-  background: linear-gradient(90deg, rgba(18, 9, 47, 1), rgba(18, 9, 47, .28));
+  display: none;
 }
 .auth-panel > * { position: relative; z-index: 1; }
 .auth-kicker {
@@ -2098,38 +2092,67 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
+@media (max-width: 960px) {
+  .tournament-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 @media (max-width: 860px) {
   .ewc-navbar {
     height: auto;
-    padding: 10px 16px;
+    padding: 10px 12px;
     flex-wrap: wrap;
     gap: 8px;
   }
   .ewc-nav-center {
     order: 3;
     width: 100%;
+    justify-content: space-between;
     overflow-x: auto;
-    padding-bottom: 4px;
+    padding-bottom: 2px;
     gap: 4px;
   }
-  .ewc-item { padding: 6px 10px; }
-  .ewc-item strong { font-size: 12px; }
+  .ewc-item {
+    padding: 6px 8px;
+    flex: 1 1 auto;
+    justify-content: center;
+    white-space: nowrap;
+  }
+  .ewc-item strong { font-size: 11px; }
   .shell { padding: 24px 16px 64px; }
   .auth-modal-card { padding: 32px 20px 24px; }
 }
 
-/* Supplied fantasy artwork */
+@media (max-width: 640px) {
+  .tournament-grid { grid-template-columns: 1fr; }
+  .section-heading .section-count {
+    display: inline-flex;
+    margin-top: 12px;
+  }
+  .hero h1 {
+    font-size: clamp(24px, 6.8vw, 34px);
+    line-height: 1.15;
+  }
+}
+
+/* Supplied fantasy artwork & per-game card backgrounds */
 :root {
   --game-art: url("/games/league-of-legends.png");
   --game-art-alt: url("/games/valorant.png");
   --game-art-third: url("/games/arena-of-valor.png");
 }
 
+.card-game-league-of-legends { --card-art: url("/games/league-of-legends.png"); }
+.card-game-teamfight-tactics { --card-art: url("/games/teamfight-tactics.png"); }
+.card-game-valorant { --card-art: url("/games/valorant.png"); }
+.card-game-arena-of-valor { --card-art: url("/games/arena-of-valor.png"); }
+.card-game-free-fire { --card-art: url("/games/free-fire.png"); }
+.card-game-default { --card-art: url("/games/league-of-legends.png"); }
+
 .hero {
   background:
-    linear-gradient(90deg, rgba(10, 5, 28, .9), rgba(22, 10, 48, .42) 58%, rgba(10, 5, 28, .7)),
-    linear-gradient(0deg, rgba(12, 6, 32, .82), transparent 58%),
-    var(--game-art) center 12% / cover no-repeat;
+    linear-gradient(90deg, #0a051c 0%, #0a051c 38%, rgba(16, 8, 40, .74) 68%, rgba(10, 5, 28, .86) 100%),
+    linear-gradient(0deg, rgba(12, 6, 32, .9), transparent 58%),
+    var(--game-art) right 18% / 185% auto no-repeat;
 }
 .hero::before {
   background:
@@ -2138,31 +2161,120 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 }
 .tournament-zone {
   background:
-    linear-gradient(rgba(13, 7, 37, .88), rgba(13, 7, 37, .93)),
-    var(--game-art) center 43% / 1120px auto no-repeat,
+    linear-gradient(180deg, rgba(13, 7, 37, .96), rgba(10, 5, 28, .98)),
     var(--fantasy-panel);
 }
-.tournament-card {
+.tournament-card,
+.tournament-card:nth-child(3n + 2) {
   background:
-    linear-gradient(145deg, rgba(25, 13, 54, .42), rgba(10, 5, 28, .88)),
-    var(--game-art) 18% 44% / 920px auto no-repeat;
+    linear-gradient(to top, rgba(8, 4, 22, .96) 0%, rgba(10, 5, 28, .88) 55%, rgba(10, 5, 28, .78) 100%),
+    linear-gradient(90deg, rgba(10, 5, 28, .96) 0%, rgba(10, 5, 28, .88) 50%, rgba(12, 6, 32, .68) 100%),
+    var(--card-art, var(--game-art)) right 22% / 195% auto no-repeat;
+  border: 1px solid rgba(220, 210, 255, .18);
+  border-radius: 8px;
 }
-.tournament-card:nth-child(2) {
+.tournament-card.card-game-free-fire,
+.tournament-card.card-game-free-fire:nth-child(3n + 2) {
   background:
-    linear-gradient(145deg, rgba(35, 18, 60, .4), rgba(10, 5, 28, .88)),
-    var(--game-art-alt) 49% 45% / cover no-repeat;
+    linear-gradient(to top, rgba(8, 4, 22, .96) 0%, rgba(10, 5, 28, .88) 55%, rgba(10, 5, 28, .82) 100%),
+    linear-gradient(90deg, rgba(10, 5, 28, .96) 0%, rgba(10, 5, 28, .88) 50%, rgba(12, 6, 32, .72) 100%),
+    var(--card-art) center 50% / 135% auto no-repeat;
 }
-.tournament-card:nth-child(3) {
-  background:
-    linear-gradient(145deg, rgba(56, 22, 64, .38), rgba(10, 5, 28, .88)),
-    var(--game-art-third) 81% 45% / cover no-repeat;
+.tournament-card h3 {
+  color: #ffffff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .9);
+}
+.tournament-card .game-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #e2e8f0;
+  font-weight: 600;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, .85);
+}
+.card-game-icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
 }
 .tournament-card:nth-child(3n + 2)::before,
 .tournament-card::before { background: rgba(245, 239, 255, .82); }
-.approved-team-card, .registration-card, .stage-card {
+
+/* Esports Team Cards Grid */
+.team-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-top: 20px;
+}
+.team-list article.team-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 8px;
+  border: 1px solid rgba(220, 210, 255, .16);
   background:
-    linear-gradient(90deg, rgba(18, 8, 43, .86), rgba(35, 18, 62, .7)),
-    var(--game-art) center 48% / 820px auto no-repeat;
+    linear-gradient(to top, rgba(8, 4, 22, .96) 0%, rgba(10, 5, 28, .88) 55%, rgba(12, 7, 32, .78) 100%),
+    linear-gradient(90deg, rgba(10, 5, 28, .96) 0%, rgba(10, 5, 28, .88) 50%, rgba(12, 7, 32, .68) 100%),
+    var(--card-art, var(--game-art)) right 22% / 195% auto no-repeat;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.team-list article.team-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(56, 189, 248, .55);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .35);
+}
+.team-card-body {
+  width: 100%;
+}
+.team-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.team-tag-pill {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(56, 189, 248, .15);
+  border: 1px solid rgba(56, 189, 248, .35);
+  color: #7dd3fc;
+  font: 700 11px ui-monospace, monospace;
+}
+.team-card-logo {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+.team-card h3 {
+  font-size: 18px;
+  color: #ffffff;
+  margin: 0 0 6px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .85);
+}
+.team-card-meta {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+.team-card-btn {
+  align-self: flex-start;
+  font-weight: 700;
+  color: #38bdf8;
+}
+@media (max-width: 960px) {
+  .team-list { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 640px) {
+  .team-list { grid-template-columns: 1fr; }
+}
+.approved-team-card, .registration-card, .stage-card {
+  background: linear-gradient(90deg, rgba(18, 8, 43, .92), rgba(35, 18, 62, .85));
 }
 
 

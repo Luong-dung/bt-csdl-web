@@ -143,6 +143,53 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return response.json() as Promise<T>;
 }
 
+const DEFAULT_PUBLISHERS: Publisher[] = [
+  { publisher_id: 1, name: "Riot Games" },
+  { publisher_id: 2, name: "Garena" },
+];
+
+export const DEFAULT_GAMES: Game[] = [
+  { game_id: 1, name: "Teamfight Tactics", slug: "teamfight-tactics", publisher_id: 1 },
+  { game_id: 2, name: "League of Legends", slug: "league-of-legends", publisher_id: 1 },
+  { game_id: 3, name: "VALORANT", slug: "valorant", publisher_id: 1 },
+  { game_id: 4, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
+  { game_id: 5, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
+];
+
+export const INITIAL_AREAS: Area[] = [
+  { area_id: 1, code: "GLOBAL", name: "Global", country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
+  { area_id: 2, code: "APAC", name: "Asia-Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "all" },
+  { area_id: 3, code: "VN", name: "Vietnam", country: "Việt Nam", flag: "🇻🇳", gameSlug: "all" },
+  { area_id: 4, code: "VN-HCM", name: "Ho Chi Minh City", country: "TP. Hồ Chí Minh", flag: "🇻🇳", gameSlug: "all" },
+  { area_id: 5, code: "LCK", name: "Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
+  { area_id: 6, code: "LPL", name: "China (LPL)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
+  { area_id: 7, code: "LEC", name: "EMEA (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
+  { area_id: 8, code: "LCS", name: "North America (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
+  { area_id: 9, code: "CBLOL", name: "Brazil (CBLOL)", country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
+  { area_id: 10, code: "LCP", name: "Asia-Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
+  { area_id: 11, code: "TFT AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
+  { area_id: 12, code: "TFT EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
+  { area_id: 13, code: "TFT APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
+  { area_id: 14, code: "TFT CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
+  { area_id: 15, code: "VCT Americas", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
+  { area_id: 16, code: "VCT EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
+  { area_id: 17, code: "VCT Pacific", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
+  { area_id: 18, code: "VCT CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
+  { area_id: 19, code: "RPL", name: "Thailand (RPL)", country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
+  { area_id: 20, code: "AOG", name: "Vietnam (AOG)", country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
+  { area_id: 21, code: "GCS", name: "Chinese Taipei (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
+  { area_id: 22, code: "ASL", name: "Indonesia (ASL)", country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
+  { area_id: 23, code: "FFWS SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
+  { area_id: 24, code: "FFWS BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
+  { area_id: 25, code: "FFWS LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
+  { area_id: 26, code: "FFWS MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
+  { area_id: 27, code: "AVC", name: "AoV International Championship", country: "Châu Á – Quốc tế", flag: "🌏", gameSlug: "arena-of-valor" },
+  { area_id: 28, code: "FFWS NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "free-fire" },
+  { area_id: 29, code: "FFWS PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", gameSlug: "free-fire" },
+  { area_id: 30, code: "FFWS IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", gameSlug: "free-fire" },
+  { area_id: 31, code: "FFWS BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire" },
+];
+
 function getGameBadge(name: string): string {
   const lower = name.toLowerCase().replace(/[-_]/g, " ");
   if (lower.includes("liên quân") || lower.includes("lien quan") || lower.includes("arena of valor") || lower.includes("arena") || lower.includes("aov") || lower === "lq") return "AOV";
@@ -478,9 +525,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
-  const [games, setGames] = useState<Game[]>([]);
-  const [publishers, setPublishers] = useState<Publisher[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
+  const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
+  const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
+  const [areas, setAreas] = useState<Area[]>(INITIAL_AREAS);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
@@ -731,8 +778,12 @@ export default function App() {
         request<Game[]>("/catalog/games"),
         request<Area[]>("/catalog/areas"),
       ]);
-      setPublishers(loadedPublishers || []);
-      setGames(loadedGames || []);
+      if (loadedPublishers && loadedPublishers.length > 0) {
+        setPublishers(loadedPublishers);
+      }
+      if (loadedGames && loadedGames.length > 0) {
+        setGames(loadedGames);
+      }
 
       const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
         const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
@@ -743,7 +794,9 @@ export default function App() {
           gameSlug: la.gameSlug || meta?.gameSlug || "all",
         };
       });
-      setAreas(enrichedAreas);
+      if (enrichedAreas.length > 0) {
+        setAreas(enrichedAreas);
+      }
     } catch (reason) {
       setCatalogReloadError((reason as Error).message);
       throw reason;
@@ -3011,17 +3064,19 @@ export default function App() {
                   <span>{t.megaNews}</span>
                   <span className="mega-tag-mini" style={{ background: "rgba(34, 197, 94, 0.2)", color: "#4ade80", borderColor: "rgba(34, 197, 94, 0.4)" }}>MỚI</span>
                 </button>
-                <button
-                  type="button"
-                  className="mega-link-item"
-                  onClick={() => {
-                    setShowGamesBar(false);
-                    const el = document.getElementById("catalog");
-                    if (el) el.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  <span>{t.megaCatalog}</span>
-                </button>
+                {globalCapabilities?.can_manage_catalog && (
+                  <button
+                    type="button"
+                    className="mega-link-item"
+                    onClick={() => {
+                      setShowGamesBar(false);
+                      const el = document.getElementById("catalog");
+                      if (el) el.scrollIntoView({ behavior: "smooth" });
+                    }}
+                  >
+                    <span>{t.megaCatalog}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="mega-link-item"
@@ -3094,7 +3149,7 @@ export default function App() {
         <header className="hero" id="top">
           <div className="hero-content">
             <span className="eyebrow">{t.heroEyebrow}</span>
-            <h1>{t.heroTitle1} <em>{t.heroTitle2}</em></h1>
+            <h1>{t.heroTitle1}<br /><em>{t.heroTitle2}</em></h1>
             <p>{t.heroDesc}</p>
             <div className="hero-actions">
               <a className="button hero-cta" href="#tournaments">
@@ -3353,9 +3408,11 @@ export default function App() {
       {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>{t.emptyTournamentsTitle}</strong><span>{t.emptyTournamentsSub}</span></div>}
       <div className="tournament-grid">{tournaments.map((tournament) => {
         const game = games.find((item) => item.game_id === tournament.game_id);
-        return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
+        const cardGameSlug = getGameCanonicalSlug(game ?? null) || "default";
+        const cardGameLogo = getGameLogo(game?.slug || game?.name);
+        return <article className={`tournament-card card-game-${cardGameSlug}`} data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
           <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? t.statusCardUpcoming : tournament.status === "ONGOING" ? t.statusCardOngoing : tournament.status === "COMPLETED" ? t.statusCardCompleted : t.statusCardCancelled}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
-          <h3>{tournament.name}</h3><p className="game-label">{game ? getLocalizedGameName(game.name, lang) : "Esports"} <span>·</span> {tournament.format.replace("_", " ")}</p>
+          <h3>{tournament.name}</h3><p className="game-label">{cardGameLogo && <img src={cardGameLogo} alt="" className="card-game-icon" />}{game ? getLocalizedGameName(game.name, lang) : "Esports"} <span>·</span> {tournament.format.replace("_", " ")}</p>
           <div className="card-meta"><span>{t.cardDatePrefix} {new Date(tournament.start_date).toLocaleDateString(t.locale)}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString(t.locale)}` : t.cardOpenEnd}</span></div>
           <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>{t.cardViewDetails}</button>
         </article>;
@@ -4108,7 +4165,7 @@ export default function App() {
       </div>
     </section>
 
-    <section className="panel catalog-panel" id="catalog">
+    {user && <section className="panel catalog-panel" id="catalog">
       <div className="panel-title"><h2>{t.catalogTitle}</h2></div>
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
       {!globalCapabilityError && !globalCapabilities?.can_manage_catalog && <p className="muted">Bạn chưa được cấp quyền quản lý publisher, game và khu vực.</p>}
@@ -4134,40 +4191,40 @@ export default function App() {
             <button className="button" disabled={catalogLoading}>{t.catalogAddArea}</button>
           </form>
         </div>
+        {catalogLoading && <p className="muted catalog-loading-text">{t.catalogLoadingText}</p>}
+        {catalogReloadError && <div className="catalog-reload">
+          <p>{t.catalogSubtext}</p>
+          <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>{t.catalogReload}</button>
+        </div>}
+        <div className="catalog-lists">
+          <div><h3>Publishers</h3>{publishers.map((publisher) => {
+            const logo = getPublisherLogo(publisher.name);
+            return (
+              <p className="catalog-item" key={publisher.publisher_id}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                  {logo && <img src={logo} alt={publisher.name} className="catalog-pub-logo" />}
+                  {publisher.name}
+                </span>
+                <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>{t.stageDeleteBtn}</button></span>
+              </p>
+            );
+          })}</div>
+          <div><h3>Games</h3>{games.map((game) => {
+            const gLogo = getGameLogo(game.slug || game.name);
+            return (
+              <p className="catalog-item" key={game.game_id}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  {gLogo && <img src={gLogo} alt="" className="catalog-game-logo" />}
+                  {game.name} <small>({game.slug})</small>
+                </span>
+                <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>{t.stageDeleteBtn}</button></span>
+              </p>
+            );
+          })}</div>
+          <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span><span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>{t.stageDeleteBtn}</button></span></p>)}</div>
+        </div>
       </>}
-      {catalogLoading && <p className="muted catalog-loading-text">{t.catalogLoadingText}</p>}
-      {catalogReloadError && <div className="catalog-reload">
-        <p>{t.catalogSubtext}</p>
-        <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>{t.catalogReload}</button>
-      </div>}
-      <div className="catalog-lists">
-        <div><h3>Publishers</h3>{publishers.map((publisher) => {
-          const logo = getPublisherLogo(publisher.name);
-          return (
-            <p className="catalog-item" key={publisher.publisher_id}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                {logo && <img src={logo} alt={publisher.name} className="catalog-pub-logo" />}
-                {publisher.name}
-              </span>
-              {globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("publishers", publisher)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("publishers", publisher.publisher_id, publisher.name)}>{t.stageDeleteBtn}</button></span>}
-            </p>
-          );
-        })}</div>
-        <div><h3>Games</h3>{games.map((game) => {
-          const gLogo = getGameLogo(game.slug || game.name);
-          return (
-            <p className="catalog-item" key={game.game_id}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-                {gLogo && <img src={gLogo} alt="" className="catalog-game-logo" />}
-                {game.name} <small>({game.slug})</small>
-              </span>
-              {globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("games", game)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("games", game.game_id, game.name)}>{t.stageDeleteBtn}</button></span>}
-            </p>
-          );
-        })}</div>
-        <div><h3>Khu vực</h3>{areas.map((area) => <p className="catalog-item" key={area.area_id}><span>{area.name} <small>({area.code})</small></span>{globalCapabilities?.can_manage_catalog && <span><button className="link-button" onClick={() => editCatalogItem("areas", area)}>{t.stageEditBtn}</button><button className="link-button danger-link" onClick={() => deleteCatalogItem("areas", area.area_id, area.name)}>{t.stageDeleteBtn}</button></span>}</p>)}</div>
-      </div>
-    </section>
+    </section>}
     <section className="panel teams-panel" id="teams">
       <div className="panel-title"><h2>{t.teamsTitle}</h2><span>{teams.length} {t.teamsCount}</span></div>
       {user ? <form className="team-form" onSubmit={createTeam}>
@@ -4176,10 +4233,22 @@ export default function App() {
         <label>{t.teamGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.teamGameSelectPlaceholder}</option>{games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
         <button className="button" disabled={loading}>{t.teamCreateBtn}</button>
       </form> : <p className="muted">{t.teamLoginRequired}</p>}
-      {teams.length === 0 ? <p className="muted">{t.teamEmpty}</p> : <div className="team-list">{teams.map((team) => <article data-team-id={team.team_id} key={team.team_id}>
-        <div><h3>{team.name}</h3><p>#{team.tag} · {games.find((game) => game.game_id === team.game_id)?.name ?? "Game"}</p></div>
-        <button className="link-button" onClick={() => viewTeam(team.team_id)}>{t.teamViewBtn}</button>
-      </article>)}</div>}
+      {teams.length === 0 ? <p className="muted">{t.teamEmpty}</p> : <div className="team-list">{teams.map((team) => {
+        const teamGame = games.find((game) => game.game_id === team.game_id);
+        const teamGameLogo = getGameLogo(teamGame?.slug || teamGame?.name);
+        const teamGameSlug = getGameCanonicalSlug(teamGame ?? null) || "default";
+        return <article className={`team-card card-game-${teamGameSlug}`} data-team-id={team.team_id} key={team.team_id}>
+          <div className="team-card-body">
+            <div className="team-card-top">
+              <span className="team-tag-pill">#{team.tag}</span>
+              {teamGameLogo && <img src={teamGameLogo} alt="" className="team-card-logo" />}
+            </div>
+            <h3>{team.name}</h3>
+            <p className="team-card-meta">#{team.tag} · {teamGame?.name ?? "Game"}</p>
+          </div>
+          <button className="link-button team-card-btn" onClick={() => viewTeam(team.team_id)}>{t.teamViewBtn}</button>
+        </article>;
+      })}</div>}
       {selectedTeam && <div className="team-detail">
       <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); setTeamCapabilityError(""); }}>{t.teamCloseBtn}</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
