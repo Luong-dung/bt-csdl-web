@@ -3201,7 +3201,7 @@ export default function App() {
           </div>
         </header>
 
-        {(error || notice) && <div className={`${error ? "message error" : "message success"}${error?.startsWith("Không thể tải catalog") ? " catalog-error" : ""}`}>
+        {!isAuthModalOpen && (error || notice) && <div className={`${error ? "message error" : "message success"}${error?.startsWith("Không thể tải catalog") ? " catalog-error" : ""}`}>
           <p>{error || notice}</p>
           {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
             setError("");
