@@ -439,9 +439,6 @@ export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(() => {
-    return typeof window !== "undefined" && window.location.hash === "#login";
-  });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<"home" | "play" | "team" | "areas" | "news">("home");
   const [selectedNewsArticle, setSelectedNewsArticle] = useState<NewsArticle | null>(null);
@@ -761,14 +758,16 @@ export default function App() {
 
   useEffect(() => {
     const handleHash = () => {
-      if (window.location.hash === "#login") {
-        setIsAuthModalOpen(true);
+      if (window.location.hash === "#login" || window.location.hash === "#auth-section") {
+        const el = document.getElementById("auth-section");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+        const input = document.querySelector('input[name="username"]') as HTMLInputElement;
+        input?.focus();
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setIsAuthModalOpen(false);
-        setUserMenuOpen(false);
+                setUserMenuOpen(false);
         setShowGamesBar(false);
         setPublisherMenuOpen(false);
       }
@@ -781,13 +780,7 @@ export default function App() {
     };
   }, []);
 
-  const closeAuthModal = () => {
-    setIsAuthModalOpen(false);
-    if (window.location.hash === "#login") {
-      history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-  };
-
+  
   const loadGlobalCapabilities = async () => {
     if (!token) {
       setGlobalCapabilities(null);
@@ -837,7 +830,6 @@ export default function App() {
         setToken(result.access_token);
         setUser(result.user);
         setNotice("Đăng nhập thành công.");
-        closeAuthModal();
       }
     } catch (reason) {
       setError((reason as Error).message);
@@ -874,7 +866,6 @@ export default function App() {
     setLockNotice("");
     setApprovedRosterStatuses({});
     setNotice("Bạn đã đăng xuất.");
-    setIsAuthModalOpen(true);
   };
 
   const createTeam = async (event: FormEvent<HTMLFormElement>) => {
@@ -2668,23 +2659,30 @@ export default function App() {
               )}
             </div>
           ) : (
-            <button
+            <a
+              href="#auth-section"
               className="ewc-user-block sidebar-login"
               data-testid="sidebar-login"
-              type="button"
-              title="Đăng nhập"
-              onClick={() => {
+              role="link"
+              title={t.navAccount}
+              onClick={(e) => {
+                e.preventDefault();
                 setError("");
                 setNotice("");
                 setAuthMode("login");
-                setIsAuthModalOpen(true);
+                const el = document.getElementById("auth-section");
+                if (el) {
+                  el.scrollIntoView({ behavior: "smooth" });
+                }
+                const u = document.querySelector('input[name="username"]') as HTMLInputElement;
+                u?.focus();
               }}
             >
               <span className="ewc-avatar-wrap">
-                <img src="/ewc/avatar.png" alt="Đăng nhập" className="ewc-avatar-img" />
+                <img src="/ewc/avatar.png" alt="" className="ewc-avatar-img" />
               </span>
               <strong>{t.navLogin}</strong>
-            </button>
+            </a>
           )}
         </div>
       </header>
@@ -3048,7 +3046,7 @@ export default function App() {
           </div>
         </header>
 
-        {(error || notice) && !isAuthModalOpen && <div className={`${error ? "message error" : "message success"}${error?.startsWith("Không thể tải catalog") ? " catalog-error" : ""}`}>
+        {(error || notice) && <div className={`${error ? "message error" : "message success"}${error?.startsWith("Không thể tải catalog") ? " catalog-error" : ""}`}>
           <p>{error || notice}</p>
           {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
             setError("");
@@ -3056,32 +3054,86 @@ export default function App() {
           }}>Thử lại</button>}
         </div>}
 
-        {user && (
-          <section className="auth-layout user-profile-layout">
-            <section className="panel auth-panel">
-              <div className="auth-kicker"><span className="auth-status-dot" /> NEXUS IDENTITY <span>SECURE ACCESS</span></div>
-              <div className="panel-title"><div><span className="auth-overline">PLAYER PROFILE</span><h2>{t.profileTitle}</h2></div><span>AUTH API</span></div>
+        <section className={`auth-layout ${user ? "user-profile-layout" : ""}`} id="auth-section">
+          <section className="panel auth-panel">
+            <div className="panel-title">
+              <h2>{user ? t.profileTitle : authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}</h2>
+              <span>AUTH API</span>
+            </div>
+            {user ? (
               <div className="profile">
                 <p><strong>{user.username}</strong></p>
-                <p>{user.email ?? "{t.profileVerifiedEmail}"} · {t.profileRole}: {user.role}</p>
+                <p>{user.email ?? t.profileVerifiedEmail} · {t.profileRole}: {user.role}</p>
                 <p className="muted">{t.profileSessionNote}</p>
                 <div style={{ marginTop: "14px" }}>
-                  <button type="button" className="button secondary small" onClick={logout}>Đăng xuất</button>
+                  <button type="button" className="button secondary small" onClick={logout}>{t.navLogout}</button>
                 </div>
               </div>
-            </section>
-            <aside className="panel checklist">
-              <span className="eyebrow">HỆ THỐNG GIẢI ĐẤU</span>
-              <h2>{t.profileWorkflowTitle}</h2>
-              <ul>
-                <li>{t.profileWorkflowItem1}</li>
-                <li>{t.profileWorkflowItem2}</li>
-                <li>{t.profileWorkflowItem3}</li>
-                <li>{t.profileWorkflowItem4}</li>
-              </ul>
-            </aside>
+            ) : (
+              <form onSubmit={submitAuth}>
+                {authMode === "register" && (
+                  <>
+                    <label>
+                      {t.authFullName}
+                      <input name="real_name" maxLength={100} placeholder={t.authFullNamePlaceholder} />
+                    </label>
+                    <label>
+                      {t.authEmail}
+                      <input name="email" type="email" required placeholder="you@arena.gg" />
+                    </label>
+                  </>
+                )}
+                <label>
+                  {t.authUsername}
+                  <input
+                    name="username"
+                    minLength={3}
+                    maxLength={50}
+                    required
+                    placeholder={t.authUsernamePlaceholder}
+                    autoComplete="username"
+                  />
+                </label>
+                <label>
+                  {t.authPassword}
+                  <input
+                    name="password"
+                    type="password"
+                    minLength={8}
+                    maxLength={128}
+                    required
+                    placeholder={t.authPasswordHint}
+                    autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                  />
+                </label>
+                <button className="button" disabled={loading}>
+                  {loading ? t.authProcessing : authMode === "login" ? t.authBtnLogin : t.authBtnRegister}
+                </button>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    setError("");
+                    setNotice("");
+                    setAuthMode(authMode === "login" ? "register" : "login");
+                  }}
+                >
+                  {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
+                </button>
+              </form>
+            )}
           </section>
-        )}
+          <aside className="panel checklist">
+            <span className="eyebrow">HỆ THỐNG GIẢI ĐẤU</span>
+            <h2>{t.profileWorkflowTitle}</h2>
+            <ul>
+              <li>{t.profileWorkflowItem1}</li>
+              <li>{t.profileWorkflowItem2}</li>
+              <li>{t.profileWorkflowItem3}</li>
+              <li>{t.profileWorkflowItem4}</li>
+            </ul>
+          </aside>
+        </section>
     <section id="tournaments" className="tournament-zone">
       <div className="section-heading">
         <div>
@@ -4265,112 +4317,6 @@ export default function App() {
     </section>
   </main>
 
-  {/* Login / Register Modal Dialog */}
-  {isAuthModalOpen && (
-    <div
-      className="auth-modal-overlay"
-      onClick={closeAuthModal}
-    >
-      <div
-        className="auth-modal-card"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="auth-modal-title"
-      >
-        <button
-          type="button"
-          className="auth-modal-close"
-          onClick={closeAuthModal}
-          aria-label="Đóng giao diện đăng nhập"
-        >
-          ✕
-        </button>
-        <div className="auth-kicker">
-          <span className="auth-status-dot" /> NEXUS IDENTITY <span>SECURE ACCESS</span>
-        </div>
-        <div className="panel-title">
-          <div>
-            <span className="auth-overline">
-              {authMode === "login" ? t.authWelcomeBack : t.authJoinArena}
-            </span>
-            <h2 id="auth-modal-title">
-              {authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}
-            </h2>
-          </div>
-          <span>AUTH API</span>
-        </div>
-
-        {(error || notice) && (
-          <div className={`message ${error ? "error" : "success"}`}>
-            <p>{error || notice}</p>
-          </div>
-        )}
-
-        <form className="auth-form" onSubmit={submitAuth}>
-          <p className="auth-intro">
-            {authMode === "login"
-              ? t.authLoginDesc
-              : t.authRegisterDesc}
-          </p>
-          {authMode === "register" && (
-            <>
-              <label className="auth-field">
-                {t.authFullName}
-                <input name="real_name" maxLength={100} placeholder={t.authFullNamePlaceholder} />
-              </label>
-              <label className="auth-field">
-                {t.authEmail}
-                <input name="email" type="email" required placeholder="you@arena.gg" />
-              </label>
-            </>
-          )}
-          <label className="auth-field">
-            {t.authUsername}
-            <input
-              name="username"
-              minLength={3}
-              maxLength={50}
-              required
-              placeholder={t.authUsernamePlaceholder}
-              autoComplete="username"
-            />
-          </label>
-          <label className="auth-field">
-            {t.authPassword}
-            <input
-              name="password"
-              type="password"
-              minLength={8}
-              maxLength={128}
-              required
-              placeholder={t.authPasswordHint}
-              autoComplete={authMode === "login" ? "current-password" : "new-password"}
-            />
-          </label>
-          <div className="auth-submit-row">
-            <span className="auth-secure-note">✦ {t.authSecureConnection}</span>
-            <button className="button auth-submit" disabled={loading}>
-              {loading ? t.authProcessing : authMode === "login" ? t.authBtnLogin : t.authBtnRegister}
-              <span>↗</span>
-            </button>
-          </div>
-          <button
-            type="button"
-            className="link-button auth-switch"
-            onClick={() => {
-              setError("");
-              setNotice("");
-              setAuthMode(authMode === "login" ? "register" : "login");
-            }}
-          >
-            {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
-          </button>
-        </form>
-      </div>
-    </div>
-  )}
-
   {/* News Article Detail Modal */}
   {selectedNewsArticle && (
     <div
@@ -4388,7 +4334,7 @@ export default function App() {
           type="button"
           className="auth-modal-close"
           onClick={() => setSelectedNewsArticle(null)}
-          aria-label="{t.newsClose}"
+          aria-label={t.newsClose || "Đóng"}
         >
           ✕
         </button>

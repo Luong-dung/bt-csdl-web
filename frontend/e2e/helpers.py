@@ -11,8 +11,6 @@ def unique_username(prefix: str) -> str:
 
 
 def register_user(page: Page, username: str, password: str = TEST_PASSWORD) -> None:
-    if not page.get_by_role("button", name="Chưa có tài khoản? Đăng ký").is_visible():
-        page.locator(".sidebar-login, [data-testid='sidebar-login']").first.click()
     page.get_by_role("button", name="Chưa có tài khoản? Đăng ký").click()
     page.get_by_label("Họ và tên").fill(f"Browser Test {username}")
     page.get_by_label("Email").fill(f"{username}@example.com")
@@ -23,8 +21,6 @@ def register_user(page: Page, username: str, password: str = TEST_PASSWORD) -> N
 
 
 def login(page: Page, username: str, password: str = TEST_PASSWORD) -> None:
-    if not page.get_by_label("Tên đăng nhập").is_visible():
-        page.locator(".sidebar-login, [data-testid='sidebar-login']").first.click()
     page.get_by_label("Tên đăng nhập").fill(username)
     page.get_by_label("Mật khẩu").fill(password)
     page.get_by_role("button", name="Đăng nhập").click()

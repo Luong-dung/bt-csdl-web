@@ -25,6 +25,7 @@ export type Translations = {
   navNews: string;
   navLogin: string;
   navLogout: string;
+  navAccount: string;
 
   // Hero
   heroEyebrow: string;
@@ -270,6 +271,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     navNews: "Tin tức",
     navLogin: "Đăng nhập",
     navLogout: "Đăng xuất",
+    navAccount: "Tài khoản",
 
     heroEyebrow: "THẾ HỆ TRANH TÀI TIẾP THEO",
     heroTitle1: "Khẳng định bản lĩnh.",
@@ -500,6 +502,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     navNews: "News",
     navLogin: "Sign In",
     navLogout: "Sign Out",
+    navAccount: "Account",
 
     heroEyebrow: "THE NEXT GENERATION OF COMPETITION",
     heroTitle1: "Build your legacy.",
@@ -730,6 +733,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     navNews: "뉴스",
     navLogin: "로그인",
     navLogout: "로그아웃",
+    navAccount: "계정",
 
     heroEyebrow: "차세대 e스포츠 경쟁",
     heroTitle1: "당신의 전설을 쓰다.",
@@ -960,6 +964,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     navNews: "ニュース",
     navLogin: "ログイン",
     navLogout: "ログアウト",
+    navAccount: "アカウント",
 
     heroEyebrow: "次世代のeスポーツ競技",
     heroTitle1: "伝説を築け。",
@@ -1190,6 +1195,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     navNews: "资讯",
     navLogin: "登录",
     navLogout: "退出",
+    navAccount: "账户",
 
     heroEyebrow: "次世代电竞赛事",
     heroTitle1: "铸就传奇。",
