@@ -143,12 +143,48 @@ const DEFAULT_PUBLISHERS: Publisher[] = [
   { publisher_id: 2, name: "Garena" },
 ];
 
-const DEFAULT_GAMES: Game[] = [
-  { game_id: 1, name: "Đấu Trường Chân Lý", slug: "teamfight-tactics", publisher_id: 1 },
-  { game_id: 2, name: "Liên Minh Huyền Thoại", slug: "league-of-legends", publisher_id: 1 },
-  { game_id: 3, name: "VALORANT", slug: "valorant", publisher_id: 1 },
-  { game_id: 4, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
-  { game_id: 5, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
+export const TFT_GAME: Game = {
+  game_id: 0,
+  name: "Đấu Trường Chân Lý",
+  slug: "teamfight-tactics",
+  publisher_id: 1,
+};
+
+export const DEFAULT_GAMES: Game[] = [
+  TFT_GAME,
+  { game_id: 1, name: "League of Legends", slug: "league-of-legends", publisher_id: 1 },
+  { game_id: 2, name: "VALORANT", slug: "valorant", publisher_id: 1 },
+  { game_id: 3, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
+  { game_id: 4, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
+];
+
+export const INITIAL_AREAS: Area[] = [
+  { area_id: 1, code: "GLOBAL", name: "Global", country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
+  { area_id: 2, code: "APAC", name: "Asia-Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "all" },
+  { area_id: 3, code: "VN", name: "Vietnam", country: "Việt Nam", flag: "🇻🇳", gameSlug: "all" },
+  { area_id: 4, code: "VN-HCM", name: "Ho Chi Minh City", country: "TP. Hồ Chí Minh", flag: "🇻🇳", gameSlug: "all" },
+  { area_id: 5, code: "LCK", name: "Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
+  { area_id: 6, code: "LPL", name: "China (LPL)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
+  { area_id: 7, code: "LEC", name: "EMEA (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
+  { area_id: 8, code: "LCS", name: "North America (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
+  { area_id: 9, code: "CBLOL", name: "Brazil (CBLOL)", country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
+  { area_id: 10, code: "LCP", name: "Asia-Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
+  { area_id: 11, code: "TFT AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
+  { area_id: 12, code: "TFT EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
+  { area_id: 13, code: "TFT APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
+  { area_id: 14, code: "TFT CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
+  { area_id: 15, code: "VCT Americas", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
+  { area_id: 16, code: "VCT EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
+  { area_id: 17, code: "VCT Pacific", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
+  { area_id: 18, code: "VCT CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
+  { area_id: 19, code: "RPL", name: "Thailand (RPL)", country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
+  { area_id: 20, code: "AOG", name: "Vietnam (AOG)", country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
+  { area_id: 21, code: "GCS", name: "Chinese Taipei (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
+  { area_id: 22, code: "ASL", name: "Indonesia (ASL)", country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
+  { area_id: 23, code: "FFWS SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
+  { area_id: 24, code: "FFWS BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
+  { area_id: 25, code: "FFWS LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
+  { area_id: 26, code: "FFWS MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
 ];
 
 function isRemovedGame(nameOrSlug?: string | null): boolean {
@@ -445,9 +481,9 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
-  const [games, setGames] = useState<Game[]>([]);
-  const [publishers, setPublishers] = useState<Publisher[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
+  const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
+  const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
+  const [areas, setAreas] = useState<Area[]>(INITIAL_AREAS);
   const [isCircuitsOpen, setIsCircuitsOpen] = useState(false);
   const [circuitTabGameSlug, setCircuitTabGameSlug] = useState<string>("all");
   const activeSelectedGame = games.find((g) => g.game_id === selectedGameId);
@@ -629,8 +665,10 @@ export default function App() {
         const filteredGames = loadedGames.filter(
           (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
         );
-        activeGames = filteredGames;
-        setGames(filteredGames);
+        const hasTft = filteredGames.some((g) => g.slug === "teamfight-tactics");
+        const mergedGames = hasTft ? filteredGames : [TFT_GAME, ...filteredGames];
+        activeGames = mergedGames;
+        setGames(mergedGames);
       }
       const validTeams = (loadedTeams || []).filter((t) => {
         if (isRemovedGame(t.name) || isRemovedGame(t.tag)) return false;
@@ -658,7 +696,9 @@ export default function App() {
     const filteredGames = (loadedGames || []).filter(
       (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
     );
-    setGames(filteredGames);
+    const hasTft = filteredGames.some((g) => g.slug === "teamfight-tactics");
+    const mergedGames = hasTft ? filteredGames : [TFT_GAME, ...filteredGames];
+    setGames(mergedGames);
 
     const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
       const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
@@ -673,6 +713,13 @@ export default function App() {
   };
 
   const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter, areaId = tournamentAreaFilter) => {
+    if (gameId === "0") {
+      setTournaments([]);
+      setTournamentTotal(0);
+      setTournamentLoading(false);
+      setTournamentError("");
+      return;
+    }
     setTournamentLoading(true);
     setTournamentError("");
     try {
@@ -3138,7 +3185,7 @@ export default function App() {
                   className="picker-card"
                   onClick={() => {
                     if (g.publisher_id) {
-                      handleSelectPublisher(g.publisher_id);
+                      setSelectedPublisherId(g.publisher_id);
                     }
                     setSelectedGameId(g.game_id);
                     setTournamentGameFilter(String(g.game_id));
@@ -3259,7 +3306,7 @@ export default function App() {
                 setSelectedGameId(found ? found.game_id : null);
                 if (found) {
                   setCircuitTabGameSlug(found.slug);
-                  if (found.publisher_id) handleSelectPublisher(found.publisher_id);
+                  if (found.publisher_id) setSelectedPublisherId(found.publisher_id);
                 }
               } else {
                 setSelectedGameId(null);
@@ -3350,7 +3397,7 @@ export default function App() {
                     setSelectedGameId(g.game_id);
                     setTournamentGameFilter(String(g.game_id));
                     if (g.publisher_id) {
-                      handleSelectPublisher(g.publisher_id);
+                      setSelectedPublisherId(g.publisher_id);
                     }
                     setTournamentPage(0);
                   }}
@@ -3359,6 +3406,7 @@ export default function App() {
                 </button>
               );
             })}
+
           </div>
         </div>
 
@@ -3376,14 +3424,14 @@ export default function App() {
                   setTournamentPage(0);
 
                   // Switch game below to match this area's game!
-                  if (area.gameSlug && area.gameSlug !== "all") {
+                  if (!isSelected && area.gameSlug && area.gameSlug !== "all") {
                     const matchedGame = games.find((g) => g.slug === area.gameSlug);
                     if (matchedGame) {
                       setSelectedGameId(matchedGame.game_id);
                       setTournamentGameFilter(String(matchedGame.game_id));
                       setCircuitTabGameSlug(matchedGame.slug);
                       if (matchedGame.publisher_id) {
-                        handleSelectPublisher(matchedGame.publisher_id);
+                        setSelectedPublisherId(matchedGame.publisher_id);
                       }
                     }
                   }
@@ -3411,7 +3459,7 @@ export default function App() {
       )}
 
             {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> {t.btnCreateTournament}</summary><form onSubmit={submitTournament} className="tournament-form">
-        <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.tcGameSelect}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
+        <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.tcGameSelect}</option>{games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
         <div className="detail-header"><div><span className="eyebrow">{t.detailTitle}</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>{t.detailClose}</button></div>
@@ -3501,7 +3549,7 @@ export default function App() {
             )}
             {tournamentCapabilities.editable_fields.includes("game_id") && (
               <label>Tựa game<select name="game_id" defaultValue={selectedTournament.game_id} required>
-                {games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}
+                {games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}
               </select></label>
             )}
             {tournamentCapabilities.editable_fields.includes("format") && (
@@ -4219,7 +4267,7 @@ export default function App() {
       {user ? <form className="team-form" onSubmit={createTeam}>
         <label>{t.teamNameLabel}<input name="name" placeholder="Phoenix Gaming" minLength={2} maxLength={100} required /></label>
         <label>{t.teamTagLabel}<input name="tag" placeholder="PHX" minLength={2} maxLength={10} pattern="[A-Za-z0-9]+" required /></label>
-        <label>{t.teamGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.teamGameSelectPlaceholder}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
+        <label>{t.teamGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.teamGameSelectPlaceholder}</option>{games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
         <button className="button" disabled={loading}>{t.teamCreateBtn}</button>
       </form> : <p className="muted">{t.teamLoginRequired}</p>}
       {teams.length === 0 ? <p className="muted">{t.teamEmpty}</p> : <div className="team-list">{teams.map((team) => <article data-team-id={team.team_id} key={team.team_id}>
