@@ -32,7 +32,7 @@ Mỗi tuần phải có đủ bốn phần:
 
 ## Tuần đang thực hiện
 
-Kế hoạch chi tiết của tuần hiện tại được tách riêng để dễ cập nhật và giữ lịch sử:
+Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và giữ lịch sử. W44 đã chốt; tuần kế tiếp W45 bắt đầu ngày 02/11:
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
 - [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): cập nhật 23/10/2026, `8/8 DONE`, `0 IN PROGRESS`, `0 TODO`; backend/PostgreSQL, frontend build và kiểm thử trình duyệt đạt. Chi tiết bằng chứng và giới hạn xác minh CI/review ghi trong W43.
@@ -40,6 +40,8 @@ Kế hoạch chi tiết của tuần hiện tại được tách riêng để d�
 - [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): chốt sớm ngày 26/10/2026, **`8/8 DONE`, `0 IN PROGRESS`, `0 TODO`**; cả 8 task đã review/merge, CI và nghiệm thu local đạt. Hoàn thành UI giải, capability và đăng ký/duyệt đội. [Đánh giá từng người](./weeks/2026-W44.md#6-đánh-giá-cuối-tuần): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm đề xuất trên thang 5).
 
 - [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): chốt nghiệm thu ngày 01/11/2026, **`8/8 DONE`, `0 REVIEW`, `0 IN PROGRESS`, `0 TODO`**. Hoàn thành roster/snapshot, khóa và điều kiện bắt đầu giải, stage, UI/phân trang, integration và Browser E2E. Cả 8 task đã review/merge; bằng chứng CI và kiểm tra local ghi tại [bảng tuần](./weeks/2026-W44-2.md). [Đánh giá từng người](./weeks/2026-W44-2.md#6-đánh-giá-cuối-đợt): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm chốt W44(2) được nhóm trưởng xác nhận ngày 01/11/2026, thang 5).
+
+- [2026-W45 — 02/11/2026 đến 08/11/2026](./weeks/2026-W45.md): kế hoạch lập ngày 01/11, **`0/8 DONE`, `8 TODO`**, mỗi người hai task. Mục tiêu: lịch trận thủ công, vòng đời/nhập kết quả, quyền trọng tài theo giải, API/UI và integration/E2E; tiếp nhận retry badge roster và test đổi giải khi đang khóa từ W44(2). Bracket tự sinh và standings theo dõi sau W45.
 
 W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 là tuần hiện tại (26/10–01/11), đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
@@ -163,6 +165,8 @@ Một đầu việc chỉ được nghiệm thu khi:
 **Nghiệm thu tuần:** thay đổi membership sau khi khóa giải không làm thay đổi roster snapshot.
 
 ### Tuần 7 — Match, bracket và standings
+
+**Ánh xạ tuần lịch:** [W45 (02–08/11)](./weeks/2026-W45.md) triển khai phần trận thủ công của W07-01 (W45-01/-03/-05), nhập kết quả W07-02 (W45-02/-06), quyền trọng tài và kiểm thử (W45-04/-07/-08). Phần tự sinh bracket của W07-01, standings W07-03 và bracket/bảng xếp hạng W07-04 dự kiến lập kế hoạch W46 sau nghiệm thu W45. Các dòng dưới vẫn TODO ở thời điểm lập kế hoạch; không coi có kế hoạch là đã triển khai. Phạm vi W06 đã được nghiệm thu qua W44(2); bảng W06 được Doanh nhận đồng bộ bằng PR riêng sau #75.
 
 **Mục tiêu:** quản lý thi đấu từ lịch đến kết quả.
 
