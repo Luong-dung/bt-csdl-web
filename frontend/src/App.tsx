@@ -439,6 +439,7 @@ export default function App() {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) ?? "");
   const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [activeNav, setActiveNav] = useState<"home" | "play" | "team" | "areas" | "news">("home");
   const [selectedNewsArticle, setSelectedNewsArticle] = useState<NewsArticle | null>(null);
@@ -758,7 +759,12 @@ export default function App() {
 
   useEffect(() => {
     const handleHash = () => {
-      if (window.location.hash === "#login" || window.location.hash === "#auth-section") {
+      if (window.location.hash === "#login") {
+        setError("");
+        setNotice("");
+        setAuthMode("login");
+        setIsAuthModalOpen(true);
+      } else if (window.location.hash === "#auth-section") {
         const el = document.getElementById("auth-section");
         if (el) el.scrollIntoView({ behavior: "smooth" });
         const input = document.querySelector('input[name="username"]') as HTMLInputElement;
@@ -767,7 +773,8 @@ export default function App() {
     };
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-                setUserMenuOpen(false);
+        setIsAuthModalOpen(false);
+        setUserMenuOpen(false);
         setShowGamesBar(false);
         setPublisherMenuOpen(false);
       }
@@ -830,6 +837,7 @@ export default function App() {
         setToken(result.access_token);
         setUser(result.user);
         setNotice("Đăng nhập thành công.");
+        setIsAuthModalOpen(false);
       }
     } catch (reason) {
       setError((reason as Error).message);
@@ -843,6 +851,7 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUser(null);
+    setIsAuthModalOpen(false);
     setUserMenuOpen(false);
     setTeamCapabilities(null);
     setTeamCapabilityError("");
@@ -2660,7 +2669,7 @@ export default function App() {
             </div>
           ) : (
             <a
-              href="#auth-section"
+              href="#login"
               className="ewc-user-block sidebar-login"
               data-testid="sidebar-login"
               role="link"
@@ -2670,12 +2679,7 @@ export default function App() {
                 setError("");
                 setNotice("");
                 setAuthMode("login");
-                const el = document.getElementById("auth-section");
-                if (el) {
-                  el.scrollIntoView({ behavior: "smooth" });
-                }
-                const u = document.querySelector('input[name="username"]') as HTMLInputElement;
-                u?.focus();
+                setIsAuthModalOpen(true);
               }}
             >
               <span className="ewc-avatar-wrap">
@@ -3057,7 +3061,7 @@ export default function App() {
         <section className={`auth-layout ${user ? "user-profile-layout" : ""}`} id="auth-section">
           <section className="panel auth-panel">
             <div className="panel-title">
-              <h2>{user ? t.profileTitle : authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}</h2>
+              <h2>{user ? t.profileTitle : isAuthModalOpen ? "Xác thực danh tính" : authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}</h2>
               <span>AUTH API</span>
             </div>
             {user ? (
@@ -3069,7 +3073,7 @@ export default function App() {
                   <button type="button" className="button secondary small" onClick={logout}>{t.navLogout}</button>
                 </div>
               </div>
-            ) : (
+            ) : !isAuthModalOpen ? (
               <form onSubmit={submitAuth}>
                 {authMode === "register" && (
                   <>
@@ -3121,6 +3125,10 @@ export default function App() {
                   {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
                 </button>
               </form>
+            ) : (
+              <div className="auth-placeholder muted" style={{ padding: "20px 0", textAlign: "center" }}>
+                <p>Đang mở hộp thoại đăng nhập...</p>
+              </div>
             )}
           </section>
           <aside className="panel checklist">
@@ -4316,6 +4324,106 @@ export default function App() {
       </div>}
     </section>
   </main>
+
+  {/* Auth Modal (Sign In / Register Popup Dialog) */}
+  {isAuthModalOpen && (
+    <div
+      className="auth-modal-overlay"
+      onClick={() => setIsAuthModalOpen(false)}
+    >
+      <div
+        className="auth-modal-card"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-modal-dialog-title"
+      >
+        <button
+          type="button"
+          className="auth-modal-close"
+          onClick={() => setIsAuthModalOpen(false)}
+          aria-label="Đóng"
+        >
+          ✕
+        </button>
+        <div className="auth-kicker">
+          <span className="auth-status-dot" /> NEXUS IDENTITY <span>SECURE ACCESS</span>
+        </div>
+        <div className="panel-title" style={{ marginBottom: "16px" }}>
+          <div>
+            <span className="auth-overline">
+              {authMode === "login" ? t.authWelcomeBack : t.authJoinArena}
+            </span>
+            <h2 id="auth-modal-dialog-title" style={{ margin: 0 }}>
+              {authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}
+            </h2>
+          </div>
+          <span>AUTH API</span>
+        </div>
+
+        {(error || notice) && (
+          <div className={`message ${error ? "error" : "success"}`} style={{ marginBottom: "16px" }}>
+            <p>{error || notice}</p>
+          </div>
+        )}
+
+        <form onSubmit={submitAuth} className="auth-form" style={{ marginTop: 0 }}>
+          {authMode === "register" && (
+            <>
+              <label>
+                {t.authFullName}
+                <input name="real_name" maxLength={100} placeholder={t.authFullNamePlaceholder} />
+              </label>
+              <label>
+                {t.authEmail}
+                <input name="email" type="email" required placeholder="you@arena.gg" />
+              </label>
+            </>
+          )}
+          <label>
+            {t.authUsername}
+            <input
+              name="username"
+              minLength={3}
+              maxLength={50}
+              required
+              placeholder={t.authUsernamePlaceholder}
+              autoComplete="username"
+              autoFocus
+            />
+          </label>
+          <label>
+            {t.authPassword}
+            <input
+              name="password"
+              type="password"
+              minLength={8}
+              maxLength={128}
+              required
+              placeholder={t.authPasswordHint}
+              autoComplete={authMode === "login" ? "current-password" : "new-password"}
+            />
+          </label>
+          <button className="button" disabled={loading} style={{ width: "100%", marginTop: "8px" }}>
+            {loading ? t.authProcessing : authMode === "login" ? t.authBtnLogin : t.authBtnRegister}
+          </button>
+          <div style={{ textAlign: "center", marginTop: "12px" }}>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setError("");
+                setNotice("");
+                setAuthMode(authMode === "login" ? "register" : "login");
+              }}
+            >
+              {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )}
 
   {/* News Article Detail Modal */}
   {selectedNewsArticle && (
