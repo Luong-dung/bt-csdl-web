@@ -1,5 +1,5 @@
 import { LangCode, LANGUAGES, TRANSLATIONS, getLocalizedGameName, getLocalizedRegionCountry, getLocalizedAreaDesc, getLocalizedNews } from "./i18n";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
@@ -42,6 +42,11 @@ export const AREA_METAS: Record<string, { country: string; flag: string; gameSlu
   "FFWS BR": { country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
   "FFWS LATAM": { country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
   "FFWS MEA": { country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
+  AVC: { country: "Châu Á – Quốc tế", flag: "🌏", gameSlug: "arena-of-valor", name: "AoV International Championship" },
+  "FFWS NA": { country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "free-fire", name: "FFWS North America" },
+  "FFWS PK": { country: "Pakistan", flag: "🇵🇰", gameSlug: "free-fire", name: "FFWS Pakistan" },
+  "FFWS IN": { country: "Ấn Độ", flag: "🇮🇳", gameSlug: "free-fire", name: "FFWS India" },
+  "FFWS BD": { country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire", name: "FFWS Bangladesh" },
 };
 type Team = { team_id: number; name: string; tag: string; game_id: number };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
@@ -185,6 +190,11 @@ export const INITIAL_AREAS: Area[] = [
   { area_id: 24, code: "FFWS BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
   { area_id: 25, code: "FFWS LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
   { area_id: 26, code: "FFWS MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
+  { area_id: 27, code: "AVC", name: "AoV International Championship", country: "Châu Á – Quốc tế", flag: "🌏", gameSlug: "arena-of-valor" },
+  { area_id: 28, code: "FFWS NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "free-fire" },
+  { area_id: 29, code: "FFWS PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", gameSlug: "free-fire" },
+  { area_id: 30, code: "FFWS IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", gameSlug: "free-fire" },
+  { area_id: 31, code: "FFWS BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire" },
 ];
 
 function isRemovedGame(nameOrSlug?: string | null): boolean {
@@ -226,6 +236,74 @@ function gameMatchesPublisher(game: Game, publisherId: number | null, publisherL
     return gameName.includes("liên quân") || gameName.includes("free fire") || gameName.includes("arena of valor") || gameName.includes("fc online") || gameName.includes("fifa");
   }
   return false;
+}
+
+export type CircuitItem = {
+  area_id: number;
+  code: string;
+  name: string;
+  country: string;
+  flag: string;
+};
+
+export const GAME_CIRCUITS_MAP: Record<string, { code: string; name: string; country: string; flag: string; dbCodes: string[] }[]> = {
+  "league-of-legends": [
+    { code: "LCK", name: "Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", dbCodes: ["LCK"] },
+    { code: "LPL", name: "China (LPL)", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["LPL"] },
+    { code: "LEC", name: "EMEA (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", dbCodes: ["LEC"] },
+    { code: "LCS", name: "North America (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", dbCodes: ["LCS"] },
+    { code: "CBLOL", name: "Brazil (CBLOL)", country: "Brazil", flag: "🇧🇷", dbCodes: ["CBLOL"] },
+    { code: "LCP", name: "Asia-Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["LCP"] },
+  ],
+  "teamfight-tactics": [
+    { code: "AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["TFT AMER", "AMER"] },
+    { code: "EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["TFT EMEA", "EMEA"] },
+    { code: "APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["TFT APAC", "APAC"] },
+    { code: "CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["TFT CN", "CN"] },
+  ],
+  "valorant": [
+    { code: "AMER", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["VCT Americas", "VCT AMER", "AMER"] },
+    { code: "EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["VCT EMEA", "EMEA"] },
+    { code: "PACIFIC", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["VCT Pacific", "VCT PACIFIC", "PACIFIC"] },
+    { code: "CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["VCT CN", "CN"] },
+  ],
+  "arena-of-valor": [
+    { code: "RPL", name: "Thailand (RPL)", country: "Thái Lan", flag: "🇹🇭", dbCodes: ["RPL"] },
+    { code: "AOG", name: "Vietnam (AOG)", country: "Việt Nam", flag: "🇻🇳", dbCodes: ["AOG"] },
+    { code: "GCS", name: "Chinese Taipei (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", dbCodes: ["GCS"] },
+    { code: "ASL", name: "Indonesia (ASL)", country: "Indonesia", flag: "🇮🇩", dbCodes: ["ASL"] },
+    { code: "AVC", name: "AoV International Championship", country: "Châu Á – Quốc tế", flag: "🌏", dbCodes: ["AVC"] },
+  ],
+  "free-fire": [
+    { code: "BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", dbCodes: ["FFWS BR", "BR"] },
+    { code: "LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", dbCodes: ["FFWS LATAM", "LATAM"] },
+    { code: "NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", dbCodes: ["FFWS NA", "NA"] },
+    { code: "SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", dbCodes: ["FFWS SEA", "SEA"] },
+    { code: "MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["FFWS MEA", "MEA"] },
+    { code: "PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", dbCodes: ["FFWS PK", "PK"] },
+    { code: "IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", dbCodes: ["FFWS IN", "IN"] },
+    { code: "BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", dbCodes: ["FFWS BD", "BD"] },
+  ],
+};
+
+function getGameCanonicalSlug(game: Game | null): string | null {
+  if (!game) return null;
+  const s = (game.slug || "").toLowerCase();
+  const n = (game.name || "").toLowerCase();
+  if (s.includes("league") || n.includes("league") || n.includes("huyền thoại") || n.includes("lol")) return "league-of-legends";
+  if (s.includes("teamfight") || n.includes("teamfight") || n.includes("chân lý") || n.includes("tft")) return "teamfight-tactics";
+  if (s.includes("valorant") || n.includes("valorant") || n.includes("val")) return "valorant";
+  if (s.includes("arena") || n.includes("arena") || n.includes("liên quân") || n.includes("aov")) return "arena-of-valor";
+  if (s.includes("free-fire") || n.includes("free fire") || n.includes("ff")) return "free-fire";
+  return game.slug;
+}
+
+function isAreaMatchingGame(area: Area, game: Game | null): boolean {
+  if (!game) return true;
+  const slug = getGameCanonicalSlug(game);
+  if (!slug || !GAME_CIRCUITS_MAP[slug]) return true;
+  const circuits = GAME_CIRCUITS_MAP[slug];
+  return circuits.some((c) => c.dbCodes.includes(area.code) || c.code === area.code);
 }
 
 function getPublisherLogo(nameOrId?: string | number | null): string | null {
@@ -292,7 +370,7 @@ function getGameLogo(slugOrName?: string | null): string | null {
     lower.split(" ").includes("ff") ||
     lower === "ff"
   ) {
-    return "/game-logos/free-fire-naruto.png?v=2";
+    return "/game-logos/free-fire.png?v=3";
   }
 
   return null;
@@ -420,7 +498,7 @@ const GAME_METAS: Record<string, GameMeta> = {
     title: "FREE FIRE MAX",
     subtitle: "BATTLE ROYALE ĐỈNH CAO",
     tagline: "Đấu trường sinh tồn tốc độ cao. Sẵn sàng so tài và giành vị trí Top 1 danh giá cùng các chiến đội hàng đầu thế giới.",
-    coverImage: "/games/free-fire.png",
+    coverImage: "/games/free-fire.png?v=3",
     badge: "FF",
     publisherName: "Garena",
   },
@@ -484,14 +562,6 @@ export default function App() {
   const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
   const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
   const [areas, setAreas] = useState<Area[]>(INITIAL_AREAS);
-  const [isCircuitsOpen, setIsCircuitsOpen] = useState(false);
-  const [circuitTabGameSlug, setCircuitTabGameSlug] = useState<string>("all");
-  const activeSelectedGame = games.find((g) => g.game_id === selectedGameId);
-  const currentCircuitAreas = activeSelectedGame
-    ? areas.filter((a) => a.gameSlug === activeSelectedGame.slug || a.code === "GLOBAL")
-    : circuitTabGameSlug === "all"
-    ? areas
-    : areas.filter((a) => a.gameSlug === circuitTabGameSlug || a.code === "GLOBAL");
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
@@ -516,6 +586,74 @@ export default function App() {
   const [tournamentGameFilter, setTournamentGameFilter] = useState("");
   const [tournamentStatusFilter, setTournamentStatusFilter] = useState("");
   const [tournamentAreaFilter, setTournamentAreaFilter] = useState("");
+  const [createTournamentGameId, setCreateTournamentGameId] = useState("");
+
+  const activeFilterGame = tournamentGameFilter
+    ? games.find((g) => String(g.game_id) === tournamentGameFilter)
+    : selectedGameId !== null
+      ? games.find((g) => g.game_id === selectedGameId)
+      : null;
+
+  const tournamentAvailableAreas = useMemo(() => {
+    const slug = getGameCanonicalSlug(activeFilterGame ?? null);
+    if (!slug || !GAME_CIRCUITS_MAP[slug]) {
+      return areas.map((a) => ({
+        area_id: a.area_id,
+        code: a.code,
+        name: a.name,
+        country: a.country ?? a.name,
+        flag: a.flag ?? "🌐",
+      }));
+    }
+
+    const circuits = GAME_CIRCUITS_MAP[slug];
+    return circuits
+      .map((circuit) => {
+        const matched =
+          areas.find((a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))) ??
+          INITIAL_AREAS.find((a) => circuit.dbCodes.includes(a.code));
+        if (!matched) return null;
+        return {
+          area_id: matched.area_id,
+          code: circuit.code,
+          name: matched.name || circuit.name,
+          country: circuit.country,
+          flag: circuit.flag,
+        };
+      })
+      .filter((item): item is CircuitItem => item !== null);
+  }, [areas, activeFilterGame]);
+
+  const createFormActiveGame = games.find((g) => String(g.game_id) === createTournamentGameId);
+  const createFormAreas = useMemo(() => {
+    const slug = getGameCanonicalSlug(createFormActiveGame ?? null);
+    if (!slug || !GAME_CIRCUITS_MAP[slug]) {
+      return areas.map((a) => ({
+        area_id: a.area_id,
+        code: a.code,
+        name: a.name,
+        country: a.country ?? a.name,
+        flag: a.flag ?? "🌐",
+      }));
+    }
+
+    const circuits = GAME_CIRCUITS_MAP[slug];
+    return circuits
+      .map((circuit) => {
+        const matched =
+          areas.find((a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))) ??
+          INITIAL_AREAS.find((a) => circuit.dbCodes.includes(a.code));
+        if (!matched) return null;
+        return {
+          area_id: matched.area_id,
+          code: circuit.code,
+          name: matched.name || circuit.name,
+          country: circuit.country,
+          flag: circuit.flag,
+        };
+      })
+      .filter((item): item is CircuitItem => item !== null);
+  }, [areas, createFormActiveGame]);
   const [globalCapabilities, setGlobalCapabilities] = useState<GlobalCapabilities | null>(null);
   const [globalCapabilityError, setGlobalCapabilityError] = useState("");
   const [memberLoading, setMemberLoading] = useState(false);
@@ -758,6 +896,17 @@ export default function App() {
   }, [tournamentPage, tournamentGameFilter, tournamentStatusFilter, tournamentAreaFilter]);
 
   useEffect(() => {
+    if (!tournamentAreaFilter || !activeFilterGame) return;
+    const isValid = tournamentAvailableAreas.some(
+      (a) => String(a.area_id) === tournamentAreaFilter || a.code === tournamentAreaFilter
+    );
+    if (!isValid) {
+      setTournamentAreaFilter("");
+      setTournamentPage(0);
+    }
+  }, [activeFilterGame, tournamentAreaFilter, tournamentAvailableAreas]);
+
+  useEffect(() => {
     if (!token) return;
     const version = sessionVersion.current;
     const controller = new AbortController();
@@ -795,7 +944,9 @@ export default function App() {
       } else if (hash === "#teams") {
         setActiveNav("team");
       } else if (hash === "#areas") {
-        setActiveNav("areas");
+        setActiveNav("play");
+        const el = document.getElementById("tournaments");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
       } else if (hash === "#news") {
         setActiveNav("news");
       } else if (hash === "#home" || hash === "#top" || hash === "") {
@@ -2593,27 +2744,6 @@ export default function App() {
 
           <button
             type="button"
-            className={`ewc-item ${activeNav === "areas" ? "active" : ""}`}
-            onClick={() => {
-              setActiveNav("areas");
-              setShowGamesBar(false);
-              const el = document.getElementById("areas");
-              if (el) el.scrollIntoView({ behavior: "smooth" });
-            }}
-            title="Areas / Khu vực"
-          >
-            <span className="ewc-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="2" y1="12" x2="22" y2="12" />
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-              </svg>
-            </span>
-            <strong>{t.navAreas}</strong>
-          </button>
-
-          <button
-            type="button"
             className={`ewc-item ${activeNav === "news" ? "active" : ""}`}
             onClick={() => {
               setActiveNav("news");
@@ -2969,18 +3099,6 @@ export default function App() {
                   className="mega-link-item"
                   onClick={() => {
                     setShowGamesBar(false);
-                    setActiveNav("areas");
-                    const el = document.getElementById("areas");
-                    if (el) el.scrollIntoView({ behavior: "smooth" });
-                  }}
-                >
-                  <span>{t.megaAreas}</span>
-                </button>
-                <button
-                  type="button"
-                  className="mega-link-item"
-                  onClick={() => {
-                    setShowGamesBar(false);
                     setActiveNav("news");
                     const el = document.getElementById("news");
                     if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -3284,7 +3402,6 @@ export default function App() {
             onClick={() => {
               setSelectedGameId(null);
               setTournamentGameFilter("");
-              setCircuitTabGameSlug("all");
               setTournamentAreaFilter("");
               setTournamentPage(0);
             }}
@@ -3301,21 +3418,30 @@ export default function App() {
               setTournamentPage(0);
               const val = event.target.value;
               setTournamentGameFilter(val);
+              let nextArea = tournamentAreaFilter;
               if (val) {
                 const found = games.find((g) => String(g.game_id) === val);
                 setSelectedGameId(found ? found.game_id : null);
-                if (found) {
-                  setCircuitTabGameSlug(found.slug);
-                  if (found.publisher_id) setSelectedPublisherId(found.publisher_id);
+                if (found && found.publisher_id) {
+                  setSelectedPublisherId(found.publisher_id);
+                }
+                if (tournamentAreaFilter && found) {
+                  const currentAreaObj = areas.find(
+                    (a) => String(a.area_id) === tournamentAreaFilter || a.code === tournamentAreaFilter
+                  );
+                  if (currentAreaObj && !isAreaMatchingGame(currentAreaObj, found)) {
+                    nextArea = "";
+                    setTournamentAreaFilter("");
+                  }
                 }
               } else {
                 setSelectedGameId(null);
-                setCircuitTabGameSlug("all");
               }
+              void loadTournaments(0, val, tournamentStatusFilter, nextArea);
             }}
           ><option value="">{t.allGamesFilter}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
-        <label>{t.allStatusesFilter}<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">{t.allStatusesFilter}</option><option value="UPCOMING">{t.statusUpcoming}</option><option value="ONGOING">{t.statusOngoing}</option><option value="COMPLETED">{t.statusCompleted}</option><option value="CANCELLED">{t.statusCancelled}</option></select></label>
-        <label>{t.allAreasFilter}<select value={tournamentAreaFilter} onChange={(event) => { setTournamentPage(0); setTournamentAreaFilter(event.target.value); }}><option value="">{t.allAreasFilter}</option>{currentCircuitAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.flag ? `${area.flag} ` : ""}{area.code} — {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}</option>)}</select></label>
+        <label>{t.allStatusesFilter}<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); void loadTournaments(0, tournamentGameFilter, event.target.value, tournamentAreaFilter); }}><option value="">{t.allStatusesFilter}</option><option value="UPCOMING">{t.statusUpcoming}</option><option value="ONGOING">{t.statusOngoing}</option><option value="COMPLETED">{t.statusCompleted}</option><option value="CANCELLED">{t.statusCancelled}</option></select></label>
+        <label>{t.allAreasFilter}<select value={tournamentAreaFilter} onChange={(event) => { setTournamentPage(0); setTournamentAreaFilter(event.target.value); void loadTournaments(0, tournamentGameFilter, tournamentStatusFilter, event.target.value); }}><option value="">{t.allAreasFilter}</option>{tournamentAvailableAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.flag ? `${area.flag} ` : ""}{area.code} — {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}</option>)}</select></label>
         <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ {t.btnRefresh}</button>
       </div>
       {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>{t.retry}</button></div>}
@@ -3339,127 +3465,9 @@ export default function App() {
       })}</div>
       {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← {t.pagePrev}</button><span>{t.pageLabel} {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>{t.pageNext} →</button></div>}
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
-      <div className="circuits-collapsible-bar" style={{ margin: "20px 0 14px" }}>
-        <button
-          type="button"
-          className="button secondary small"
-          onClick={() => setIsCircuitsOpen(!isCircuitsOpen)}
-          aria-expanded={isCircuitsOpen}
-          style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
-        >
-          <span>{isCircuitsOpen ? "▲" : "▼"}</span>
-          {isCircuitsOpen ? t.circuitToggleHide : t.circuitToggleShow}
-        </button>
-      </div>
-      {(isCircuitsOpen || activeNav === "areas") && (
-        <div className="tournament-circuit-zone" id="areas">
-        <div className="circuit-header">
-          <div className="circuit-header-info">
-            <span className="eyebrow">
-              {activeSelectedGame
-                ? `${t.areasBadge} — ${getLocalizedGameName(activeSelectedGame.name, lang).toUpperCase()}`
-                : t.areasBadge}
-            </span>
-            <h3>
-              {activeSelectedGame
-                ? `${t.areasTitle} · ${getLocalizedGameName(activeSelectedGame.name, lang)}`
-                : t.circuitHeaderTitle}
-            </h3>
-            <p className="circuit-subtext">
-              {activeSelectedGame
-                ? t.circuitGameDescTemplate.replace("{game}", getLocalizedGameName(activeSelectedGame.name, lang))
-                : t.circuitHeaderDesc}
-            </p>
-          </div>
-          <div className="circuit-game-tabs">
-            <button
-              type="button"
-              className={`circuit-tab-btn ${selectedGameId === null && circuitTabGameSlug === "all" ? "active" : ""}`}
-              onClick={() => {
-                setCircuitTabGameSlug("all");
-                setSelectedGameId(null);
-                setTournamentGameFilter("");
-                setTournamentAreaFilter("");
-                setTournamentPage(0);
-              }}
-            >
-              {t.circuitAllTabs}
-            </button>
-            {games.map((g) => {
-              const isTabActive = (selectedGameId === g.game_id) || (selectedGameId === null && circuitTabGameSlug === g.slug);
-              return (
-                <button
-                  key={g.game_id}
-                  type="button"
-                  className={`circuit-tab-btn ${isTabActive ? "active" : ""}`}
-                  onClick={() => {
-                    setCircuitTabGameSlug(g.slug);
-                    setSelectedGameId(g.game_id);
-                    setTournamentGameFilter(String(g.game_id));
-                    if (g.publisher_id) {
-                      setSelectedPublisherId(g.publisher_id);
-                    }
-                    setTournamentPage(0);
-                  }}
-                >
-                  {getLocalizedGameName(g.name, lang)}
-                </button>
-              );
-            })}
-
-          </div>
-        </div>
-
-        <div className="circuit-grid">
-          {currentCircuitAreas.map((area) => {
-            const isSelected = tournamentAreaFilter === String(area.area_id) || tournamentAreaFilter === area.code;
-            return (
-              <button
-                type="button"
-                key={area.area_id}
-                className={`circuit-card ${isSelected ? "is-selected-circuit" : ""}`}
-                onClick={() => {
-                  const newFilter = isSelected ? "" : String(area.area_id);
-                  setTournamentAreaFilter(newFilter);
-                  setTournamentPage(0);
-
-                  // Switch game below to match this area's game!
-                  if (!isSelected && area.gameSlug && area.gameSlug !== "all") {
-                    const matchedGame = games.find((g) => g.slug === area.gameSlug);
-                    if (matchedGame) {
-                      setSelectedGameId(matchedGame.game_id);
-                      setTournamentGameFilter(String(matchedGame.game_id));
-                      setCircuitTabGameSlug(matchedGame.slug);
-                      if (matchedGame.publisher_id) {
-                        setSelectedPublisherId(matchedGame.publisher_id);
-                      }
-                    }
-                  }
-                }}
-                aria-label={`Khu vực ${area.code} - ${area.country ?? area.name}`}
-              >
-                <div className="circuit-card-header">
-                  <span className="circuit-flag">{area.flag ?? "🌐"}</span>
-                  <strong className="circuit-code">{area.code}</strong>
-                </div>
-                <div className="circuit-country">
-                  {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}
-                </div>
-                <div className="circuit-full-name">{area.name}</div>
-                <div className="circuit-footer">
-                  <span className="circuit-action-indicator">
-                    {isSelected ? `✓ ${t.areasSelectedAction}` : `${t.areasViewTournaments}`}
-                  </span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      )}
 
             {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> {t.btnCreateTournament}</summary><form onSubmit={submitTournament} className="tournament-form">
-        <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.tcGameSelect}</option>{games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
+        <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required onChange={(e) => setCreateTournamentGameId(e.target.value)}><option value="" disabled>{t.tcGameSelect}</option>{games.filter((game) => game.game_id > 0).map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{createFormAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
         <div className="detail-header"><div><span className="eyebrow">{t.detailTitle}</span><h3>{selectedTournament.name}</h3><p>{games.find((game) => game.game_id === selectedTournament.game_id)?.name ?? "Game"} · {selectedTournament.format.replace("_", " ")}</p></div><button className="link-button" onClick={closeTournamentDetail}>{t.detailClose}</button></div>
