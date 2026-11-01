@@ -42,16 +42,21 @@ AREAS = (
     ("VCT EMEA", "VCT EMEA", "GLOBAL"),
     ("VCT Pacific", "VCT Pacific", "GLOBAL"),
     ("VCT CN", "VCT China", "GLOBAL"),
-    # 4. Liên Quân Mobile (LQM / Arena of Valor) - 4 khu vực
+    # 4. Liên Quân Mobile (LQM / Arena of Valor) - 5 khu vực
     ("RPL", "Thailand (RPL)", "GLOBAL"),
     ("AOG", "Vietnam (AOG)", "GLOBAL"),
     ("GCS", "Chinese Taipei (GCS)", "GLOBAL"),
     ("ASL", "Indonesia (ASL)", "GLOBAL"),
-    # 5. Free Fire - 4 khu vực
+    ("AVC", "AoV International Championship", "GLOBAL"),
+    # 5. Free Fire - 8 khu vực
     ("FFWS SEA", "FFWS Southeast Asia", "GLOBAL"),
     ("FFWS BR", "FFWS Brazil", "GLOBAL"),
     ("FFWS LATAM", "FFWS Latin America", "GLOBAL"),
     ("FFWS MEA", "FFWS Middle East & Africa", "GLOBAL"),
+    ("FFWS NA", "FFWS North America", "GLOBAL"),
+    ("FFWS PK", "FFWS Pakistan", "GLOBAL"),
+    ("FFWS IN", "FFWS India", "GLOBAL"),
+    ("FFWS BD", "FFWS Bangladesh", "GLOBAL"),
 )
 
 

@@ -561,7 +561,7 @@ export default function App() {
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
   const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
   const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
-  const [areas, setAreas] = useState<Area[]>(INITIAL_AREAS);
+  const [areas, setAreas] = useState<Area[]>([]);
 
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
@@ -609,9 +609,9 @@ export default function App() {
     const circuits = GAME_CIRCUITS_MAP[slug];
     return circuits
       .map((circuit) => {
-        const matched =
-          areas.find((a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))) ??
-          INITIAL_AREAS.find((a) => circuit.dbCodes.includes(a.code));
+        const matched = areas.find(
+          (a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))
+        );
         if (!matched) return null;
         return {
           area_id: matched.area_id,
@@ -640,9 +640,9 @@ export default function App() {
     const circuits = GAME_CIRCUITS_MAP[slug];
     return circuits
       .map((circuit) => {
-        const matched =
-          areas.find((a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))) ??
-          INITIAL_AREAS.find((a) => circuit.dbCodes.includes(a.code));
+        const matched = areas.find(
+          (a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))
+        );
         if (!matched) return null;
         return {
           area_id: matched.area_id,
@@ -867,15 +867,11 @@ export default function App() {
       if (areaId) params.set("area_id", areaId);
       const response = await fetch(`${API}/tournaments?${params}`);
       if (!response.ok) throw new RequestError("Không thể tải danh sách giải đấu", response.status);
+      const totalHeader = response.headers.get("x-total-count");
+      const parsedTotal = totalHeader !== null ? parseInt(totalHeader, 10) : NaN;
       const allTournaments = (await response.json()) as Tournament[];
-      const validTournaments = allTournaments.filter((t) => {
-        if (isRemovedGame(t.name)) return false;
-        const g = games.find((item) => item.game_id === t.game_id);
-        if (g && (isRemovedGame(g.name) || isRemovedGame(g.slug))) return false;
-        return true;
-      });
-      setTournaments(validTournaments);
-      setTournamentTotal(validTournaments.length);
+      setTournaments(allTournaments);
+      setTournamentTotal(!isNaN(parsedTotal) ? parsedTotal : allTournaments.length);
     } catch (reason) {
       setTournamentError((reason as Error).message);
     } finally {
@@ -3447,14 +3443,7 @@ export default function App() {
       {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>{t.retry}</button></div>}
       {tournamentLoading && <div className="loading-state"><span className="spinner" /> {t.loadingTournaments}</div>}
       {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>{t.emptyTournamentsTitle}</strong><span>{t.emptyTournamentsSub}</span></div>}
-      <div className="tournament-grid">{tournaments
-        .filter((tournament) => {
-          if (isRemovedGame(tournament.name)) return false;
-          const game = games.find((item) => item.game_id === tournament.game_id);
-          if (game && (isRemovedGame(game.name) || isRemovedGame(game.slug))) return false;
-          return true;
-        })
-        .map((tournament) => {
+      <div className="tournament-grid">{tournaments.map((tournament) => {
         const game = games.find((item) => item.game_id === tournament.game_id);
         return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
           <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? t.statusCardUpcoming : tournament.status === "ONGOING" ? t.statusCardOngoing : tournament.status === "COMPLETED" ? t.statusCardCompleted : t.statusCardCancelled}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
