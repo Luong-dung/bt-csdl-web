@@ -97,7 +97,7 @@ def test_large_registration_and_approved_team_ui_pagination(
     approved_teams = page.locator(".approved-team-card[data-team-id]")
     registration_pages = page.locator('[data-testid="registrations-pagination"]')
     team_pages = page.locator('[data-testid="approved-teams-pagination"]')
-    expect(registration_pages.locator(".pagination-info")).to_have_text("Trang 1 / 6 (51 đơn)")
+    expect(registration_pages.locator(".pagination-info")).to_have_text("Trang 1 / 6 (Tổng 51 đơn)")
     expect(team_pages.locator(".pagination-info")).to_have_text("Trang 1 / 6 (Tổng 51 đội)")
 
     seen_registrations: set[str] = set()
