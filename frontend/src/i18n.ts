@@ -259,6 +259,19 @@ export type Translations = {
   circuitHeaderTitle: string;
   circuitHeaderDesc: string;
   circuitAllTabs: string;
+  circuitToggleShow: string;
+  circuitToggleHide: string;
+  circuitGameDescTemplate: string;
+  detailConditionsHelp: string;
+  detailNoApprovedTeamsWarning: string;
+  detailDraftStatus: string;
+  detailLockedStatus: string;
+  detailRosterPlayerEmpty: string;
+  detailRosterNoPlayers: string;
+  detailSelectMemberToAdd: string;
+  detailHasPlayer: string;
+  detailMissingPlayer: string;
+  navAdmin: string;
 };
 
 export const TRANSLATIONS: Record<LangCode, Translations> = {
@@ -308,8 +321,8 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     pickerShowingTournamentsFor: "Đang hiển thị danh sách các giải đấu và bảng đấu cho tựa game này",
     pickerResetBtn: "✕ Xem tất cả tựa game",
 
-    tournamentsEyebrowAll: "W44-05 · ARENA CONTROL",
-    tournamentsEyebrowGame: "W44-05 · ARENA CONTROL —",
+    tournamentsEyebrowAll: "HỆ THỐNG GIẢI ĐẤU",
+    tournamentsEyebrowGame: "HỆ THỐNG GIẢI ĐẤU —",
     tournamentsHeadingOngoing: "Giải đấu đang diễn ra",
     tournamentsHeadingGame: "Giải đấu",
     tournamentsSubAll: "Khám phá lịch thi đấu, theo dõi trạng thái và vận hành giải từ một command center.",
@@ -491,6 +504,19 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     circuitHeaderTitle: "Khu vực & Giải đấu chuyên nghiệp",
     circuitHeaderDesc: "Các khu vực thi đấu và hệ thống giải đấu chuyên nghiệp chính thức tương ứng với từng bộ môn.",
     circuitAllTabs: "Tất cả bộ môn",
+    circuitToggleShow: "Xem 26 khu vực chuyên nghiệp theo game",
+    circuitToggleHide: "Thu gọn khu vực thi đấu",
+    circuitGameDescTemplate: "Hệ thống khu vực và giải đấu chuyên nghiệp chính thức của bộ môn {game}.",
+    detailConditionsHelp: "Giải đấu cần phải khóa đội hình và mỗi đội đã duyệt phải có ít nhất một tuyển thủ (PLAYER). Nút \"Chuyển sang ONGOING\" sẽ tự động hiển thị sau khi khóa thành công.",
+    detailNoApprovedTeamsWarning: "Chưa có đội tuyển nào được duyệt (APPROVED) vào giải.",
+    detailDraftStatus: "📝 Bản nháp (Chưa khóa)",
+    detailLockedStatus: "🔒 Đã khóa (Snapshot)",
+    detailRosterPlayerEmpty: "Chưa có tuyển thủ nào trong đội hình tham dự.",
+    detailRosterNoPlayers: "Đội tuyển chưa có danh sách tuyển thủ.",
+    detailSelectMemberToAdd: "-- Chọn thành viên để thêm --",
+    detailHasPlayer: "Đã có PLAYER",
+    detailMissingPlayer: "Chưa có PLAYER",
+    navAdmin: "Quản trị",
   },
 
   en: {
@@ -539,8 +565,8 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     pickerShowingTournamentsFor: "Displaying all active tournaments and brackets for this discipline",
     pickerResetBtn: "✕ View all games",
 
-    tournamentsEyebrowAll: "W44-05 · ARENA CONTROL",
-    tournamentsEyebrowGame: "W44-05 · ARENA CONTROL —",
+    tournamentsEyebrowAll: "ARENA CONTROL",
+    tournamentsEyebrowGame: "ARENA CONTROL —",
     tournamentsHeadingOngoing: "Active Tournaments",
     tournamentsHeadingGame: "Tournaments",
     tournamentsSubAll: "Discover schedules, track live bracket status, and manage events from a unified command center.",
@@ -722,6 +748,19 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     circuitHeaderTitle: "Official Regional Circuits",
     circuitHeaderDesc: "Official competitive regions and premier professional league circuits for each discipline.",
     circuitAllTabs: "All Disciplines",
+    circuitToggleShow: "View 26 official circuits by game",
+    circuitToggleHide: "Collapse regional circuits",
+    circuitGameDescTemplate: "Official regional circuits and premier leagues for {game}.",
+    detailConditionsHelp: "Tournament roster must be locked and each approved team must have at least one PLAYER. 'Move to ONGOING' will be enabled once locked.",
+    detailNoApprovedTeamsWarning: "No teams have been approved into this tournament yet.",
+    detailDraftStatus: "📝 Draft (Unlocked)",
+    detailLockedStatus: "🔒 Locked (Snapshot)",
+    detailRosterPlayerEmpty: "No players in this roster yet.",
+    detailRosterNoPlayers: "Team has no member roster.",
+    detailSelectMemberToAdd: "-- Select member to add --",
+    detailHasPlayer: "Has PLAYER",
+    detailMissingPlayer: "Missing PLAYER",
+    navAdmin: "Admin",
   },
 
   ko: {
@@ -770,8 +809,8 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     pickerShowingTournamentsFor: "이 종목에 등록된 모든 토너먼트 및 대진표를 표시합니다",
     pickerResetBtn: "✕ 모든 게임 보기",
 
-    tournamentsEyebrowAll: "W44-05 · 아레나 컨트롤",
-    tournamentsEyebrowGame: "W44-05 · 아레나 컨트롤 —",
+    tournamentsEyebrowAll: "아레나 컨트롤",
+    tournamentsEyebrowGame: "아레나 컨트롤 —",
     tournamentsHeadingOngoing: "진행 중인 토너먼트",
     tournamentsHeadingGame: "토너먼트",
     tournamentsSubAll: "통합 사령부에서 경기 일정을 확인하고, 실시간 상태를 추적하며 대회를 운영하세요.",
@@ -953,6 +992,19 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     circuitHeaderTitle: "공식 지역 리그 및 서킷",
     circuitHeaderDesc: "각 종목별 공식 프로 리그 및 지역별 챔피언십 서킷입니다.",
     circuitAllTabs: "모든 종목",
+    circuitToggleShow: "종목별 26개 공식 리그 보기",
+    circuitToggleHide: "지역 리그 접기",
+    circuitGameDescTemplate: "{game}의 공식 지역 리그 및 서킷 시스템.",
+    detailConditionsHelp: "토너먼트 로스터를 잠가야 하며 각 승인된 팀에는 최소 한 명의 선수(PLAYER)가 있어야 합니다. 잠금 후 '진행 중으로 변경' 버튼이 활성화됩니다.",
+    detailNoApprovedTeamsWarning: "이 토너먼트에 승인된 팀이 아직 없습니다.",
+    detailDraftStatus: "📝 임시 명단 (미잠금)",
+    detailLockedStatus: "🔒 잠김 (스냅샷)",
+    detailRosterPlayerEmpty: "참가 로스터에 선수가 없습니다.",
+    detailRosterNoPlayers: "팀에 멤버 로스터가 없습니다.",
+    detailSelectMemberToAdd: "-- 추가할 멤버 선택 --",
+    detailHasPlayer: "선수 등록됨",
+    detailMissingPlayer: "선수 없음",
+    navAdmin: "관리",
   },
 
   ja: {
@@ -1001,8 +1053,8 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     pickerShowingTournamentsFor: "このタイトルの公式大会およびトーナメント表を表示中",
     pickerResetBtn: "✕ すべてのゲームを表示",
 
-    tournamentsEyebrowAll: "W44-05 · アリーナコントロール",
-    tournamentsEyebrowGame: "W44-05 · アリーナコントロール —",
+    tournamentsEyebrowAll: "アリーナコントロール",
+    tournamentsEyebrowGame: "アリーナコントロール —",
     tournamentsHeadingOngoing: "開催中のトーナメント",
     tournamentsHeadingGame: "大会",
     tournamentsSubAll: "統一コマンドセンターから日程を確認し、進行状況を追跡・運営します。",
@@ -1184,6 +1236,19 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     circuitHeaderTitle: "公式地域リーグ＆サーキット",
     circuitHeaderDesc: "各競技タイトルごとの公式プロリーグおよび地域別チャンピオンシップです。",
     circuitAllTabs: "すべての種目",
+    circuitToggleShow: "ゲーム別公式26地域サーキットを表示",
+    circuitToggleHide: "地域サーキットを折りたたむ",
+    circuitGameDescTemplate: "{game}の公式地域リーグ＆サーキット体系。",
+    detailConditionsHelp: "トーナメントのロスターをロックする必要があり、各承認済みチームには少なくとも1名の選手（PLAYER）が必要です。ロック後に「進行中に変更」が有効になります。",
+    detailNoApprovedTeamsWarning: "このトーナメントに承認されたチームはまだありません。",
+    detailDraftStatus: "📝 下書き（未ロック）",
+    detailLockedStatus: "🔒 ロック済み（スナップショット）",
+    detailRosterPlayerEmpty: "参加ロスターに選手がいません。",
+    detailRosterNoPlayers: "チームにメンバーロスターがありません。",
+    detailSelectMemberToAdd: "-- 追加するメンバーを選択 --",
+    detailHasPlayer: "PLAYER登録済み",
+    detailMissingPlayer: "PLAYER未登録",
+    navAdmin: "管理",
   },
 
   zh: {
@@ -1232,8 +1297,8 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     pickerShowingTournamentsFor: "正在展示该项目的全部锦标赛与赛程安排",
     pickerResetBtn: "✕ 查看所有游戏",
 
-    tournamentsEyebrowAll: "W44-05 · 赛场控制中心",
-    tournamentsEyebrowGame: "W44-05 · 赛场控制中心 —",
+    tournamentsEyebrowAll: "赛场控制中心",
+    tournamentsEyebrowGame: "赛场控制中心 —",
     tournamentsHeadingOngoing: "正在进行的锦标赛",
     tournamentsHeadingGame: "锦标赛",
     tournamentsSubAll: "从统一控制台查看赛程日历、追踪实时对阵与赛事运转。",
@@ -1415,6 +1480,19 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     circuitHeaderTitle: "官方职业赛区与联赛体系",
     circuitHeaderDesc: "各电竞项目专属的官方职业赛区与顶级联赛体系。",
     circuitAllTabs: "全部竞技项目",
+    circuitToggleShow: "按项目查看26个职业赛区体系",
+    circuitToggleHide: "折叠赛区体系",
+    circuitGameDescTemplate: "{game}官方职业赛区与顶级联赛体系。",
+    detailConditionsHelp: "赛事必须锁定大名单，且每个获批战队至少拥有一名选手（PLAYER）。锁定后“变更为进行中”按钮可用。",
+    detailNoApprovedTeamsWarning: "该赛事暂无已获批战队。",
+    detailDraftStatus: "📝 草稿名单（未锁定）",
+    detailLockedStatus: "🔒 已锁定（快照）",
+    detailRosterPlayerEmpty: "参赛名单中暂无选手。",
+    detailRosterNoPlayers: "战队暂无成员名单。",
+    detailSelectMemberToAdd: "-- 选择要添加的成员 --",
+    detailHasPlayer: "已有PLAYER",
+    detailMissingPlayer: "缺少PLAYER",
+    navAdmin: "管理",
   },
 };
 

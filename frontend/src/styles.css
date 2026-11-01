@@ -1984,15 +1984,34 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  min-height: 380px;
-  padding: 48px 36px;
+  min-height: 220px;
+  padding: 32px 32px 26px;
   border-bottom: 1px solid rgba(148, 163, 184, .14);
+}
+
+.hero::after {
+  display: none !important;
 }
 
 .hero-content,
 .hero > div {
   padding-top: 0 !important;
-  max-width: 900px;
+  max-width: 800px;
+}
+
+.hero h1 {
+  font-size: clamp(28px, 4vw, 44px) !important;
+  line-height: 1.2 !important;
+  margin: 6px 0 12px !important;
+  letter-spacing: -0.03em !important;
+}
+
+.hero p {
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+  max-width: 620px !important;
+  color: #cbd5e1 !important;
+  margin: 0 0 18px !important;
 }
 
 .site-nav {
@@ -2754,6 +2773,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  appearance: none;
 }
 
 .circuit-card:hover {

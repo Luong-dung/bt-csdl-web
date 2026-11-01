@@ -15,41 +15,34 @@ export type Area = {
   parent_id?: number | null;
 };
 
-export const DEFAULT_AREAS: Area[] = [
-  { area_id: 1, code: "GLOBAL", name: "Global Championship", country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
-
-  // 1. League of Legends (LoL) - 6 khu vực chuyên nghiệp
-  { area_id: 2, code: "LCK", name: "League of Legends Champions Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
-  { area_id: 3, code: "LPL", name: "League of Legends Pro League (LPL)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
-  { area_id: 4, code: "LEC", name: "League of Legends EMEA Championship (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
-  { area_id: 5, code: "LCS", name: "League Championship Series (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
-  { area_id: 6, code: "CBLOL", name: "Campeonato Brasileiro de LoL (CBLOL)", country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
-  { area_id: 7, code: "LCP", name: "League of Legends Championship Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
-
-  // 2. Teamfight Tactics (TFT) - 4 khu vực
-  { area_id: 8, code: "TFT AMER", name: "TFT Americas Circuit", country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
-  { area_id: 9, code: "TFT EMEA", name: "TFT EMEA Championship", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
-  { area_id: 10, code: "TFT APAC", name: "TFT APAC Circuit", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
-  { area_id: 11, code: "TFT CN", name: "TFT China Circuit (TOC/JOC)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
-
-  // 3. VALORANT (VLR) - 4 khu vực
-  { area_id: 12, code: "VCT Americas", name: "VCT Americas League", country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
-  { area_id: 13, code: "VCT EMEA", name: "VCT EMEA League", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
-  { area_id: 14, code: "VCT Pacific", name: "VCT Pacific League", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
-  { area_id: 15, code: "VCT CN", name: "VCT China League", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
-
-  // 4. Liên Quân Mobile (LQM / Arena of Valor) - 4 khu vực
-  { area_id: 16, code: "RPL", name: "RoV Pro League (RPL)", country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
-  { area_id: 17, code: "AOG", name: "Đấu Trường Danh Vọng (AOG)", country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
-  { area_id: 18, code: "GCS", name: "Garena Challenger Series (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
-  { area_id: 19, code: "ASL", name: "AOV Star League (ASL)", country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
-
-  // 5. Free Fire - 4 khu vực
-  { area_id: 20, code: "FFWS SEA", name: "Free Fire World Series SEA", country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
-  { area_id: 21, code: "FFWS BR", name: "Free Fire World Series Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
-  { area_id: 22, code: "FFWS LATAM", name: "Free Fire World Series LATAM", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
-  { area_id: 23, code: "FFWS MEA", name: "Free Fire World Series MEA", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
-];
+export const AREA_METAS: Record<string, { country: string; flag: string; gameSlug: string; name?: string }> = {
+  GLOBAL: { country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
+  APAC: { country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "all" },
+  VN: { country: "Việt Nam", flag: "🇻🇳", gameSlug: "all" },
+  "VN-HCM": { country: "TP. Hồ Chí Minh", flag: "🇻🇳", gameSlug: "all" },
+  LCK: { country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
+  LPL: { country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
+  LEC: { country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
+  LCS: { country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
+  CBLOL: { country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
+  LCP: { country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
+  "TFT AMER": { country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
+  "TFT EMEA": { country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
+  "TFT APAC": { country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
+  "TFT CN": { country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
+  "VCT Americas": { country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
+  "VCT EMEA": { country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
+  "VCT Pacific": { country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
+  "VCT CN": { country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
+  RPL: { country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
+  AOG: { country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
+  GCS: { country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
+  ASL: { country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
+  "FFWS SEA": { country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
+  "FFWS BR": { country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
+  "FFWS LATAM": { country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
+  "FFWS MEA": { country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
+};
 type Team = { team_id: number; name: string; tag: string; game_id: number };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
 type TeamDetail = Team & { members: TeamMember[] };
@@ -452,9 +445,10 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
-  const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
-  const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
-  const [areas, setAreas] = useState<Area[]>(DEFAULT_AREAS);
+  const [games, setGames] = useState<Game[]>([]);
+  const [publishers, setPublishers] = useState<Publisher[]>([]);
+  const [areas, setAreas] = useState<Area[]>([]);
+  const [isCircuitsOpen, setIsCircuitsOpen] = useState(false);
   const [circuitTabGameSlug, setCircuitTabGameSlug] = useState<string>("all");
   const activeSelectedGame = games.find((g) => g.game_id === selectedGameId);
   const currentCircuitAreas = activeSelectedGame
@@ -630,19 +624,13 @@ export default function App() {
         request<Game[]>("/catalog/games"),
         request<Team[]>("/teams"),
       ]);
-      let activeGames = [...DEFAULT_GAMES];
+      let activeGames: Game[] = [];
       if (loadedGames && loadedGames.length > 0) {
         const filteredGames = loadedGames.filter(
           (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
         );
-        const mergedGames = [...filteredGames];
-        for (const def of DEFAULT_GAMES) {
-          if (!mergedGames.some((g) => g.slug === def.slug || g.name.toLowerCase() === def.name.toLowerCase())) {
-            mergedGames.push(def);
-          }
-        }
-        activeGames = mergedGames;
-        setGames(mergedGames);
+        activeGames = filteredGames;
+        setGames(filteredGames);
       }
       const validTeams = (loadedTeams || []).filter((t) => {
         if (isRemovedGame(t.name) || isRemovedGame(t.tag)) return false;
@@ -665,33 +653,23 @@ export default function App() {
     const filteredPublishers = (loadedPublishers || []).filter(
       (p) => !isRemovedGame(p.name)
     );
-    const mergedPublishers = [...filteredPublishers];
-    for (const def of DEFAULT_PUBLISHERS) {
-      if (!mergedPublishers.some((p) => p.name.toLowerCase().includes(def.name.toLowerCase()))) {
-        mergedPublishers.push(def);
-      }
-    }
-    setPublishers(mergedPublishers);
+    setPublishers(filteredPublishers);
 
     const filteredGames = (loadedGames || []).filter(
       (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
     );
-    const mergedGames = [...filteredGames];
-    for (const def of DEFAULT_GAMES) {
-      if (!mergedGames.some((g) => g.slug === def.slug || g.name.toLowerCase() === def.name.toLowerCase())) {
-        mergedGames.push(def);
-      }
-    }
-    setGames(mergedGames);
-    const mergedAreas = [...DEFAULT_AREAS];
-    if (loadedAreas && loadedAreas.length > 0) {
-      for (const la of loadedAreas) {
-        if (!mergedAreas.some((a) => a.code === la.code)) {
-          mergedAreas.push(la);
-        }
-      }
-    }
-    setAreas(mergedAreas);
+    setGames(filteredGames);
+
+    const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
+      const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
+      return {
+        ...la,
+        country: la.country || meta?.country || la.name,
+        flag: la.flag || meta?.flag || "🌐",
+        gameSlug: la.gameSlug || meta?.gameSlug || "all",
+      };
+    });
+    setAreas(enrichedAreas);
   };
 
   const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter, areaId = tournamentAreaFilter) => {
@@ -759,16 +737,22 @@ export default function App() {
 
   useEffect(() => {
     const handleHash = () => {
-      if (window.location.hash === "#login") {
+      const hash = (window.location.hash || "").toLowerCase();
+      if (hash === "#login") {
         setError("");
         setNotice("");
         setAuthMode("login");
         setIsAuthModalOpen(true);
-      } else if (window.location.hash === "#auth-section") {
-        const el = document.getElementById("auth-section");
-        if (el) el.scrollIntoView({ behavior: "smooth" });
-        const input = document.querySelector('input[name="username"]') as HTMLInputElement;
-        input?.focus();
+      } else if (hash === "#tournaments") {
+        setActiveNav("play");
+      } else if (hash === "#teams") {
+        setActiveNav("team");
+      } else if (hash === "#areas") {
+        setActiveNav("areas");
+      } else if (hash === "#news") {
+        setActiveNav("news");
+      } else if (hash === "#home" || hash === "#top" || hash === "") {
+        setActiveNav("home");
       }
     };
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -779,6 +763,7 @@ export default function App() {
         setPublisherMenuOpen(false);
       }
     };
+    handleHash();
     window.addEventListener("hashchange", handleHash);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -851,7 +836,8 @@ export default function App() {
     localStorage.removeItem(TOKEN_KEY);
     setToken("");
     setUser(null);
-    setIsAuthModalOpen(false);
+    setAuthMode("login");
+    setIsAuthModalOpen(true);
     setUserMenuOpen(false);
     setTeamCapabilities(null);
     setTeamCapabilityError("");
@@ -3039,7 +3025,7 @@ export default function App() {
         <header className="hero" id="top">
           <div className="hero-content">
             <span className="eyebrow">{t.heroEyebrow}</span>
-            <h1>{t.heroTitle1}<br /><em>{t.heroTitle2}</em></h1>
+            <h1>{t.heroTitle1} <em>{t.heroTitle2}</em></h1>
             <p>{t.heroDesc}</p>
             <div className="hero-actions">
               <a className="button hero-cta" href="#tournaments">
@@ -3055,16 +3041,15 @@ export default function App() {
           {error === "Không thể kiểm tra phiên đăng nhập. Hãy thử lại." && <button className="link-button" onClick={() => {
             setError("");
             setAuthCheckAttempt((attempt) => attempt + 1);
-          }}>Thử lại</button>}
+          }}>{t.retry}</button>}
         </div>}
 
-        <section className={`auth-layout ${user ? "user-profile-layout" : ""}`} id="auth-section">
-          <section className="panel auth-panel">
-            <div className="panel-title">
-              <h2>{user ? t.profileTitle : isAuthModalOpen ? "Xác thực danh tính" : authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}</h2>
-              <span>AUTH API</span>
-            </div>
-            {user ? (
+        {user && (
+          <section className="auth-layout user-profile-layout" id="auth-section">
+            <section className="panel auth-panel">
+              <div className="panel-title">
+                <h2>{t.profileTitle}</h2>
+              </div>
               <div className="profile">
                 <p><strong>{user.username}</strong></p>
                 <p>{user.email ?? t.profileVerifiedEmail} · {t.profileRole}: {user.role}</p>
@@ -3073,75 +3058,9 @@ export default function App() {
                   <button type="button" className="button secondary small" onClick={logout}>{t.navLogout}</button>
                 </div>
               </div>
-            ) : !isAuthModalOpen ? (
-              <form onSubmit={submitAuth}>
-                {authMode === "register" && (
-                  <>
-                    <label>
-                      {t.authFullName}
-                      <input name="real_name" maxLength={100} placeholder={t.authFullNamePlaceholder} />
-                    </label>
-                    <label>
-                      {t.authEmail}
-                      <input name="email" type="email" required placeholder="you@arena.gg" />
-                    </label>
-                  </>
-                )}
-                <label>
-                  {t.authUsername}
-                  <input
-                    name="username"
-                    minLength={3}
-                    maxLength={50}
-                    required
-                    placeholder={t.authUsernamePlaceholder}
-                    autoComplete="username"
-                  />
-                </label>
-                <label>
-                  {t.authPassword}
-                  <input
-                    name="password"
-                    type="password"
-                    minLength={8}
-                    maxLength={128}
-                    required
-                    placeholder={t.authPasswordHint}
-                    autoComplete={authMode === "login" ? "current-password" : "new-password"}
-                  />
-                </label>
-                <button className="button" disabled={loading}>
-                  {loading ? t.authProcessing : authMode === "login" ? t.authBtnLogin : t.authBtnRegister}
-                </button>
-                <button
-                  type="button"
-                  className="link-button"
-                  onClick={() => {
-                    setError("");
-                    setNotice("");
-                    setAuthMode(authMode === "login" ? "register" : "login");
-                  }}
-                >
-                  {authMode === "login" ? t.authSwitchToRegister : t.authSwitchToLogin}
-                </button>
-              </form>
-            ) : (
-              <div className="auth-placeholder muted" style={{ padding: "20px 0", textAlign: "center" }}>
-                <p>Đang mở hộp thoại đăng nhập...</p>
-              </div>
-            )}
+            </section>
           </section>
-          <aside className="panel checklist">
-            <span className="eyebrow">HỆ THỐNG GIẢI ĐẤU</span>
-            <h2>{t.profileWorkflowTitle}</h2>
-            <ul>
-              <li>{t.profileWorkflowItem1}</li>
-              <li>{t.profileWorkflowItem2}</li>
-              <li>{t.profileWorkflowItem3}</li>
-              <li>{t.profileWorkflowItem4}</li>
-            </ul>
-          </aside>
-        </section>
+        )}
     <section id="tournaments" className="tournament-zone">
       <div className="section-heading">
         <div>
@@ -3327,8 +3246,66 @@ export default function App() {
           </button>
         </div>
       )}
-      {/* Integrated Game-Specific Competition Regions */}
-      <div className="tournament-circuit-zone" id="areas">
+            <div className="tournament-toolbar">
+        <label>{t.allGamesFilter}<select
+            aria-label="Bộ lọc giải đấu"
+            value={tournamentGameFilter}
+            onChange={(event) => {
+              setTournamentPage(0);
+              const val = event.target.value;
+              setTournamentGameFilter(val);
+              if (val) {
+                const found = games.find((g) => String(g.game_id) === val);
+                setSelectedGameId(found ? found.game_id : null);
+                if (found) {
+                  setCircuitTabGameSlug(found.slug);
+                  if (found.publisher_id) handleSelectPublisher(found.publisher_id);
+                }
+              } else {
+                setSelectedGameId(null);
+                setCircuitTabGameSlug("all");
+              }
+            }}
+          ><option value="">{t.allGamesFilter}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
+        <label>{t.allStatusesFilter}<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">{t.allStatusesFilter}</option><option value="UPCOMING">{t.statusUpcoming}</option><option value="ONGOING">{t.statusOngoing}</option><option value="COMPLETED">{t.statusCompleted}</option><option value="CANCELLED">{t.statusCancelled}</option></select></label>
+        <label>{t.allAreasFilter}<select value={tournamentAreaFilter} onChange={(event) => { setTournamentPage(0); setTournamentAreaFilter(event.target.value); }}><option value="">{t.allAreasFilter}</option>{currentCircuitAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.flag ? `${area.flag} ` : ""}{area.code} — {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}</option>)}</select></label>
+        <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ {t.btnRefresh}</button>
+      </div>
+      {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>{t.retry}</button></div>}
+      {tournamentLoading && <div className="loading-state"><span className="spinner" /> {t.loadingTournaments}</div>}
+      {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>{t.emptyTournamentsTitle}</strong><span>{t.emptyTournamentsSub}</span></div>}
+      <div className="tournament-grid">{tournaments
+        .filter((tournament) => {
+          if (isRemovedGame(tournament.name)) return false;
+          const game = games.find((item) => item.game_id === tournament.game_id);
+          if (game && (isRemovedGame(game.name) || isRemovedGame(game.slug))) return false;
+          return true;
+        })
+        .map((tournament) => {
+        const game = games.find((item) => item.game_id === tournament.game_id);
+        return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
+          <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? t.statusCardUpcoming : tournament.status === "ONGOING" ? t.statusCardOngoing : tournament.status === "COMPLETED" ? t.statusCardCompleted : t.statusCardCancelled}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
+          <h3>{tournament.name}</h3><p className="game-label">{game ? getLocalizedGameName(game.name, lang) : "Esports"} <span>·</span> {tournament.format.replace("_", " ")}</p>
+          <div className="card-meta"><span>{t.cardDatePrefix} {new Date(tournament.start_date).toLocaleDateString(t.locale)}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString(t.locale)}` : t.cardOpenEnd}</span></div>
+          <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>{t.cardViewDetails}</button>
+        </article>;
+      })}</div>
+      {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← {t.pagePrev}</button><span>{t.pageLabel} {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>{t.pageNext} →</button></div>}
+      {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
+      <div className="circuits-collapsible-bar" style={{ margin: "20px 0 14px" }}>
+        <button
+          type="button"
+          className="button secondary small"
+          onClick={() => setIsCircuitsOpen(!isCircuitsOpen)}
+          aria-expanded={isCircuitsOpen}
+          style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}
+        >
+          <span>{isCircuitsOpen ? "▲" : "▼"}</span>
+          {isCircuitsOpen ? t.circuitToggleHide : t.circuitToggleShow}
+        </button>
+      </div>
+      {(isCircuitsOpen || activeNav === "areas") && (
+        <div className="tournament-circuit-zone" id="areas">
         <div className="circuit-header">
           <div className="circuit-header-info">
             <span className="eyebrow">
@@ -3343,7 +3320,7 @@ export default function App() {
             </h3>
             <p className="circuit-subtext">
               {activeSelectedGame
-                ? `Hệ thống khu vực và giải đấu chuyên nghiệp chính thức của bộ môn ${getLocalizedGameName(activeSelectedGame.name, lang)}.`
+                ? t.circuitGameDescTemplate.replace("{game}", getLocalizedGameName(activeSelectedGame.name, lang))
                 : t.circuitHeaderDesc}
             </p>
           </div>
@@ -3388,11 +3365,9 @@ export default function App() {
         <div className="circuit-grid">
           {currentCircuitAreas.map((area) => {
             const isSelected = tournamentAreaFilter === String(area.area_id) || tournamentAreaFilter === area.code;
-            const count = tournaments.filter(
-              (tourn) => tourn.area_id === area.area_id || tourn.name.toLowerCase().includes(area.code.toLowerCase())
-            ).length;
             return (
-              <div
+              <button
+                type="button"
                 key={area.area_id}
                 className={`circuit-card ${isSelected ? "is-selected-circuit" : ""}`}
                 onClick={() => {
@@ -3413,14 +3388,11 @@ export default function App() {
                     }
                   }
                 }}
-                role="button"
-                tabIndex={0}
                 aria-label={`Khu vực ${area.code} - ${area.country ?? area.name}`}
               >
                 <div className="circuit-card-header">
                   <span className="circuit-flag">{area.flag ?? "🌐"}</span>
                   <strong className="circuit-code">{area.code}</strong>
-                  <span className="circuit-tournaments-badge">{count} {t.areasTournamentCountSuffix}</span>
                 </div>
                 <div className="circuit-country">
                   {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}
@@ -3431,59 +3403,14 @@ export default function App() {
                     {isSelected ? `✓ ${t.areasSelectedAction}` : `${t.areasViewTournaments}`}
                   </span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
       </div>
+      )}
 
-      <div className="tournament-toolbar">
-        <label>{t.allGamesFilter}<select
-            aria-label="Bộ lọc giải đấu"
-            value={tournamentGameFilter}
-            onChange={(event) => {
-              setTournamentPage(0);
-              const val = event.target.value;
-              setTournamentGameFilter(val);
-              if (val) {
-                const found = games.find((g) => String(g.game_id) === val);
-                setSelectedGameId(found ? found.game_id : null);
-                if (found) {
-                  setCircuitTabGameSlug(found.slug);
-                  if (found.publisher_id) handleSelectPublisher(found.publisher_id);
-                }
-              } else {
-                setSelectedGameId(null);
-                setCircuitTabGameSlug("all");
-              }
-            }}
-          ><option value="">{t.allGamesFilter}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label>
-        <label>{t.allStatusesFilter}<select value={tournamentStatusFilter} onChange={(event) => { setTournamentPage(0); setTournamentStatusFilter(event.target.value); }}><option value="">{t.allStatusesFilter}</option><option value="UPCOMING">{t.statusUpcoming}</option><option value="ONGOING">{t.statusOngoing}</option><option value="COMPLETED">{t.statusCompleted}</option><option value="CANCELLED">{t.statusCancelled}</option></select></label>
-        <label>{t.allAreasFilter}<select value={tournamentAreaFilter} onChange={(event) => { setTournamentPage(0); setTournamentAreaFilter(event.target.value); }}><option value="">{t.allAreasFilter}</option>{currentCircuitAreas.map((area) => <option key={area.area_id} value={area.area_id}>{area.flag ? `${area.flag} ` : ""}{area.code} — {getLocalizedRegionCountry(area.code, area.country ?? area.name, lang)}</option>)}</select></label>
-        <button className="button secondary" onClick={() => void loadTournaments()} disabled={tournamentLoading}>↻ {t.btnRefresh}</button>
-      </div>
-      {tournamentError && <div className="inline-error"><span>{tournamentError}</span><button className="link-button" onClick={() => void loadTournaments()}>Thử lại</button></div>}
-      {tournamentLoading && <div className="loading-state"><span className="spinner" /> {t.loadingTournaments}</div>}
-      {!tournamentLoading && !tournamentError && tournaments.length === 0 && <div className="empty-state"><strong>{t.emptyTournamentsTitle}</strong><span>{t.emptyTournamentsSub}</span></div>}
-      <div className="tournament-grid">{tournaments
-        .filter((tournament) => {
-          if (isRemovedGame(tournament.name)) return false;
-          const game = games.find((item) => item.game_id === tournament.game_id);
-          if (game && (isRemovedGame(game.name) || isRemovedGame(game.slug))) return false;
-          return true;
-        })
-        .map((tournament) => {
-        const game = games.find((item) => item.game_id === tournament.game_id);
-        return <article className="tournament-card" data-tournament-id={tournament.tournament_id} key={tournament.tournament_id} onClick={() => void viewTournament(tournament.tournament_id)}>
-          <div className="card-topline"><span className={`status status-${tournament.status.toLowerCase()}`}>{tournament.status === "UPCOMING" ? t.statusCardUpcoming : tournament.status === "ONGOING" ? t.statusCardOngoing : tournament.status === "COMPLETED" ? t.statusCardCompleted : t.statusCardCancelled}</span><span className="tournament-id">#T{String(tournament.tournament_id).padStart(3, "0")}</span></div>
-          <h3>{tournament.name}</h3><p className="game-label">{game ? getLocalizedGameName(game.name, lang) : "Esports"} <span>·</span> {tournament.format.replace("_", " ")}</p>
-          <div className="card-meta"><span>{t.cardDatePrefix} {new Date(tournament.start_date).toLocaleDateString(t.locale)}</span><span>{tournament.end_date ? `→ ${new Date(tournament.end_date).toLocaleDateString(t.locale)}` : t.cardOpenEnd}</span></div>
-          <button className="card-link" onClick={(event) => { event.stopPropagation(); void viewTournament(tournament.tournament_id); }}>{t.cardViewDetails}</button>
-        </article>;
-      })}</div>
-      {tournamentTotal > 6 && <div className="pagination"><button className="button secondary" disabled={tournamentPage === 0 || tournamentLoading} onClick={() => setTournamentPage((page) => page - 1)}>← {t.pagePrev}</button><span>{t.pageLabel} {tournamentPage + 1} / {Math.ceil(tournamentTotal / 6)}</span><button className="button secondary" disabled={(tournamentPage + 1) * 6 >= tournamentTotal || tournamentLoading} onClick={() => setTournamentPage((page) => page + 1)}>{t.pageNext} →</button></div>}
-      {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>Thử lại</button></div>}
-      {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> {t.btnCreateTournament}</summary><form onSubmit={submitTournament} className="tournament-form">
+            {globalCapabilities?.can_create_tournament && <details className="tournament-create"><summary><span>+</span> {t.btnCreateTournament}</summary><form onSubmit={submitTournament} className="tournament-form">
         <label>{t.tcNameLabel}<input name="name" placeholder={t.tcNamePlaceholder} minLength={3} maxLength={150} required /></label><label>{t.tcGameLabel}<select name="game_id" defaultValue="" required><option value="" disabled>{t.tcGameSelect}</option>{games.map((game) => <option key={game.game_id} value={game.game_id}>{getLocalizedGameName(game.name, lang)}</option>)}</select></label><label>{t.tcFormatLabel}<select name="format" defaultValue="SINGLE_ELIM"><option value="SINGLE_ELIM">Single Elimination</option><option value="DOUBLE_ELIM">Double Elimination</option><option value="ROUND_ROBIN">Round Robin</option></select></label><label>{t.tcStartLabel}<input name="start_date" type="date" required /></label><label>{t.tcEndLabel}<input name="end_date" type="date" /></label><label>{t.tcAreaLabel}<select name="area_id" defaultValue=""><option value="">{t.tcAreaGlobal}</option>{areas.map((area) => <option key={area.area_id} value={area.area_id}>{area.name}</option>)}</select></label><label className="wide-field">{t.tcDescLabel}<textarea name="description" maxLength={2000} placeholder={t.tcDescPlaceholder} /></label><button className="button" disabled={tournamentLoading}>{t.tcSubmitBtn}</button>
       </form></details>}
       {selectedTournament && <div className="tournament-detail">
@@ -3495,9 +3422,9 @@ export default function App() {
           <div><span>{t.detailArea}</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? t.detailGlobalArea}</strong></div>
         </div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
-        {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current)}>Thử lại</button></div>}
+        {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current)}>{t.retry}</button></div>}
                 {tournamentCapabilities?.can_manage && <div className="manage-panel">
-          <div className="panel-title"><h4>{t.detailOpsTitle}</h4><span>CAPABILITY VERIFIED</span></div>
+          <div className="panel-title"><h4>{t.detailOpsTitle}</h4></div>
           {selectedTournament.status === "UPCOMING" && (
             <div className="start-conditions-box">
               {tournamentCapabilities.roster_locked || rosterLock?.locked ? (
@@ -3510,12 +3437,12 @@ export default function App() {
                   <span className="condition-icon">⚠️</span>
                   <div>
                     <strong>{t.detailConditionsTitle}</strong>
-                    <p>Giải đấu cần phải khóa đội hình và mỗi đội đã duyệt phải có ít nhất một tuyển thủ (PLAYER). Nút "Chuyển sang ONGOING" sẽ tự động hiển thị sau khi khóa thành công.</p>
+                    <p>{t.detailConditionsHelp}</p>
                     {rosterStatusWarning && (
                       <p className="condition-warning-detail text-warning">⚠️ {rosterStatusWarning}</p>
                     )}
                     {approvedTeams.length === 0 ? (
-                      <p className="condition-warning-detail text-warning">Chưa có đội tuyển nào được duyệt (APPROVED) vào giải.</p>
+                      <p className="condition-warning-detail text-warning">{t.detailNoApprovedTeamsWarning}</p>
                     ) : (
                       (() => {
                         const missing = approvedTeams.filter(
@@ -3561,7 +3488,7 @@ export default function App() {
               {lockError && (
                 <div className="error-banner">
                   <span>{lockError}</span>
-                  <button type="button" className="button secondary" onClick={() => void handleLockRoster()}>Thử lại</button>
+                  <button type="button" className="button secondary" onClick={() => void handleLockRoster()}>{t.retry}</button>
                 </div>
               )}
               {lockNotice && <div className="notice-banner">{lockNotice}</div>}
@@ -3882,9 +3809,9 @@ export default function App() {
                 </div>
                 <div className="header-badges">
                   {rosterData?.locked || rosterLock?.locked || tournamentCapabilities?.roster_locked ? (
-                    <span className="status status-completed">🔒 Đã khóa (Snapshot)</span>
+                    <span className="status status-completed">{t.detailLockedStatus}</span>
                   ) : (
-                    <span className="status status-upcoming">📝 Bản nháp (Chưa khóa)</span>
+                    <span className="status status-upcoming">{t.detailDraftStatus}</span>
                   )}
                   <button
                     type="button"
@@ -4008,7 +3935,7 @@ export default function App() {
                   ) : (
                     <div className="roster-viewer">
                       {(!rosterData?.members || rosterData.members.length === 0) ? (
-                        <p className="muted">Đội tuyển chưa có danh sách tuyển thủ.</p>
+                        <p className="muted">{t.detailRosterNoPlayers}</p>
                       ) : (
                         <div className="roster-members-grid">
                           {rosterData.members.map((m) => (
@@ -4088,7 +4015,7 @@ export default function App() {
             {registrationError && (
               <div className="error-banner">
                 <span>{registrationError}</span>
-                <button className="button secondary" onClick={() => void reloadTournamentDetailsData(selectedTournament)}>Thử lại</button>
+                <button className="button secondary" onClick={() => void reloadTournamentDetailsData(selectedTournament)}>{t.retry}</button>
               </div>
             )}
             {registrationNotice && <div className="notice-banner">{registrationNotice}</div>}
@@ -4229,8 +4156,8 @@ export default function App() {
     </section>
 
     <section className="panel catalog-panel">
-      <div className="panel-title"><h2>{t.catalogTitle}</h2><span>CAPABILITY</span></div>
-      {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>Thử lại</button></div>}
+      <div className="panel-title"><h2>{t.catalogTitle}</h2></div>
+      {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
       {!globalCapabilityError && !globalCapabilities?.can_manage_catalog && <p className="muted">Bạn chưa được cấp quyền quản lý publisher, game và khu vực.</p>}
       {globalCapabilities?.can_manage_catalog && <>
         <div className="catalog-forms">
@@ -4302,7 +4229,7 @@ export default function App() {
       {selectedTeam && <div className="team-detail">
       <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); setTeamCapabilityError(""); }}>{t.teamCloseBtn}</button></div>
         <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
-        {teamCapabilityError && <div className="error-banner"><span>{teamCapabilityError}</span><button className="button secondary" onClick={() => void loadTeamCapabilities(selectedTeam.team_id)}>Thử lại</button></div>}
+        {teamCapabilityError && <div className="error-banner"><span>{teamCapabilityError}</span><button className="button secondary" onClick={() => void loadTeamCapabilities(selectedTeam.team_id)}>{t.retry}</button></div>}
         {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
           <label>{t.authUsername}<input name="username" placeholder={t.teamUsernamePlaceholder} maxLength={50} required /></label>
           <label>{t.teamRoleLabel}<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
@@ -4358,7 +4285,7 @@ export default function App() {
               {authMode === "login" ? t.authLoginTitle : t.authRegisterTitle}
             </h2>
           </div>
-          <span>AUTH API</span>
+          
         </div>
 
         {(error || notice) && (
