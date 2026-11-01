@@ -45,10 +45,10 @@ def ids(client, path, key, field="name"):
 
 def test_list_and_filter(client):
     publishers = ids(client, "publishers", "publisher_id")
-    assert set(publishers) == {"Riot Games", "Valve"}
+    assert set(publishers) == {"Riot Games", "Garena"}
 
-    games = client.get("/api/v1/catalog/games", params={"publisher_id": publishers["Valve"]}).json()
-    assert [game["slug"] for game in games] == ["counter-strike-2", "dota-2"]
+    games = client.get("/api/v1/catalog/games", params={"publisher_id": publishers["Garena"]}).json()
+    assert sorted([game["slug"] for game in games]) == ["arena-of-valor", "free-fire"]
 
     areas = ids(client, "areas", "area_id", "code")
     children = client.get("/api/v1/catalog/areas", params={"parent_id": areas["VN"]}).json()
@@ -70,8 +70,8 @@ def test_publisher_crud(client):
     publisher_id = created.json()["publisher_id"]
     assert created.json()["name"] == "Blizzard"
 
-    assert client.post("/api/v1/catalog/publishers", json={"name": "Valve"}).status_code == 409
-    assert client.patch(f"/api/v1/catalog/publishers/{publisher_id}", json={"name": "Valve"}).status_code == 409
+    assert client.post("/api/v1/catalog/publishers", json={"name": "Garena"}).status_code == 409
+    assert client.patch(f"/api/v1/catalog/publishers/{publisher_id}", json={"name": "Garena"}).status_code == 409
     assert client.patch(f"/api/v1/catalog/publishers/{publisher_id}", json={"name": None}).status_code == 422
 
     renamed = client.patch(f"/api/v1/catalog/publishers/{publisher_id}", json={"name": "Blizzard Entertainment"})
@@ -110,9 +110,9 @@ def test_game_crud(client):
                                                       "publisher_id": 9999}).status_code == 422
     assert client.patch(f"/api/v1/catalog/games/{game_id}", json={"slug": "valorant"}).status_code == 409
 
-    moved = client.patch(f"/api/v1/catalog/games/{game_id}", json={"publisher_id": publishers["Valve"]})
+    moved = client.patch(f"/api/v1/catalog/games/{game_id}", json={"publisher_id": publishers["Garena"]})
     assert moved.status_code == 200
-    assert moved.json()["publisher_id"] == publishers["Valve"]
+    assert moved.json()["publisher_id"] == publishers["Garena"]
     assert moved.json()["slug"] == "teamfight-tactics"
 
     assert client.delete(f"/api/v1/catalog/games/{game_id}").status_code == 204
@@ -130,7 +130,7 @@ def test_game_in_use_cannot_be_deleted(client, session_factory):
     tournament_used = client.delete(f"/api/v1/catalog/games/{games['valorant']}")
     assert tournament_used.status_code == 409
     assert "giải đấu" in tournament_used.json()["detail"]
-    assert client.delete(f"/api/v1/catalog/games/{games['dota-2']}").status_code == 204
+    assert client.delete(f"/api/v1/catalog/games/{games['free-fire']}").status_code == 204
 
 
 def test_area_crud_and_hierarchy(client):

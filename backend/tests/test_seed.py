@@ -35,7 +35,7 @@ def test_empty_database_and_repeat_run(db):
         assert db.scalar(select(func.count()).select_from(model)) == count
     games = {game.slug: game for game in db.scalars(select(Game))}
     assert games["valorant"].publisher.name == "Riot Games"
-    assert games["dota-2"].publisher.name == "Valve"
+    assert games["free-fire"].publisher.name == "Garena"
     areas = {area.code: area for area in db.scalars(select(CompetitionArea))}
     assert areas["GLOBAL"].parent_id is None
     for child, parent in (("APAC", "GLOBAL"), ("VN", "APAC"), ("VN-HCM", "VN")):
