@@ -215,6 +215,9 @@ export type Translations = {
   catalogAddArea: string;
   catalogReload: string;
   catalogSubtext: string;
+  catalogLoadingText: string;
+  catalogUpdatedNotice: string;
+  catalogReloadedNotice: string;
 
   // Auth Dialog
   authWelcomeBack: string;
@@ -460,8 +463,11 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     catalogAddPub: "Thêm publisher",
     catalogAddGame: "Thêm game",
     catalogAddArea: "Thêm khu vực",
-    catalogReload: "Thử tải lại",
+    catalogReload: "Thử tải lại danh sách",
     catalogSubtext: "Danh sách catalog có thể chưa phản ánh thao tác gần nhất.",
+    catalogLoadingText: "Đang tải catalog...",
+    catalogUpdatedNotice: "Đã cập nhật catalog.",
+    catalogReloadedNotice: "Đã tải lại catalog.",
 
     authWelcomeBack: "CHÀO MỪNG TRỞ LẠI",
     authJoinArena: "GIA NHẬP ĐẤU TRƯỜNG",
@@ -707,6 +713,9 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     catalogAddArea: "Add Region",
     catalogReload: "Reload Catalog",
     catalogSubtext: "Catalog listing may not reflect recent mutations yet.",
+    catalogLoadingText: "Loading catalog...",
+    catalogUpdatedNotice: "Catalog updated.",
+    catalogReloadedNotice: "Catalog reloaded.",
 
     authWelcomeBack: "WELCOME BACK",
     authJoinArena: "JOIN THE ARENA",
@@ -952,6 +961,9 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     catalogAddArea: "지역 추가",
     catalogReload: "다시 불러오기",
     catalogSubtext: "카탈로그 목록에 최근 변경 사항이 즉시 반영되지 않을 수 있습니다.",
+    catalogLoadingText: "카탈로그 불러오는 중...",
+    catalogUpdatedNotice: "카탈로그가 업데이트되었습니다.",
+    catalogReloadedNotice: "카탈로그를 다시 불러왔습니다.",
 
     authWelcomeBack: "다시 오신 것을 환영합니다",
     authJoinArena: "아레나에 합류하세요",
@@ -1197,6 +1209,9 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     catalogAddArea: "地域追加",
     catalogReload: "再読み込み",
     catalogSubtext: "カタログ一覧に最新の変更が即時反映されない場合があります。",
+    catalogLoadingText: "カタログを読み込み中...",
+    catalogUpdatedNotice: "カタログを更新しました。",
+    catalogReloadedNotice: "カタログを再読み込みしました。",
 
     authWelcomeBack: "おかえりなさい",
     authJoinArena: "アリーナに参加",
@@ -1442,6 +1457,9 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     catalogAddArea: "添加赛区",
     catalogReload: "重新加载",
     catalogSubtext: "目录数据可能需要稍后刷新才能反映最新更改。",
+    catalogLoadingText: "正在加载目录...",
+    catalogUpdatedNotice: "目录已更新。",
+    catalogReloadedNotice: "目录已重新加载。",
 
     authWelcomeBack: "欢迎回来",
     authJoinArena: "进入竞技场",

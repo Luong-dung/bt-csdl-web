@@ -143,10 +143,6 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return response.json() as Promise<T>;
 }
 
-const DEFAULT_PUBLISHERS: Publisher[] = [];
-export const DEFAULT_GAMES: Game[] = [];
-export const INITIAL_AREAS: Area[] = [];
-
 function getGameBadge(name: string): string {
   const lower = name.toLowerCase().replace(/[-_]/g, " ");
   if (lower.includes("liên quân") || lower.includes("lien quan") || lower.includes("arena of valor") || lower.includes("arena") || lower.includes("aov") || lower === "lq") return "AOV";
@@ -788,7 +784,6 @@ export default function App() {
   useEffect(() => {
     loadTeams();
     loadCatalog().catch((reason) => {
-      setCatalogReloadError((reason as Error).message);
       setError(`Không thể tải catalog: ${(reason as Error).message}`);
     });
   }, []);
@@ -1111,33 +1106,24 @@ export default function App() {
     }
     try {
       await loadCatalog();
-      setCatalogReloadError("");
-      setNotice("Đã cập nhật catalog.");
+      setNotice(t.catalogUpdatedNotice);
       return true;
     } catch (reason) {
       const message = (reason as Error).message;
-      setCatalogReloadError(message);
       setError(`Đã ghi thành công nhưng không thể tải lại danh sách: ${message}. Không gửi lại thao tác; hãy thử tải lại.`);
       return false;
-    } finally {
-      setCatalogLoading(false);
     }
   };
 
   const retryCatalogLoad = async () => {
     setError("");
     setNotice("");
-    setCatalogLoading(true);
     try {
       await loadCatalog();
-      setCatalogReloadError("");
-      setNotice("Đã tải lại catalog.");
+      setNotice(t.catalogReloadedNotice);
     } catch (reason) {
       const message = (reason as Error).message;
-      setCatalogReloadError(message);
       setError(`Không thể tải lại catalog: ${message}`);
-    } finally {
-      setCatalogLoading(false);
     }
   };
 
@@ -4149,10 +4135,10 @@ export default function App() {
           </form>
         </div>
       </>}
-      {catalogLoading && <p className="muted" style={{ padding: "8px 0" }}>Đang tải catalog...</p>}
+      {catalogLoading && <p className="muted catalog-loading-text">{t.catalogLoadingText}</p>}
       {catalogReloadError && <div className="catalog-reload">
         <p>{t.catalogSubtext}</p>
-        <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>
+        <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>{t.catalogReload}</button>
       </div>}
       <div className="catalog-lists">
         <div><h3>Publishers</h3>{publishers.map((publisher) => {
