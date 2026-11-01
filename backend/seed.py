@@ -14,6 +14,7 @@ from modules.identity.models import Role
 
 ROLE_NAMES = ("ADMIN", "ORGANIZER", "REFEREE", "TEAM_MANAGER", "PLAYER", "VIEWER")
 GAMES = (
+    ("Riot Games", "Teamfight Tactics", "teamfight-tactics"),
     ("Riot Games", "League of Legends", "league-of-legends"),
     ("Riot Games", "VALORANT", "valorant"),
     ("Garena", "Liên Quân Mobile", "arena-of-valor"),

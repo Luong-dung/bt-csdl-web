@@ -24,16 +24,17 @@ def db():
 
 def test_empty_database_and_repeat_run(db):
     assert seed_reference_data(db) == {
-        "roles": 6, "publishers": 2, "games": 4, "competition_areas": 31,
+        "roles": 6, "publishers": 2, "games": 5, "competition_areas": 31,
     }
     db.commit()
     assert seed_reference_data(db) == dict.fromkeys(
         ("roles", "publishers", "games", "competition_areas"), 0
     )
     assert set(db.scalars(select(Role.role_name))) == set(ROLE_NAMES)
-    for model, count in ((Role, 6), (Publisher, 2), (Game, 4), (CompetitionArea, 31)):
+    for model, count in ((Role, 6), (Publisher, 2), (Game, 5), (CompetitionArea, 31)):
         assert db.scalar(select(func.count()).select_from(model)) == count
     games = {game.slug: game for game in db.scalars(select(Game))}
+    assert games["teamfight-tactics"].publisher.name == "Riot Games"
     assert games["valorant"].publisher.name == "Riot Games"
     assert games["free-fire"].publisher.name == "Garena"
     areas = {area.code: area for area in db.scalars(select(CompetitionArea))}
@@ -52,7 +53,7 @@ def test_preserves_existing_records_and_uses_their_ids(db):
     db.commit()
     added = seed_reference_data(db)
     db.commit()
-    assert added == {"roles": 5, "publishers": 1, "games": 4, "competition_areas": 30}
+    assert added == {"roles": 5, "publishers": 1, "games": 5, "competition_areas": 30}
     assert db.scalar(select(Game).where(Game.slug == "valorant")).publisher_id == 42
     assert db.scalar(select(CompetitionArea).where(CompetitionArea.code == "APAC")).parent_id == 42
     assert db.get(CompetitionArea, 42).name == "Custom global"

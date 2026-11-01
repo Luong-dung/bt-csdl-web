@@ -2105,9 +2105,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 
 /* Supplied fantasy artwork */
 :root {
-  --game-art: url("https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Yone_0.jpg");
-  --game-art-alt: url("https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg");
-  --game-art-third: url("https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Aatrox_0.jpg");
+  --game-art: url("/games/league-of-legends.png");
+  --game-art-alt: url("/games/valorant.png");
+  --game-art-third: url("/games/arena-of-valor.png");
 }
 
 .hero {

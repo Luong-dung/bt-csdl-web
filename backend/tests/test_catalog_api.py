@@ -99,13 +99,13 @@ def test_game_payload_validation(client, payload):
 
 def test_game_crud(client):
     publishers = ids(client, "publishers", "publisher_id")
-    payload = {"name": "Teamfight Tactics", "slug": "teamfight-tactics", "publisher_id": publishers["Riot Games"]}
+    payload = {"name": "Wild Rift", "slug": "wild-rift", "publisher_id": publishers["Riot Games"]}
     created = client.post("/api/v1/catalog/games", json=payload)
     assert created.status_code == 201
     game_id = created.json()["game_id"]
 
-    assert client.post("/api/v1/catalog/games", json={**payload, "name": "TFT"}).status_code == 409
-    assert client.post("/api/v1/catalog/games", json={**payload, "slug": "tft"}).status_code == 409
+    assert client.post("/api/v1/catalog/games", json={**payload, "name": "WR"}).status_code == 409
+    assert client.post("/api/v1/catalog/games", json={**payload, "slug": "wr"}).status_code == 409
     assert client.post("/api/v1/catalog/games", json={**payload, "name": "X", "slug": "x",
                                                       "publisher_id": 9999}).status_code == 422
     assert client.patch(f"/api/v1/catalog/games/{game_id}", json={"slug": "valorant"}).status_code == 409
@@ -113,7 +113,7 @@ def test_game_crud(client):
     moved = client.patch(f"/api/v1/catalog/games/{game_id}", json={"publisher_id": publishers["Garena"]})
     assert moved.status_code == 200
     assert moved.json()["publisher_id"] == publishers["Garena"]
-    assert moved.json()["slug"] == "teamfight-tactics"
+    assert moved.json()["slug"] == "wild-rift"
 
     assert client.delete(f"/api/v1/catalog/games/{game_id}").status_code == 204
     assert client.delete(f"/api/v1/catalog/games/{game_id}").status_code == 404

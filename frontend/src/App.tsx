@@ -148,19 +148,12 @@ const DEFAULT_PUBLISHERS: Publisher[] = [
   { publisher_id: 2, name: "Garena" },
 ];
 
-export const TFT_GAME: Game = {
-  game_id: 0,
-  name: "Đấu Trường Chân Lý",
-  slug: "teamfight-tactics",
-  publisher_id: 1,
-};
-
 export const DEFAULT_GAMES: Game[] = [
-  TFT_GAME,
-  { game_id: 1, name: "League of Legends", slug: "league-of-legends", publisher_id: 1 },
-  { game_id: 2, name: "VALORANT", slug: "valorant", publisher_id: 1 },
-  { game_id: 3, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
-  { game_id: 4, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
+  { game_id: 1, name: "Teamfight Tactics", slug: "teamfight-tactics", publisher_id: 1 },
+  { game_id: 2, name: "League of Legends", slug: "league-of-legends", publisher_id: 1 },
+  { game_id: 3, name: "VALORANT", slug: "valorant", publisher_id: 1 },
+  { game_id: 4, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
+  { game_id: 5, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
 ];
 
 export const INITIAL_AREAS: Area[] = [
@@ -197,45 +190,19 @@ export const INITIAL_AREAS: Area[] = [
   { area_id: 31, code: "FFWS BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire" },
 ];
 
-function isRemovedGame(nameOrSlug?: string | null): boolean {
-  if (!nameOrSlug) return false;
-  const lower = nameOrSlug.toLowerCase();
-  return (
-    lower.includes("counter") ||
-    lower.includes("strike") ||
-    lower.includes("cs2") ||
-    lower.includes("cs:go") ||
-    lower.includes("csgo") ||
-    lower.includes("dota") ||
-    lower.includes("valve")
-  );
-}
-
 function getGameBadge(name: string): string {
   const lower = name.toLowerCase().replace(/[-_]/g, " ");
   if (lower.includes("liên quân") || lower.includes("lien quan") || lower.includes("arena of valor") || lower.includes("arena") || lower.includes("aov") || lower === "lq") return "AOV";
   if (lower.includes("teamfight") || lower.includes("tft") || lower.includes("chân lý") || lower.includes("chan ly")) return "TFT";
   if (lower.includes("league") || lower.includes("huyền thoại") || lower.includes("huyen thoai") || lower.includes("lol")) return "LoL";
-  if (lower.includes("valorant") || lower === "val" || lower.startsWith("val ")) return "VAL";
+  if (lower.includes("valorant") || lower === "vlr" || lower.startsWith("val ")) return "VAL";
   if (lower.includes("free fire") || lower.includes("freefire") || lower === "ff") return "FF";
   return name.slice(0, 3).toUpperCase();
 }
 
 function gameMatchesPublisher(game: Game, publisherId: number | null, publisherList: Publisher[]): boolean {
   if (publisherId === null) return true;
-  const targetPublisher = publisherList.find((p) => p.publisher_id === publisherId);
-  if (!targetPublisher) return true;
-  const targetName = targetPublisher.name.toLowerCase();
-
-  if (game.publisher_id === publisherId) return true;
-  const gameName = game.name.toLowerCase();
-  if (targetName.includes("riot")) {
-    return gameName.includes("league") || gameName.includes("huyền thoại") || gameName.includes("valorant") || gameName.includes("teamfight") || gameName.includes("chân lý") || gameName.includes("tft");
-  }
-  if (targetName.includes("garena")) {
-    return gameName.includes("liên quân") || gameName.includes("free fire") || gameName.includes("arena of valor") || gameName.includes("fc online") || gameName.includes("fifa");
-  }
-  return false;
+  return game.publisher_id === publisherId;
 }
 
 export type CircuitItem = {
@@ -256,16 +223,16 @@ export const GAME_CIRCUITS_MAP: Record<string, { code: string; name: string; cou
     { code: "LCP", name: "Asia-Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["LCP"] },
   ],
   "teamfight-tactics": [
-    { code: "AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["TFT AMER", "AMER"] },
-    { code: "EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["TFT EMEA", "EMEA"] },
-    { code: "APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["TFT APAC", "APAC"] },
-    { code: "CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["TFT CN", "CN"] },
+    { code: "AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["TFT AMER"] },
+    { code: "EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["TFT EMEA"] },
+    { code: "APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["TFT APAC"] },
+    { code: "CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["TFT CN"] },
   ],
   "valorant": [
-    { code: "AMER", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["VCT Americas", "VCT AMER", "AMER"] },
-    { code: "EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["VCT EMEA", "EMEA"] },
-    { code: "PACIFIC", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["VCT Pacific", "VCT PACIFIC", "PACIFIC"] },
-    { code: "CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["VCT CN", "CN"] },
+    { code: "AMER", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", dbCodes: ["VCT Americas", "VCT AMER"] },
+    { code: "EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["VCT EMEA"] },
+    { code: "PACIFIC", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", dbCodes: ["VCT Pacific", "VCT PACIFIC"] },
+    { code: "CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", dbCodes: ["VCT CN"] },
   ],
   "arena-of-valor": [
     { code: "RPL", name: "Thailand (RPL)", country: "Thái Lan", flag: "🇹🇭", dbCodes: ["RPL"] },
@@ -275,26 +242,25 @@ export const GAME_CIRCUITS_MAP: Record<string, { code: string; name: string; cou
     { code: "AVC", name: "AoV International Championship", country: "Châu Á – Quốc tế", flag: "🌏", dbCodes: ["AVC"] },
   ],
   "free-fire": [
-    { code: "BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", dbCodes: ["FFWS BR", "BR"] },
-    { code: "LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", dbCodes: ["FFWS LATAM", "LATAM"] },
-    { code: "NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", dbCodes: ["FFWS NA", "NA"] },
-    { code: "SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", dbCodes: ["FFWS SEA", "SEA"] },
-    { code: "MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["FFWS MEA", "MEA"] },
-    { code: "PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", dbCodes: ["FFWS PK", "PK"] },
-    { code: "IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", dbCodes: ["FFWS IN", "IN"] },
-    { code: "BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", dbCodes: ["FFWS BD", "BD"] },
+    { code: "BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", dbCodes: ["FFWS BR"] },
+    { code: "LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", dbCodes: ["FFWS LATAM"] },
+    { code: "NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", dbCodes: ["FFWS NA"] },
+    { code: "SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", dbCodes: ["FFWS SEA"] },
+    { code: "MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["FFWS MEA"] },
+    { code: "PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", dbCodes: ["FFWS PK"] },
+    { code: "IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", dbCodes: ["FFWS IN"] },
+    { code: "BD", name: "FFWS BD", country: "Bangladesh", flag: "🇧🇩", dbCodes: ["FFWS BD"] },
   ],
 };
 
 function getGameCanonicalSlug(game: Game | null): string | null {
   if (!game) return null;
-  const s = (game.slug || "").toLowerCase();
-  const n = (game.name || "").toLowerCase();
-  if (s.includes("league") || n.includes("league") || n.includes("huyền thoại") || n.includes("lol")) return "league-of-legends";
-  if (s.includes("teamfight") || n.includes("teamfight") || n.includes("chân lý") || n.includes("tft")) return "teamfight-tactics";
-  if (s.includes("valorant") || n.includes("valorant") || n.includes("val")) return "valorant";
-  if (s.includes("arena") || n.includes("arena") || n.includes("liên quân") || n.includes("aov")) return "arena-of-valor";
-  if (s.includes("free-fire") || n.includes("free fire") || n.includes("ff")) return "free-fire";
+  const s = (game.slug || "").toLowerCase().trim();
+  if (s === "league-of-legends" || s === "lol") return "league-of-legends";
+  if (s === "teamfight-tactics" || s === "tft") return "teamfight-tactics";
+  if (s === "valorant" || s === "vlr") return "valorant";
+  if (s === "arena-of-valor" || s === "lien-quan-mobile" || s === "lqm" || s === "aov") return "arena-of-valor";
+  if (s === "free-fire" || s === "ff") return "free-fire";
   return game.slug;
 }
 
@@ -303,7 +269,7 @@ function isAreaMatchingGame(area: Area, game: Game | null): boolean {
   const slug = getGameCanonicalSlug(game);
   if (!slug || !GAME_CIRCUITS_MAP[slug]) return true;
   const circuits = GAME_CIRCUITS_MAP[slug];
-  return circuits.some((c) => c.dbCodes.includes(area.code) || c.code === area.code);
+  return circuits.some((c) => c.dbCodes.includes(area.code));
 }
 
 function getPublisherLogo(nameOrId?: string | number | null): string | null {
@@ -609,9 +575,7 @@ export default function App() {
     const circuits = GAME_CIRCUITS_MAP[slug];
     return circuits
       .map((circuit) => {
-        const matched = areas.find(
-          (a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))
-        );
+        const matched = areas.find((a) => circuit.dbCodes.includes(a.code));
         if (!matched) return null;
         return {
           area_id: matched.area_id,
@@ -640,9 +604,7 @@ export default function App() {
     const circuits = GAME_CIRCUITS_MAP[slug];
     return circuits
       .map((circuit) => {
-        const matched = areas.find(
-          (a) => circuit.dbCodes.includes(a.code) || circuit.dbCodes.some((c) => a.name.includes(c))
-        );
+        const matched = areas.find((a) => circuit.dbCodes.includes(a.code));
         if (!matched) return null;
         return {
           area_id: matched.area_id,
@@ -770,7 +732,7 @@ export default function App() {
       }
     }
     const matching = games.filter(
-      (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug) && gameMatchesPublisher(g, pubId, publishers)
+      (g) => gameMatchesPublisher(g, pubId, publishers)
     );
     if (matching.length > 0 && !matching.some((g) => g.slug === hoveredGameSlug)) {
       setHoveredGameSlug(matching[0].slug);
@@ -778,7 +740,7 @@ export default function App() {
   };
 
   const displayedGames = games.filter(
-    (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug) && gameMatchesPublisher(g, selectedPublisherId, publishers)
+    (g) => gameMatchesPublisher(g, selectedPublisherId, publishers)
   );
   const activePreviewGame = displayedGames.find((g) => g.slug === hoveredGameSlug) ?? displayedGames[0];
   const activePreviewMeta = activePreviewGame
@@ -787,7 +749,7 @@ export default function App() {
         title: "NEXUS ARENA",
         subtitle: "ĐẤU TRƯỜNG ESPORTS",
         tagline: "Chọn tựa game để khám phá các giải đấu và bảng đấu tương ứng.",
-        coverImage: "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg",
+        coverImage: "/games/league-of-legends.png",
         badge: "NEXUS",
         publisherName: "ESPORTS",
       };
@@ -798,23 +760,10 @@ export default function App() {
         request<Game[]>("/catalog/games"),
         request<Team[]>("/teams"),
       ]);
-      let activeGames: Game[] = [];
       if (loadedGames && loadedGames.length > 0) {
-        const filteredGames = loadedGames.filter(
-          (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
-        );
-        const hasTft = filteredGames.some((g) => g.slug === "teamfight-tactics");
-        const mergedGames = hasTft ? filteredGames : [TFT_GAME, ...filteredGames];
-        activeGames = mergedGames;
-        setGames(mergedGames);
+        setGames(loadedGames);
       }
-      const validTeams = (loadedTeams || []).filter((t) => {
-        if (isRemovedGame(t.name) || isRemovedGame(t.tag)) return false;
-        const g = activeGames.find((item) => item.game_id === t.game_id);
-        if (g && (isRemovedGame(g.name) || isRemovedGame(g.slug))) return false;
-        return true;
-      });
-      setTeams(validTeams);
+      setTeams(loadedTeams || []);
     } catch (reason) {
       setError((reason as Error).message);
     }
@@ -826,17 +775,8 @@ export default function App() {
       request<Game[]>("/catalog/games"),
       request<Area[]>("/catalog/areas"),
     ]);
-    const filteredPublishers = (loadedPublishers || []).filter(
-      (p) => !isRemovedGame(p.name)
-    );
-    setPublishers(filteredPublishers);
-
-    const filteredGames = (loadedGames || []).filter(
-      (g) => !isRemovedGame(g.name) && !isRemovedGame(g.slug)
-    );
-    const hasTft = filteredGames.some((g) => g.slug === "teamfight-tactics");
-    const mergedGames = hasTft ? filteredGames : [TFT_GAME, ...filteredGames];
-    setGames(mergedGames);
+    setPublishers(loadedPublishers || []);
+    setGames(loadedGames || []);
 
     const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
       const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
@@ -2812,6 +2752,23 @@ export default function App() {
                     <span className="dropdown-role">{user.role}</span>
                     {user.email && <span className="dropdown-email">{user.email}</span>}
                   </div>
+                  {globalCapabilities?.can_manage_catalog && (
+                    <>
+                      <hr className="dropdown-divider" />
+                      <button
+                        type="button"
+                        className="dropdown-logout-btn"
+                        style={{ textAlign: "left", color: "#38bdf8" }}
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          const el = document.getElementById("catalog");
+                          if (el) el.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        ⚙ Quản trị Catalog
+                      </button>
+                    </>
+                  )}
                   <hr className="dropdown-divider" />
                   <button
                     type="button"
@@ -4200,7 +4157,7 @@ export default function App() {
       </div>
     </section>
 
-    <section className="panel catalog-panel">
+    <section className="panel catalog-panel" id="catalog">
       <div className="panel-title"><h2>{t.catalogTitle}</h2></div>
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
       {!globalCapabilityError && !globalCapabilities?.can_manage_catalog && <p className="muted">Bạn chưa được cấp quyền quản lý publisher, game và khu vực.</p>}
