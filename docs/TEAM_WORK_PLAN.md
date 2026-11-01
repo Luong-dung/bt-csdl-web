@@ -39,7 +39,7 @@ Kế hoạch chi tiết của tuần hiện tại được tách riêng để d�
 
 - [2026-W44 — Tuần 3, 26/10/2026 đến 01/11/2026](./weeks/2026-W44.md): chốt sớm ngày 26/10/2026, **`8/8 DONE`, `0 IN PROGRESS`, `0 TODO`**; cả 8 task đã review/merge, CI và nghiệm thu local đạt. Hoàn thành UI giải, capability và đăng ký/duyệt đội. [Đánh giá từng người](./weeks/2026-W44.md#6-đánh-giá-cuối-tuần): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm đề xuất trên thang 5).
 
-- [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): đợt tiếp theo trong tuần lịch `2026-W44`; cập nhật 31/10: `4/8 DONE`, `3 REVIEW`, `1 IN PROGRESS`, `0 TODO` (W44-2-01/-05/-06/-07 DONE; -02/-03/-04 chờ DUNG chốt; DUC đang làm -08, bổ sung Browser E2E cho snapshot sau đổi membership, assignment scope và phân trang hơn 50 bản ghi). Mỗi người hai task: DUNG nền tảng roster/stage, DOANH API roster/khóa và bắt đầu giải, DUONG UI roster/stage và danh sách lớn, DUC integration/E2E. Mã task dùng `W44-2-01`…`W44-2-08`, không trùng W44 đã chốt; xem [bằng chứng và trạng thái chi tiết](./weeks/2026-W44-2.md).
+- [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): chốt nghiệm thu ngày 01/11/2026, **`8/8 DONE`, `0 REVIEW`, `0 IN PROGRESS`, `0 TODO`**. Hoàn thành roster/snapshot, khóa và điều kiện bắt đầu giải, stage, UI/phân trang, integration và Browser E2E. Cả 8 task đã review/merge; bằng chứng CI và kiểm tra local ghi tại [bảng tuần](./weeks/2026-W44-2.md). [Đánh giá từng người](./weeks/2026-W44-2.md#6-đánh-giá-cuối-đợt): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm chốt W44(2) được nhóm trưởng xác nhận ngày 01/11/2026, thang 5).
 
 W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 là tuần hiện tại (26/10–01/11), đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
@@ -155,10 +155,10 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W06-01 | Snapshot tournament roster | `DOANH` | `DUNG` | Roster service/API | `TODO` |
-| W06-02 | Khóa roster theo trạng thái giải | `DOANH` | `DUC` | Business rules | `TODO` |
-| W06-03 | CRUD stage và thứ tự stage | `DUNG` | `DOANH` | Migration/API | `TODO` |
-| W06-04 | Giao diện khóa đội hình | `DUONG` | `DUNG` | Roster UI | `TODO` |
+| W06-01 | Snapshot tournament roster | `DOANH` | `DUNG` | Roster service/API (W44-2-01/03; DUNG làm nền tảng) | `DONE` |
+| W06-02 | Khóa roster theo trạng thái giải | `DOANH` | `DUC` | Business rules (W44-2-04) | `DONE` |
+| W06-03 | CRUD stage và thứ tự stage | `DUNG` | `DOANH` | Migration/API (W44-2-02) | `DONE` |
+| W06-04 | Giao diện khóa đội hình | `DUONG` | `DUNG` | Roster UI (W44-2-05; UI stage W44-2-06) | `DONE` |
 
 **Nghiệm thu tuần:** thay đổi membership sau khi khóa giải không làm thay đổi roster snapshot.
 
