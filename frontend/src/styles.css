@@ -1964,6 +1964,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   background: rgba(239, 68, 68, 0.3);
 }
 
+.dropdown-admin-btn {
+  text-align: left;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.dropdown-admin-btn:hover {
+  background: rgba(56, 189, 248, 0.2);
+}
+
 @keyframes dropdownFadeIn {
   from { opacity: 0; transform: translateY(-6px); }
   to { opacity: 1; transform: translateY(0); }

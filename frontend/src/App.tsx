@@ -143,52 +143,9 @@ async function request<T>(path: string, options: RequestInit = {}, token?: strin
   return response.json() as Promise<T>;
 }
 
-const DEFAULT_PUBLISHERS: Publisher[] = [
-  { publisher_id: 1, name: "Riot Games" },
-  { publisher_id: 2, name: "Garena" },
-];
-
-export const DEFAULT_GAMES: Game[] = [
-  { game_id: 1, name: "Teamfight Tactics", slug: "teamfight-tactics", publisher_id: 1 },
-  { game_id: 2, name: "League of Legends", slug: "league-of-legends", publisher_id: 1 },
-  { game_id: 3, name: "VALORANT", slug: "valorant", publisher_id: 1 },
-  { game_id: 4, name: "Liên Quân Mobile", slug: "arena-of-valor", publisher_id: 2 },
-  { game_id: 5, name: "Free Fire", slug: "free-fire", publisher_id: 2 },
-];
-
-export const INITIAL_AREAS: Area[] = [
-  { area_id: 1, code: "GLOBAL", name: "Global", country: "Toàn cầu", flag: "🌐", gameSlug: "all" },
-  { area_id: 2, code: "APAC", name: "Asia-Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "all" },
-  { area_id: 3, code: "VN", name: "Vietnam", country: "Việt Nam", flag: "🇻🇳", gameSlug: "all" },
-  { area_id: 4, code: "VN-HCM", name: "Ho Chi Minh City", country: "TP. Hồ Chí Minh", flag: "🇻🇳", gameSlug: "all" },
-  { area_id: 5, code: "LCK", name: "Korea (LCK)", country: "Hàn Quốc", flag: "🇰🇷", gameSlug: "league-of-legends" },
-  { area_id: 6, code: "LPL", name: "China (LPL)", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "league-of-legends" },
-  { area_id: 7, code: "LEC", name: "EMEA (LEC)", country: "Châu Âu (EMEA)", flag: "🇪🇺", gameSlug: "league-of-legends" },
-  { area_id: 8, code: "LCS", name: "North America (LCS)", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "league-of-legends" },
-  { area_id: 9, code: "CBLOL", name: "Brazil (CBLOL)", country: "Brazil", flag: "🇧🇷", gameSlug: "league-of-legends" },
-  { area_id: 10, code: "LCP", name: "Asia-Pacific (LCP)", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "league-of-legends" },
-  { area_id: 11, code: "TFT AMER", name: "TFT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "teamfight-tactics" },
-  { area_id: 12, code: "TFT EMEA", name: "TFT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "teamfight-tactics" },
-  { area_id: 13, code: "TFT APAC", name: "TFT APAC", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "teamfight-tactics" },
-  { area_id: 14, code: "TFT CN", name: "TFT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "teamfight-tactics" },
-  { area_id: 15, code: "VCT Americas", name: "VCT Americas", country: "Châu Mỹ", flag: "🌎", gameSlug: "valorant" },
-  { area_id: 16, code: "VCT EMEA", name: "VCT EMEA", country: "Châu Âu, Trung Đông và châu Phi", flag: "🌍", gameSlug: "valorant" },
-  { area_id: 17, code: "VCT Pacific", name: "VCT Pacific", country: "Châu Á – Thái Bình Dương", flag: "🌏", gameSlug: "valorant" },
-  { area_id: 18, code: "VCT CN", name: "VCT China", country: "Trung Quốc", flag: "🇨🇳", gameSlug: "valorant" },
-  { area_id: 19, code: "RPL", name: "Thailand (RPL)", country: "Thái Lan", flag: "🇹🇭", gameSlug: "arena-of-valor" },
-  { area_id: 20, code: "AOG", name: "Vietnam (AOG)", country: "Việt Nam", flag: "🇻🇳", gameSlug: "arena-of-valor" },
-  { area_id: 21, code: "GCS", name: "Chinese Taipei (GCS)", country: "Đài Bắc Trung Hoa", flag: "🇹🇼", gameSlug: "arena-of-valor" },
-  { area_id: 22, code: "ASL", name: "Indonesia (ASL)", country: "Indonesia", flag: "🇮🇩", gameSlug: "arena-of-valor" },
-  { area_id: 23, code: "FFWS SEA", name: "FFWS Southeast Asia", country: "Đông Nam Á", flag: "🌏", gameSlug: "free-fire" },
-  { area_id: 24, code: "FFWS BR", name: "FFWS Brazil", country: "Brazil", flag: "🇧🇷", gameSlug: "free-fire" },
-  { area_id: 25, code: "FFWS LATAM", name: "FFWS Latin America", country: "Mỹ Latinh", flag: "🌎", gameSlug: "free-fire" },
-  { area_id: 26, code: "FFWS MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", gameSlug: "free-fire" },
-  { area_id: 27, code: "AVC", name: "AoV International Championship", country: "Châu Á – Quốc tế", flag: "🌏", gameSlug: "arena-of-valor" },
-  { area_id: 28, code: "FFWS NA", name: "FFWS North America", country: "Bắc Mỹ", flag: "🇺🇸", gameSlug: "free-fire" },
-  { area_id: 29, code: "FFWS PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", gameSlug: "free-fire" },
-  { area_id: 30, code: "FFWS IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", gameSlug: "free-fire" },
-  { area_id: 31, code: "FFWS BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire" },
-];
+const DEFAULT_PUBLISHERS: Publisher[] = [];
+export const DEFAULT_GAMES: Game[] = [];
+export const INITIAL_AREAS: Area[] = [];
 
 function getGameBadge(name: string): string {
   const lower = name.toLowerCase().replace(/[-_]/g, " ");
@@ -249,7 +206,7 @@ export const GAME_CIRCUITS_MAP: Record<string, { code: string; name: string; cou
     { code: "MEA", name: "FFWS Middle East & Africa", country: "Trung Đông & Châu Phi", flag: "🌍", dbCodes: ["FFWS MEA"] },
     { code: "PK", name: "FFWS Pakistan", country: "Pakistan", flag: "🇵🇰", dbCodes: ["FFWS PK"] },
     { code: "IN", name: "FFWS India", country: "Ấn Độ", flag: "🇮🇳", dbCodes: ["FFWS IN"] },
-    { code: "BD", name: "FFWS BD", country: "Bangladesh", flag: "🇧🇩", dbCodes: ["FFWS BD"] },
+    { code: "BD", name: "FFWS Bangladesh", country: "Bangladesh", flag: "🇧🇩", dbCodes: ["FFWS BD"] },
   ],
 };
 
@@ -525,8 +482,8 @@ export default function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [authCheckAttempt, setAuthCheckAttempt] = useState(0);
-  const [games, setGames] = useState<Game[]>(DEFAULT_GAMES);
-  const [publishers, setPublishers] = useState<Publisher[]>(DEFAULT_PUBLISHERS);
+  const [games, setGames] = useState<Game[]>([]);
+  const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
 
   const [teams, setTeams] = useState<Team[]>([]);
@@ -770,24 +727,33 @@ export default function App() {
   };
 
   const loadCatalog = async () => {
-    const [loadedPublishers, loadedGames, loadedAreas] = await Promise.all([
-      request<Publisher[]>("/catalog/publishers"),
-      request<Game[]>("/catalog/games"),
-      request<Area[]>("/catalog/areas"),
-    ]);
-    setPublishers(loadedPublishers || []);
-    setGames(loadedGames || []);
+    setCatalogLoading(true);
+    setCatalogReloadError("");
+    try {
+      const [loadedPublishers, loadedGames, loadedAreas] = await Promise.all([
+        request<Publisher[]>("/catalog/publishers"),
+        request<Game[]>("/catalog/games"),
+        request<Area[]>("/catalog/areas"),
+      ]);
+      setPublishers(loadedPublishers || []);
+      setGames(loadedGames || []);
 
-    const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
-      const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
-      return {
-        ...la,
-        country: la.country || meta?.country || la.name,
-        flag: la.flag || meta?.flag || "🌐",
-        gameSlug: la.gameSlug || meta?.gameSlug || "all",
-      };
-    });
-    setAreas(enrichedAreas);
+      const enrichedAreas: Area[] = (loadedAreas || []).map((la) => {
+        const meta = AREA_METAS[la.code] || AREA_METAS[la.code.toUpperCase()];
+        return {
+          ...la,
+          country: la.country || meta?.country || la.name,
+          flag: la.flag || meta?.flag || "🌐",
+          gameSlug: la.gameSlug || meta?.gameSlug || "all",
+        };
+      });
+      setAreas(enrichedAreas);
+    } catch (reason) {
+      setCatalogReloadError((reason as Error).message);
+      throw reason;
+    } finally {
+      setCatalogLoading(false);
+    }
   };
 
   const loadTournaments = async (page = tournamentPage, gameId = tournamentGameFilter, status = tournamentStatusFilter, areaId = tournamentAreaFilter) => {
@@ -2757,15 +2723,14 @@ export default function App() {
                       <hr className="dropdown-divider" />
                       <button
                         type="button"
-                        className="dropdown-logout-btn"
-                        style={{ textAlign: "left", color: "#38bdf8" }}
+                        className="dropdown-logout-btn dropdown-admin-btn"
                         onClick={() => {
                           setUserMenuOpen(false);
                           const el = document.getElementById("catalog");
                           if (el) el.scrollIntoView({ behavior: "smooth" });
                         }}
                       >
-                        ⚙ Quản trị Catalog
+                        ⚙ {t.catalogAdminBtn}
                       </button>
                     </>
                   )}
@@ -4184,6 +4149,7 @@ export default function App() {
           </form>
         </div>
       </>}
+      {catalogLoading && <p className="muted" style={{ padding: "8px 0" }}>Đang tải catalog...</p>}
       {catalogReloadError && <div className="catalog-reload">
         <p>{t.catalogSubtext}</p>
         <button className="button secondary" onClick={retryCatalogLoad} disabled={catalogLoading}>Thử tải lại danh sách</button>

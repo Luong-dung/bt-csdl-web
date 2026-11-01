@@ -23,7 +23,7 @@ def upgrade() -> None:
     # Clean up legacy CS2 and Dota 2 games if unreferenced
     bind.execute(sa.text("""
         DELETE FROM games
-        WHERE slug IN ('cs2', 'dota-2')
+        WHERE slug IN ('counter-strike-2', 'cs2', 'dota-2')
           AND game_id NOT IN (SELECT DISTINCT game_id FROM tournaments WHERE game_id IS NOT NULL)
           AND game_id NOT IN (SELECT DISTINCT game_id FROM teams WHERE game_id IS NOT NULL)
     """))
@@ -36,4 +36,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Irreversible data cleanup migration: deleted legacy games/publisher are not restored.
     pass

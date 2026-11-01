@@ -209,6 +209,7 @@ export type Translations = {
 
   // Catalog
   catalogTitle: string;
+  catalogAdminBtn: string;
   catalogAddPub: string;
   catalogAddGame: string;
   catalogAddArea: string;
@@ -455,6 +456,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     profileWorkflowItem4: "Người tạo đội tự động là MANAGER",
 
     catalogTitle: "Quản trị catalog",
+    catalogAdminBtn: "Quản trị Catalog",
     catalogAddPub: "Thêm publisher",
     catalogAddGame: "Thêm game",
     catalogAddArea: "Thêm khu vực",
@@ -699,6 +701,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     profileWorkflowItem4: "Creator is automatically assigned as MANAGER",
 
     catalogTitle: "Catalog Administration",
+    catalogAdminBtn: "Catalog Administration",
     catalogAddPub: "Add Publisher",
     catalogAddGame: "Add Game",
     catalogAddArea: "Add Region",
@@ -943,6 +946,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     profileWorkflowItem4: "창단자는 자동으로 MANAGER 권한을 부여받습니다",
 
     catalogTitle: "카탈로그 관리",
+    catalogAdminBtn: "카탈로그 관리",
     catalogAddPub: "퍼블리셔 추가",
     catalogAddGame: "게임 추가",
     catalogAddArea: "지역 추가",
@@ -1187,6 +1191,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     profileWorkflowItem4: "作成者には自動的にMANAGER権限が付与されます",
 
     catalogTitle: "カタログ管理",
+    catalogAdminBtn: "カタログ管理",
     catalogAddPub: "パブリッシャー追加",
     catalogAddGame: "ゲーム追加",
     catalogAddArea: "地域追加",
@@ -1431,6 +1436,7 @@ export const TRANSLATIONS: Record<LangCode, Translations> = {
     profileWorkflowItem4: "创建者自动获得 MANAGER 战队经理权限",
 
     catalogTitle: "目录管理后台",
+    catalogAdminBtn: "目录管理",
     catalogAddPub: "添加厂商",
     catalogAddGame: "添加游戏",
     catalogAddArea: "添加赛区",
