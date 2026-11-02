@@ -2136,23 +2136,23 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 
 /* Supplied fantasy artwork & per-game card backgrounds */
 :root {
-  --game-art: url("/games/league-of-legends.png");
+  --game-art: url("/games/yasuo-hero.jpg");
   --game-art-alt: url("/games/valorant.png");
   --game-art-third: url("/games/arena-of-valor.png");
 }
 
-.card-game-league-of-legends { --card-art: url("/games/league-of-legends.png"); }
+.card-game-league-of-legends { --card-art: url("/games/yasuo-hero.jpg"); }
 .card-game-teamfight-tactics { --card-art: url("/games/teamfight-tactics.png"); }
 .card-game-valorant { --card-art: url("/games/valorant.png"); }
 .card-game-arena-of-valor { --card-art: url("/games/arena-of-valor.png"); }
 .card-game-free-fire { --card-art: url("/games/free-fire.png"); }
-.card-game-default { --card-art: url("/games/league-of-legends.png"); }
+.card-game-default { --card-art: url("/games/yasuo-hero.jpg"); }
 
 .hero {
   background:
-    linear-gradient(90deg, #0a051c 0%, #0a051c 38%, rgba(16, 8, 40, .74) 68%, rgba(10, 5, 28, .86) 100%),
-    linear-gradient(0deg, rgba(12, 6, 32, .9), transparent 58%),
-    var(--game-art) right 18% / 185% auto no-repeat;
+    linear-gradient(90deg, rgba(10, 5, 28, .88), rgba(22, 10, 48, .38) 58%, rgba(10, 5, 28, .65)),
+    linear-gradient(0deg, rgba(12, 6, 32, .82), transparent 58%),
+    var(--game-art) center 22% / cover no-repeat;
 }
 .hero::before {
   background:
@@ -2161,7 +2161,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 }
 .tournament-zone {
   background:
-    linear-gradient(180deg, rgba(13, 7, 37, .96), rgba(10, 5, 28, .98)),
+    linear-gradient(rgba(13, 7, 37, .88), rgba(13, 7, 37, .93)),
+    var(--game-art) center 43% / 1120px auto no-repeat,
     var(--fantasy-panel);
 }
 .tournament-card,
