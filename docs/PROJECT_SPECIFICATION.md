@@ -131,6 +131,7 @@ Schema triển khai nằm tại [database/schema_postgres.sql](../database/schem
 | Tournaments | `/api/v1/tournaments`, `/api/v1/tournaments/{tournament_id}`, `/api/v1/tournaments/{tournament_id}/status` |
 | Roster foundation | `GET /api/v1/tournaments/{tournament_id}/roster-lock`, `GET /api/v1/tournaments/{tournament_id}/teams/{team_id}/roster/capabilities`, `GET/PUT /api/v1/tournaments/{tournament_id}/teams/{team_id}/roster`, `POST /api/v1/tournaments/{tournament_id}/roster-lock`; capability giải thêm `roster_locked`, `can_lock_roster`, `can_approve_registrations` |
 | Stage | `GET/POST /api/v1/tournaments/{tournament_id}/stages`, `GET/PATCH/DELETE .../stages/{stage_id}`, `PUT .../stages/order`; capability giải thêm `can_manage_stages` |
+| Match | `GET/POST /api/v1/tournaments/{tournament_id}/matches`, `GET/PATCH/DELETE .../matches/{match_id}`, `POST .../matches/{match_id}/status`, `PUT .../matches/{match_id}/result`, `GET .../matches/{match_id}/capabilities`; capability giải thêm `can_manage_matches` |
 | Vận hành | `/health`, `/ready`, `/docs` |
 
 ## 9. Tiến độ

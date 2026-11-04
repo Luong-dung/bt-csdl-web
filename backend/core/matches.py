@@ -91,6 +91,10 @@ def match_cancellable(tournament: Tournament, match: Match) -> bool:
     return match.status in ('PENDING', 'ONGOING') and tournament.status in ('UPCOMING', 'ONGOING')
 
 
+def matches_writable(tournament: Tournament) -> bool:
+    return tournament.status in ('UPCOMING', 'ONGOING') and tournament.roster_locked_at is not None
+
+
 def ensure_match_writable_tournament(tournament: Tournament) -> None:
     if tournament.status not in ('UPCOMING', 'ONGOING'):
         raise HTTPException(status_code=409, detail='Giải đã kết thúc hoặc bị hủy, không thể ghi trận')

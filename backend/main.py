@@ -11,6 +11,7 @@ from routes.registrations import router as registration_router
 from routes.rosters import router as roster_router
 from routes.stages import router as stage_router
 from routes.match_results import router as match_result_router
+from routes.matches import router as match_router
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(roster_router)
     app.include_router(stage_router)
     app.include_router(match_result_router)
+    app.include_router(match_router)
 
     @app.get("/")
     def check_server():

@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from core.matches import matches_writable
 from core.tournament_policy import registration_resolution_open, registrations_open, stages_editable
 from core.validation import ResourceId
 from middleware.auth import (
@@ -40,6 +41,7 @@ class TournamentCapabilities(BaseModel):
     roster_locked: bool
     can_lock_roster: bool
     can_manage_stages: bool
+    can_manage_matches: bool
     editable_fields: list[str]
     allowed_status_transitions: list[str]
 
@@ -91,6 +93,7 @@ def tournament_capabilities(
         roster_locked=tournament.roster_locked_at is not None,
         can_lock_roster=allowed and registrations_open(tournament.status, tournament.roster_locked_at),
         can_manage_stages=allowed and stages_editable(tournament.status),
+        can_manage_matches=allowed and matches_writable(tournament),
         editable_fields=fields,
         allowed_status_transitions=transitions,
     )

@@ -76,7 +76,7 @@ Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; s
 - List: `offset` (≥ 0), `limit` 1–100 mặc định 50, lọc `stage_id`, `team_id`, `status`; header `X-Total-Count`; sắp `stages.sequence_order, round_no, match_id`.
 - Ghi kết quả: `PUT …/result` body `{"score_team1": 2, "score_team2": 1}` (`extra='forbid'`).
 - Đổi trạng thái: `POST …/status` body `{"status": "ONGOING" | "CANCELLED"}`.
-- Thứ tự lỗi: 401 → 422 payload (FastAPI validate body trước handler) → 404 giải/trận → 403 → 422 liên kết → 409 lifecycle.
+- Thứ tự lỗi: 401 → 422 payload (FastAPI validate body trước handler) → 404 giải/trận → 403 → 422 liên kết → 409 lifecycle. W45-03 đổi thứ tự hai bước cuối, xem mục 5c.
 - Audit `resource='match'`, action `MATCH_CREATED/UPDATED/DELETED/STARTED/CANCELLED/RESULT_SUBMITTED`, details `{tournament_id, match_id, before, after}`.
 
 ## 5b. W45-02 — API ghi kết quả (đã triển khai)
@@ -95,6 +95,48 @@ Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; s
 | Thành công | 200; trận COMPLETED, `winner_id` do server tính; audit `MATCH_RESULT_SUBMITTED` cùng transaction |
 
 Sau khi chờ khóa giải, request đọc lại quyền (assignment bị thu hồi → 403), trạng thái giải (kết thúc → 409) và trạng thái trận (bị hủy → 409). Lỗi audit hoặc constraint rollback cả trận lẫn audit. Test: `tests/test_match_result_api.py`, `tests/test_match_result_concurrency.py` (PostgreSQL, connection độc lập).
+
+## 5c. W45-03/-04 — API danh sách, lịch, vòng đời và capability (đã triển khai)
+
+Tất cả nằm dưới `/api/v1/tournaments/{tournament_id}/matches`; code ở `backend/routes/matches.py`, test ở `backend/tests/test_match_api.py`.
+
+| Thao tác | Endpoint | Quyền | Thành công |
+|---|---|---|---|
+| Danh sách | `GET ` | Công khai | 200 `MatchRead[]`, header `X-Total-Count` |
+| Chi tiết | `GET /{match_id}` | Công khai | 200 `MatchRead` |
+| Tạo | `POST ` | Quản lý giải | 201 `MatchRead`, audit `MATCH_CREATED` |
+| Sửa | `PATCH /{match_id}` | Quản lý giải | 200 `MatchRead`, audit `MATCH_UPDATED`; không đổi gì thì không audit |
+| Xóa | `DELETE /{match_id}` | Quản lý giải | 204, audit `MATCH_DELETED` |
+| Bắt đầu | `POST /{match_id}/status` `{"status":"ONGOING"}` | Quản lý hoặc trọng tài đúng giải, không thuộc hai đội | 200, audit `MATCH_STARTED`; đã ONGOING thì 200 không audit |
+| Hủy | `POST /{match_id}/status` `{"status":"CANCELLED"}` | Quản lý giải | 200, audit `MATCH_CANCELLED`; đã CANCELLED thì 200 không audit |
+| Capability | `GET /{match_id}/capabilities` | Đăng nhập, chỉ trả quyền của chính mình | 200, `Cache-Control: private, no-store` |
+
+**Body tạo:** `stage_id`, `round_no`, `team1_id`, `team2_id` (số nguyên strict > 0, bắt buộc), `scheduled_at` (tùy chọn). **Body sửa:** gửi ít nhất một trường trong số đó; chỉ `scheduled_at` được nhận `null` (xóa lịch). `scheduled_at` phải là chuỗi ISO 8601 có offset; thiếu offset, số Unix hoặc giờ vượt phạm vi UTC đều trả 422. Trường lạ như `status`, `winner_id`, `score_team1` trả 422.
+
+**Capability trận:**
+
+```json
+{"match_id": 31, "can_update": true, "can_delete": true, "can_start": true,
+ "can_submit_result": false, "can_cancel": true,
+ "editable_fields": ["round_no", "scheduled_at", "stage_id", "team1_id", "team2_id"]}
+```
+
+Các cờ đã gộp quyền và vòng đời hiện tại, chỉ là gợi ý cho UI; API vẫn kiểm tra lại khi ghi. `can_start` không kiểm tra trước tình trạng đội, nên đội bị đổi đăng ký sau khi tạo trận vẫn có thể trả 422 khi bắt đầu. Capability giải có thêm `can_manage_matches` (quản lý giải, giải UPCOMING/ONGOING, roster đã khóa) để UI hiện nút tạo trận.
+
+**Ma trận quyền:**
+
+| Người gọi | Xem | Tạo/sửa/xóa | Bắt đầu | Ghi kết quả | Hủy |
+|---|---|---|---|---|---|
+| Khách | Có | 401 | 401 | 401 | 401 |
+| ADMIN, người quản lý đúng giải | Có | Có | Có | Có | Có |
+| REFEREE assignment `TOURNAMENT` đúng giải | Có | 403 | Có | Có | 403 |
+| REFEREE như trên nhưng thuộc roster/membership ACTIVE của một trong hai đội | Có | 403 | 403 | 403 | 403 |
+| REFEREE assignment giải khác hoặc GLOBAL, role REFEREE trên user | Có | 403 | 403 | 403 | 403 |
+| TEAM_MANAGER/PLAYER/VIEWER, kể cả của đội đang đấu | Có | 403 | 403 | 403 | 403 |
+
+**Khác với bản đề xuất ở mục 5:** route ghi trả 409 vòng đời **trước** 422 liên kết, tức `401 → 422 payload → 404 → 403 → 409 vòng đời → 422 liên kết`. Giải chưa khóa roster chưa có snapshot, nên theo thứ tự cũ người dùng sẽ luôn nhận 422 "chưa có PLAYER" thay vì 409 "cần khóa đội hình".
+
+**Dữ liệu cũ:** trận có `next_match_id`, hoặc được trận khác trỏ tới, trả 409 khi sửa/xóa và không được báo có thể sửa trong capability; vẫn bắt đầu, ghi kết quả và hủy được. Trận cũ thiếu đội trả 409 khi bắt đầu; `PATCH` đổi một đội mà đội còn lại đang `null` trả 422.
 
 ## 6. Giới hạn đã biết
 
