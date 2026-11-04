@@ -11,7 +11,7 @@ from core.matches import (as_utc, to_utc, can_cancel_match, can_manage_matches, 
                           ensure_match_teams, ensure_stage_in_tournament, lock_match_context, match_cancellable,
                           match_editable, match_result_open, match_startable, match_state)
 from modules.identity.models import RoleAssignment, User
-from modules.teams.models import Team
+from modules.teams.models import Team, TeamMembership
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import session_factory
 from test_permissions import access, organizer_tournament
@@ -52,23 +52,33 @@ def insert(db, **values):
     db.flush()
 
 
-@pytest.mark.parametrize('bad', [
-    {'status': 'DONE'}, {'round_no': 0}, {'score_team1': -1},
-    {'team2': 'Alpha'}, {'winner': 'Gamma'}, {'status': 'COMPLETED'}, {'winner': 'Alpha'},
-    {'stage': 'other_stage'},
+@pytest.mark.parametrize('case,constraint', [
+    ({'status': 'DONE'}, 'ck_matches_status'),
+    ({'round_no': 0}, 'ck_matches_round'),
+    ({'score_team1': -1}, 'ck_matches_scores'),
+    ({'team2': 'Alpha'}, 'ck_matches_distinct_teams'),
+    # COMPLETED so ck_matches_result cannot reject first; winner is outside the match.
+    ({'winner': 'Gamma', 'status': 'COMPLETED'}, 'ck_matches_winner_team'),
+    ({'team1': None, 'winner': 'Gamma', 'status': 'COMPLETED'}, 'ck_matches_winner_team'),  # NULL team must not let it pass
+    ({'team1': None, 'winner': 'Beta', 'status': 'COMPLETED'}, 'ck_matches_winner_team'),
+    ({'status': 'COMPLETED'}, 'ck_matches_result'),
+    ({'winner': 'Alpha'}, 'ck_matches_result'),
+    ({'stage': 'other_stage'}, None),  # composite FK: stage of another tournament
 ])
-def test_database_rejects_invalid_direct_writes(access, session_factory, match_case, bad):
-    _, _, _, teams, _ = access
+def test_database_rejects_invalid_direct_writes(access, session_factory, match_case, case, constraint):
+    bad = dict(case)  # never mutate the shared parametrize dict
     with session_factory.begin() as db:
         db.add(Team(name='Gamma', tag='G', game_id=1))
     with session_factory() as db:
-        teams = {t.name: t.team_id for t in db.scalars(select(Team))}
+        teams = {t.name: t.team_id for t in db.scalars(select(Team))} | {None: None}
         values = {'tournament_id': match_case['tid'], 'stage_id': match_case[bad.pop('stage', 'stage')],
-                  'team1_id': teams['Alpha'], 'team2_id': teams[bad.pop('team2', 'Beta')]}
+                  'team1_id': teams[bad.pop('team1', 'Alpha')], 'team2_id': teams[bad.pop('team2', 'Beta')]}
         if 'winner' in bad:
             values['winner_id'] = teams[bad.pop('winner')]
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError) as error:
             insert(db, **values, **bad)
+        if constraint:
+            assert constraint in str(error.value.orig)
         db.rollback()
 
 
@@ -91,6 +101,25 @@ def test_database_accepts_completed_result_and_utc_schedule(access, session_fact
     assert error.value.status_code == 422
 
 
+@pytest.mark.parametrize('edge', [
+    datetime(1, 1, 1, 0, 0, tzinfo=timezone(timedelta(hours=7))),
+    datetime(9999, 12, 31, 23, 0, tzinfo=timezone(timedelta(hours=-7))),
+])
+def test_to_utc_out_of_range_is_422_not_500(edge):
+    with pytest.raises(HTTPException) as error:
+        to_utc(edge)
+    assert error.value.status_code == 422
+
+
+def test_as_utc_normalizes_aware_values_from_any_session_timezone():
+    # PostgreSQL returns values in the session TimeZone, e.g. Asia/Ho_Chi_Minh.
+    local = datetime(2026, 11, 5, 19, 0, tzinfo=timezone(timedelta(hours=7)))
+    assert as_utc(local) == local and as_utc(local).utcoffset() == timedelta(0)
+    assert as_utc(local).isoformat() == '2026-11-05T12:00:00+00:00'
+    assert as_utc(datetime(2026, 11, 5, 12, 0)).isoformat() == '2026-11-05T12:00:00+00:00'
+    assert as_utc(None) is None
+
+
 def assign(session_factory, users, roles, user, role, scope_type, scope_id):
     with session_factory.begin() as db:
         db.add(RoleAssignment(user_id=users[user], role_id=roles[role], scope_type=scope_type, scope_id=scope_id))
@@ -103,7 +132,10 @@ def assign(session_factory, users, roles, user, role, scope_type, scope_id):
     ('referee', ('GLOBAL', None), False, False),
     ('referee', ('TOURNAMENT', 'other'), False, False),
     ('referee', ('TOURNAMENT', 'tid'), False, True),
-    ('viewer', ('TOURNAMENT', 'tid'), False, True),   # assignment, not user role, is what counts
+    ('admin', ('TOURNAMENT', 'tid'), True, True),
+    # Conflict of interest: a tournament referee who plays for (roster/active member of) either team.
+    ('viewer', ('TOURNAMENT', 'tid'), False, False),   # Alpha PLAYER in the roster snapshot
+    ('manager', ('TOURNAMENT', 'tid'), False, False),  # Beta PLAYER in the roster snapshot
     ('manager', None, False, False),             # team manager of a playing team
     ('viewer', None, False, False),              # PLAYER of a playing team
 ])
@@ -119,6 +151,22 @@ def test_shared_checkers_follow_tournament_scope(access, session_factory, match_
         assert can_cancel_match(db, tournament, match, actor) is manage
         assert can_start_match(db, tournament, match, actor) is referee
         assert can_submit_result(db, tournament, match, actor) is referee
+
+
+def test_referee_who_is_active_member_of_a_playing_team_is_blocked(access, session_factory, match_case):
+    _, _, users, teams, roles = access
+    assign(session_factory, users, roles, 'referee', 'REFEREE', 'TOURNAMENT', match_case['tid'])
+    with session_factory.begin() as db:
+        db.add(TeamMembership(team_id=teams['Beta'], user_id=users['referee'], role_in_team='MANAGER'))
+    with session_factory() as db:
+        tournament, match = db.get(Tournament, match_case['tid']), db.get(Match, match_case['match'])
+        actor = db.get(User, users['referee'])
+        assert not can_submit_result(db, tournament, match, actor)
+        assert not can_start_match(db, tournament, match, actor)
+        db.execute(text("UPDATE team_memberships SET status='LEFT', left_date=CURRENT_DATE WHERE user_id=:u"),
+                   {'u': users['referee']})
+        assert can_submit_result(db, tournament, match, actor)
+        db.rollback()
 
 
 def test_lock_context_rechecks_after_lock_and_scopes_404(access, session_factory, match_case):

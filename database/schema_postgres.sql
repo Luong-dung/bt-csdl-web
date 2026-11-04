@@ -128,7 +128,7 @@ CREATE TABLE matches (
     CONSTRAINT ck_matches_round CHECK (round_no > 0),
     CONSTRAINT ck_matches_scores CHECK (score_team1 >= 0 AND score_team2 >= 0),
     CONSTRAINT ck_matches_distinct_teams CHECK (team1_id IS NULL OR team2_id IS NULL OR team1_id <> team2_id),
-    CONSTRAINT ck_matches_winner_team CHECK (winner_id IS NULL OR winner_id = team1_id OR winner_id = team2_id),
+    CONSTRAINT ck_matches_winner_team CHECK (winner_id IS NULL OR (team1_id IS NOT NULL AND team2_id IS NOT NULL AND winner_id IN (team1_id, team2_id))),
     CONSTRAINT ck_matches_result CHECK ((status = 'COMPLETED' AND winner_id IS NOT NULL)
                                         OR (status <> 'COMPLETED' AND winner_id IS NULL))
 );

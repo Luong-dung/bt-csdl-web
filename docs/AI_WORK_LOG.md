@@ -24,6 +24,13 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### Bổ sung sửa review W45 ngày 2026-11-05
+
+- **ID:** `AI-2026-W45-DUNG-003`; PR #80, đồng bộ sang #81.
+- Tiếp tục phần sửa đang dở: constraint winner không để NULL vượt CHECK; chuẩn hóa aware datetime về UTC và trả 422 khi tràn phạm vi; test xác nhận đúng constraint, không sửa dict tham số dùng chung; bỏ hằng không dùng, sửa docstring và contract thứ tự lỗi/đội nullable/kiểm tra đội trước bắt đầu/giới hạn đóng giải.
+- Áp dụng đề xuất review: trọng tài thuộc roster hoặc membership ACTIVE của hai đội không được bắt đầu/ghi kết quả; quyền quản lý giải giữ policy hiện có. Contract đề xuất bắt đầu lại ONGOING trả 200 không audit, W45-03 cần triển khai/test.
+- Kiểm tra #80: `python -m pytest -q` → 557 passed, 57 skipped; PostgreSQL `tests/test_match_foundation.py tests/test_match_migration.py --postgres -m postgres -q` → 39 passed trên database test tạm riêng, đã xóa sau chạy. Trạng thái `APPLIED`; chờ reviewer xác nhận và CI head mới.
+
 ### Lường Tiến Dũng — `DUNG`
 
 | ID | Ngày | Task/PR | Nội dung đã nhờ AI | Kết quả áp dụng | File/module ảnh hưởng | Kiểm tra của người thực hiện | Trạng thái |
