@@ -52,6 +52,9 @@ def test_match_upgrade_downgrade_preserves_rows(request, session_factory, match_
     "UPDATE matches SET status='COMPLETED'",              # completed without winner
     'UPDATE matches SET winner_id=team1_id',               # winner on a pending match
     'UPDATE matches SET stage_id=:other_stage',            # stage of another tournament
+    'UPDATE matches SET team2_id=team1_id',                # ck_matches_distinct_teams
+    # ck_matches_winner_team with a NULL team: NOT(...) must not evaluate to NULL and slip through.
+    "UPDATE matches SET status='COMPLETED', winner_id=team2_id, team1_id=NULL",
 ])
 def test_match_migration_stops_before_ddl_on_bad_legacy_rows(request, session_factory, match_case, legacy):
     if not request.config.getoption('--postgres'):

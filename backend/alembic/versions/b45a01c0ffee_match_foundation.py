@@ -24,7 +24,7 @@ CHECKS = (
     ('ck_matches_round', 'round_no > 0'),
     ('ck_matches_scores', 'score_team1 >= 0 AND score_team2 >= 0'),
     ('ck_matches_distinct_teams', 'team1_id IS NULL OR team2_id IS NULL OR team1_id <> team2_id'),
-    ('ck_matches_winner_team', 'winner_id IS NULL OR winner_id = team1_id OR winner_id = team2_id'),
+    ('ck_matches_winner_team', 'winner_id IS NULL OR (team1_id IS NOT NULL AND team2_id IS NOT NULL AND winner_id IN (team1_id, team2_id))'),
     ('ck_matches_result', "(status = 'COMPLETED' AND winner_id IS NOT NULL) OR "
                           "(status <> 'COMPLETED' AND winner_id IS NULL)"),
 )

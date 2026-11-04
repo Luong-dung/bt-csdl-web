@@ -15,11 +15,8 @@ from core.rosters import approved_team
 from core.tournaments import get_tournament_or_404, lock_tournament_as
 from middleware.auth import can_manage_tournament
 from modules.identity.models import User
-from modules.teams.models import Team
+from modules.teams.models import Team, TeamMembership
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRoster
-
-MATCH_STATUSES = ('PENDING', 'ONGOING', 'COMPLETED', 'CANCELLED')
-
 
 # ---------- permission checkers (single policy for API enforcement and capabilities) ----------
 
@@ -40,14 +37,32 @@ def can_manage_matches(tournament: Tournament, user: User) -> bool:
     return can_manage_tournament(tournament, user)
 
 
+def plays_in_match(db: Session, match: Match | None, user: User) -> bool:
+    """User is in the tournament roster snapshot or an active member of either team of the match."""
+    team_ids = [t for t in (getattr(match, 'team1_id', None), getattr(match, 'team2_id', None)) if t is not None]
+    if not team_ids:
+        return False
+    in_roster = db.scalar(select(TournamentRoster.roster_id).where(
+        TournamentRoster.tournament_id == match.tournament_id, TournamentRoster.team_id.in_(team_ids),
+        TournamentRoster.user_id == user.user_id).limit(1)) is not None
+    return in_roster or db.scalar(select(TeamMembership.membership_id).where(
+        TeamMembership.team_id.in_(team_ids), TeamMembership.user_id == user.user_id,
+        TeamMembership.status == 'ACTIVE', TeamMembership.left_date.is_(None)).limit(1)) is not None
+
+
+def is_match_referee(db: Session, tournament: Tournament, match: Match | None, user: User) -> bool:
+    """Tournament-scoped REFEREE who does not play for either team of this match (conflict of interest)."""
+    return is_tournament_referee(tournament, user) and not plays_in_match(db, match, user)
+
+
 def can_start_match(db: Session, tournament: Tournament, match: Match, user: User) -> bool:
-    """Permission only; lifecycle is checked by ``ensure_match_startable``."""
-    return can_manage_tournament(tournament, user) or is_tournament_referee(tournament, user)
+    """Permission only. Lifecycle: ``match_startable``; the start route must also call ``ensure_match_teams``."""
+    return can_manage_tournament(tournament, user) or is_match_referee(db, tournament, match, user)
 
 
 def can_submit_result(db: Session, tournament: Tournament, match: Match, user: User) -> bool:
-    """Permission only; lifecycle is checked by ``ensure_result_submittable``."""
-    return can_manage_tournament(tournament, user) or is_tournament_referee(tournament, user)
+    """Permission only. Lifecycle: ``match_result_open`` (plus idempotent replay of a COMPLETED result)."""
+    return can_manage_tournament(tournament, user) or is_match_referee(db, tournament, match, user)
 
 
 def can_cancel_match(db: Session, tournament: Tournament, match: Match, user: User) -> bool:
@@ -150,14 +165,20 @@ def to_utc(value: datetime | None) -> datetime | None:
         return None
     if value.tzinfo is None or value.utcoffset() is None:
         raise HTTPException(status_code=422, detail='Giờ thi đấu phải kèm múi giờ (offset)')
-    return value.astimezone(timezone.utc)
+    try:
+        return value.astimezone(timezone.utc)
+    except OverflowError:
+        raise HTTPException(status_code=422, detail='Giờ thi đấu nằm ngoài phạm vi hỗ trợ') from None
 
 
 def as_utc(value: datetime | None) -> datetime | None:
-    """Read side: PostgreSQL returns aware UTC, SQLite returns naive values stored as UTC."""
-    if value is None or value.tzinfo is not None:
-        return value
-    return value.replace(tzinfo=timezone.utc)
+    """Read side. PostgreSQL returns aware values in the session TimeZone (not necessarily UTC);
+    SQLite returns naive values that were stored as UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
 
 
 def match_state(match: Match) -> dict:

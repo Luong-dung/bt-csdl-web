@@ -30,7 +30,7 @@ Index: `ix_matches_tournament_stage (tournament_id, stage_id, round_no, match_id
 
 | Hàm | Dùng cho |
 |---|---|
-| `can_start_match(db, tournament, match, user) -> bool` | Quản lý giải **hoặc** REFEREE assignment `TOURNAMENT` đúng giải |
+| `can_start_match(db, tournament, match, user) -> bool` | Quản lý giải **hoặc** REFEREE assignment `TOURNAMENT` đúng giải, không thuộc hai đội của trận |
 | `can_submit_result(db, tournament, match, user) -> bool` | Như trên |
 | `can_cancel_match(db, tournament, match, user) -> bool`, `can_manage_matches(tournament, user)` | Chỉ quản lý giải (`can_manage_tournament` hiện có) |
 | `is_tournament_referee(tournament, user)` | Role REFEREE trên user, assignment GLOBAL hoặc giải khác **không** tính |
@@ -41,7 +41,9 @@ Index: `ix_matches_tournament_stage (tournament_id, stage_id, round_no, match_id
 | `to_utc(dt)` / `as_utc(dt)` | Ghi: bắt buộc có offset (thiếu → 422), đổi sang UTC. Đọc: SQLite trả naive → gắn UTC |
 | `match_state(match)` | Snapshot before/after cho audit |
 
-Checker chỉ kiểm tra quyền; tham số `match` giữ để mở rộng mà không đổi chữ ký. Route **không** tự viết lại checker.
+Checker chỉ kiểm tra quyền. REFEREE đúng giải bị chặn bắt đầu/ghi kết quả nếu có tên trong snapshot roster hoặc là thành viên ACTIVE chưa rời một trong hai đội của trận; quyền ADMIN/quản lý giải vẫn theo policy hiện có. Route **không** tự viết lại checker.
+
+Route bắt đầu trận W45-03 phải gọi `ensure_match_teams` sau khi khóa và trước mutation, ngoài `match_startable`, để kiểm tra hai đội khác nhau, đúng game, APPROVED và có PLAYER trong snapshot. `as_utc` chuẩn hóa cả datetime đã có offset về UTC; `to_utc` trả 422 nếu chuyển đổi vượt phạm vi datetime.
 
 ## 4. Vòng đời
 
@@ -53,6 +55,8 @@ Checker chỉ kiểm tra quyền; tham số `match` giữ để mở rộng mà 
 | PENDING/ONGOING → CANCELLED | hủy (quản lý) | UPCOMING/ONGOING |
 | COMPLETED | gửi lại đúng kết quả → 200 không audit; khác → 409 | — |
 | CANCELLED | hủy lại → 200 không audit | — |
+
+Gọi bắt đầu lại khi trận đã ONGOING: 200, không audit thêm; vẫn kiểm tra quyền hiện tại và yêu cầu giải ONGOING, roster khóa, hai đội hợp lệ. W45-03 triển khai và kiểm thử hành vi này.
 
 Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; server tự tính `winner_id`.
 
@@ -68,14 +72,16 @@ Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; s
 ```
 
 - `result` là `null` khi chưa COMPLETED (UI không hiển thị 0–0).
+- `team1` và `team2` có thể là `null` với dữ liệu cũ; UI phải xử lý đội chưa xác định.
 - List: `offset` (≥ 0), `limit` 1–100 mặc định 50, lọc `stage_id`, `team_id`, `status`; header `X-Total-Count`; sắp `stages.sequence_order, round_no, match_id`.
 - Ghi kết quả: `PUT …/result` body `{"score_team1": 2, "score_team2": 1}` (`extra='forbid'`).
 - Đổi trạng thái: `POST …/status` body `{"status": "ONGOING" | "CANCELLED"}`.
-- Thứ tự lỗi: 401 → 404 giải/trận → 403 → 422 payload/liên kết → 409 lifecycle.
+- Thứ tự lỗi: 401 → 422 payload (FastAPI validate body trước handler) → 404 giải/trận → 403 → 422 liên kết → 409 lifecycle.
 - Audit `resource='match'`, action `MATCH_CREATED/UPDATED/DELETED/STARTED/CANCELLED/RESULT_SUBMITTED`, details `{tournament_id, match_id, before, after}`.
 
 ## 6. Giới hạn đã biết
 
 - `scheduled_at` không chống trùng lịch (chưa có thời lượng/sân).
-- FK team của `matches` trong model không có ON DELETE; `schema_postgres.sql` ghi SET NULL. Đội đang có đăng ký bị chặn xóa bởi FK RESTRICT của `tournament_registrations`; nếu SET NULL chạm trận COMPLETED thì `ck_matches_result` chặn. Theo dõi cùng mục FK khi có tính năng xóa giải/đội.
-- PostgreSQL test chưa chạy local trên máy tác giả (không có database test riêng); dựa vào CI.
+- `change_tournament_status` chưa chặn kết thúc/hủy giải khi còn trận PENDING/ONGOING. Các trận đó không thể ghi kết quả hoặc hủy sau khi giải kết thúc; người quản lý cần xử lý trận trước khi đóng giải. W45 chưa bổ sung điều kiện đóng giải.
+- FK team của `matches` trong model không có ON DELETE; `schema_postgres.sql` ghi SET NULL. Đội đang có đăng ký bị chặn xóa bởi FK RESTRICT của `tournament_registrations`; nếu SET NULL chạm trận COMPLETED thì `ck_matches_winner_team` chặn. Theo dõi cùng mục FK khi có tính năng xóa giải/đội.
+- Kiểm tra bản sửa review ngày 2026-11-05: SQLite toàn bộ 557 passed/57 skipped; PostgreSQL foundation/migration 39 passed trên database tạm riêng (đã xóa sau test). Toàn bộ PostgreSQL và frontend/E2E chờ CI trên head mới.
