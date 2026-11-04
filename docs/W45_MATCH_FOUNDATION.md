@@ -74,6 +74,23 @@ Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; s
 - Thứ tự lỗi: 401 → 404 giải/trận → 403 → 422 payload/liên kết → 409 lifecycle.
 - Audit `resource='match'`, action `MATCH_CREATED/UPDATED/DELETED/STARTED/CANCELLED/RESULT_SUBMITTED`, details `{tournament_id, match_id, before, after}`.
 
+## 5b. W45-02 — API ghi kết quả (đã triển khai)
+
+`PUT /api/v1/tournaments/{tournament_id}/matches/{match_id}/result`, body `{"score_team1": int, "score_team2": int}`, trả `MatchRead` (schema dùng chung ở `backend/modules/tournaments/match_schemas.py`, W45-03 tái sử dụng).
+
+| Tình huống | Kết quả |
+|---|---|
+| Thiếu/sai token | 401 |
+| Giải/trận không tồn tại hoặc trận thuộc giải khác | 404 |
+| Không phải quản lý giải hoặc trọng tài assignment đúng giải (gồm TEAM_MANAGER/PLAYER của đội đang đấu) | 403, không chờ khóa |
+| Hòa, âm, bool/float/chuỗi, thiếu trường, có trường lạ (`winner_id`), vượt INT | 422 (FastAPI kiểm tra body trước 404/403) |
+| Trận không ONGOING hoặc giải không ONGOING | 409 |
+| Trận COMPLETED, gửi đúng kết quả đã lưu | 200, không audit thêm, vẫn kiểm tra quyền hiện tại |
+| Trận COMPLETED, gửi kết quả khác | 409 |
+| Thành công | 200; trận COMPLETED, `winner_id` do server tính; audit `MATCH_RESULT_SUBMITTED` cùng transaction |
+
+Sau khi chờ khóa giải, request đọc lại quyền (assignment bị thu hồi → 403), trạng thái giải (kết thúc → 409) và trạng thái trận (bị hủy → 409). Lỗi audit hoặc constraint rollback cả trận lẫn audit. Test: `tests/test_match_result_api.py`, `tests/test_match_result_concurrency.py` (PostgreSQL, connection độc lập).
+
 ## 6. Giới hạn đã biết
 
 - `scheduled_at` không chống trùng lịch (chưa có thời lượng/sân).
