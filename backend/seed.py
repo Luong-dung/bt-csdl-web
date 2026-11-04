@@ -14,10 +14,11 @@ from modules.identity.models import Role
 
 ROLE_NAMES = ("ADMIN", "ORGANIZER", "REFEREE", "TEAM_MANAGER", "PLAYER", "VIEWER")
 GAMES = (
+    ("Riot Games", "Teamfight Tactics", "teamfight-tactics"),
     ("Riot Games", "League of Legends", "league-of-legends"),
     ("Riot Games", "VALORANT", "valorant"),
-    ("Valve", "Counter-Strike 2", "counter-strike-2"),
-    ("Valve", "Dota 2", "dota-2"),
+    ("Garena", "Liên Quân Mobile", "arena-of-valor"),
+    ("Garena", "Free Fire", "free-fire"),
 )
 # Parents must appear before their children.
 AREAS = (
@@ -25,6 +26,38 @@ AREAS = (
     ("APAC", "Asia-Pacific", "GLOBAL"),
     ("VN", "Vietnam", "APAC"),
     ("VN-HCM", "Ho Chi Minh City", "VN"),
+    # 1. League of Legends (LoL) - 6 khu vực chuyên nghiệp
+    ("LCK", "Korea (LCK)", "GLOBAL"),
+    ("LPL", "China (LPL)", "GLOBAL"),
+    ("LEC", "EMEA (LEC)", "GLOBAL"),
+    ("LCS", "North America (LCS)", "GLOBAL"),
+    ("CBLOL", "Brazil (CBLOL)", "GLOBAL"),
+    ("LCP", "Asia-Pacific (LCP)", "GLOBAL"),
+    # 2. Teamfight Tactics (TFT) - 4 khu vực
+    ("TFT AMER", "TFT Americas", "GLOBAL"),
+    ("TFT EMEA", "TFT EMEA", "GLOBAL"),
+    ("TFT APAC", "TFT APAC", "GLOBAL"),
+    ("TFT CN", "TFT China", "GLOBAL"),
+    # 3. VALORANT (VLR) - 4 khu vực
+    ("VCT Americas", "VCT Americas", "GLOBAL"),
+    ("VCT EMEA", "VCT EMEA", "GLOBAL"),
+    ("VCT Pacific", "VCT Pacific", "GLOBAL"),
+    ("VCT CN", "VCT China", "GLOBAL"),
+    # 4. Liên Quân Mobile (LQM / Arena of Valor) - 5 khu vực
+    ("RPL", "Thailand (RPL)", "GLOBAL"),
+    ("AOG", "Vietnam (AOG)", "GLOBAL"),
+    ("GCS", "Chinese Taipei (GCS)", "GLOBAL"),
+    ("ASL", "Indonesia (ASL)", "GLOBAL"),
+    ("AVC", "AoV International Championship", "GLOBAL"),
+    # 5. Free Fire - 8 khu vực
+    ("FFWS SEA", "FFWS Southeast Asia", "GLOBAL"),
+    ("FFWS BR", "FFWS Brazil", "GLOBAL"),
+    ("FFWS LATAM", "FFWS Latin America", "GLOBAL"),
+    ("FFWS MEA", "FFWS Middle East & Africa", "GLOBAL"),
+    ("FFWS NA", "FFWS North America", "GLOBAL"),
+    ("FFWS PK", "FFWS Pakistan", "GLOBAL"),
+    ("FFWS IN", "FFWS India", "GLOBAL"),
+    ("FFWS BD", "FFWS Bangladesh", "GLOBAL"),
 )
 
 

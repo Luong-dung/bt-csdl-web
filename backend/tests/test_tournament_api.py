@@ -36,13 +36,13 @@ def test_create_list_and_detail(client, refs):
     assert body["status"] == "UPCOMING"
     assert body["area_id"] == areas["VN"]
 
-    other = client.post(URL, json=payload(games["dota-2"], name="Dota Cup", start_date=day(40), end_date=None))
+    other = client.post(URL, json=payload(games["free-fire"], name="Free Fire Cup", start_date=day(40), end_date=None))
     assert other.status_code == 201
     assert other.json()["format"] == "SINGLE_ELIM"
     assert other.json()["end_date"] is None
 
     listed = client.get(URL).json()
-    assert [t["name"] for t in listed] == ["Dota Cup", "VCT Pacific"]
+    assert [t["name"] for t in listed] == ["Free Fire Cup", "VCT Pacific"]
     by_game = client.get(URL, params={"game_id": games["valorant"]}).json()
     assert [t["tournament_id"] for t in by_game] == [body["tournament_id"]]
     assert client.get(URL, params={"area_id": areas["VN"]}).json() == by_game
@@ -136,11 +136,11 @@ def set_status(client, tournament_id, *statuses):
 def test_update_upcoming_tournament(client, refs, tournament):
     games, areas = refs
     path = f"{URL}/{tournament['tournament_id']}"
-    response = client.patch(path, json={"name": "  VCT Masters  ", "game_id": games["dota-2"], "area_id": areas["VN"],
+    response = client.patch(path, json={"name": "  VCT Masters  ", "game_id": games["free-fire"], "area_id": areas["VN"],
                                         "format": "DOUBLE_ELIM", "start_date": day(5), "end_date": None})
     assert response.status_code == 200
     body = response.json()
-    assert (body["name"], body["game_id"], body["area_id"]) == ("VCT Masters", games["dota-2"], areas["VN"])
+    assert (body["name"], body["game_id"], body["area_id"]) == ("VCT Masters", games["free-fire"], areas["VN"])
     assert (body["format"], body["start_date"], body["end_date"]) == ("DOUBLE_ELIM", day(5), None)
     assert client.get(path).json() == body
 
@@ -226,7 +226,7 @@ def test_ongoing_tournament_allows_only_basic_edits(client, refs, tournament):
     allowed = client.patch(path, json={"name": "VCT Live", "description": "Đang đấu", "end_date": day(30)})
     assert allowed.status_code == 200
     assert (allowed.json()["name"], allowed.json()["end_date"]) == ("VCT Live", day(30))
-    for changes in [{"format": "ROUND_ROBIN"}, {"start_date": day(11)}, {"game_id": games["dota-2"]},
+    for changes in [{"format": "ROUND_ROBIN"}, {"start_date": day(11)}, {"game_id": games["free-fire"]},
                     {"area_id": areas["VN"]}, {"name": "Mixed", "format": "ROUND_ROBIN"}]:
         assert client.patch(path, json=changes).status_code == 409
     assert client.get(path).json() == allowed.json()
