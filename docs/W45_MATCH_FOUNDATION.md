@@ -87,7 +87,7 @@ Kết quả: tỉ số nguyên ≥ 0 (strict, không bool/float), không hòa; s
 |---|---|
 | Thiếu/sai token | 401 |
 | Giải/trận không tồn tại hoặc trận thuộc giải khác | 404 |
-| Không phải quản lý giải hoặc trọng tài assignment đúng giải (gồm TEAM_MANAGER/PLAYER của đội đang đấu) | 403, không chờ khóa |
+| Không phải quản lý giải hoặc trọng tài assignment đúng giải; trọng tài thuộc roster/membership ACTIVE của đội đang đấu cũng bị chặn | 403, không chờ khóa |
 | Hòa, âm, bool/float/chuỗi, thiếu trường, có trường lạ (`winner_id`), vượt INT | 422 (FastAPI kiểm tra body trước 404/403) |
 | Trận không ONGOING hoặc giải không ONGOING | 409 |
 | Trận COMPLETED, gửi đúng kết quả đã lưu | 200, không audit thêm, vẫn kiểm tra quyền hiện tại |
