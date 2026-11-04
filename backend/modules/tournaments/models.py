@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -70,6 +70,8 @@ class Stage(Base):
     tournament = relationship("Tournament", back_populates="stages")
     __table_args__ = (
         UniqueConstraint('tournament_id', 'sequence_order', name='uq_stages_tournament_order'),
+        # Target of the composite FK proving a match's stage belongs to the same tournament.
+        UniqueConstraint('stage_id', 'tournament_id', name='uq_stages_id_tournament'),
         CheckConstraint('sequence_order > 0', name='ck_stages_positive_order'),
         CheckConstraint('length(trim(name)) BETWEEN 1 AND 80', name='ck_stages_name'),
     )
@@ -89,6 +91,25 @@ class Match(Base):
     score_team2 = Column(Integer, nullable=False, default=0)
     next_match_id = Column(Integer, ForeignKey("matches.match_id"), nullable=True)
     status = Column(String(20), nullable=False, default="PENDING")
+    # W45: optional kick-off time, always stored as UTC (timezone-aware).
+    scheduled_at = Column(DateTime(timezone=True), nullable=True)
+    # Keep names/expressions in sync with migration b45a01c0ffee and database/schema_postgres.sql.
+    __table_args__ = (
+        ForeignKeyConstraint(["stage_id", "tournament_id"], ["stages.stage_id", "stages.tournament_id"],
+                             ondelete="RESTRICT", name="fk_matches_stage_tournament"),
+        CheckConstraint("status IN ('PENDING', 'ONGOING', 'COMPLETED', 'CANCELLED')", name="ck_matches_status"),
+        CheckConstraint("round_no > 0", name="ck_matches_round"),
+        CheckConstraint("score_team1 >= 0 AND score_team2 >= 0", name="ck_matches_scores"),
+        CheckConstraint("team1_id IS NULL OR team2_id IS NULL OR team1_id <> team2_id",
+                        name="ck_matches_distinct_teams"),
+        CheckConstraint("winner_id IS NULL OR winner_id = team1_id OR winner_id = team2_id",
+                        name="ck_matches_winner_team"),
+        CheckConstraint("(status = 'COMPLETED' AND winner_id IS NOT NULL) OR "
+                        "(status <> 'COMPLETED' AND winner_id IS NULL)", name="ck_matches_result"),
+        Index("ix_matches_tournament_stage", "tournament_id", "stage_id", "round_no", "match_id"),
+        Index("ix_matches_team1", "team1_id"),
+        Index("ix_matches_team2", "team2_id"),
+    )
 
 
 class TournamentRoster(Base):

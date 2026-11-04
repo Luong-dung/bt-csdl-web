@@ -106,6 +106,7 @@ CREATE TABLE stages (
     sequence_order INT NOT NULL,
     CONSTRAINT uq_stages_tournament_order UNIQUE (tournament_id, sequence_order),
     CONSTRAINT ck_stages_positive_order CHECK (sequence_order > 0),
+    CONSTRAINT uq_stages_id_tournament UNIQUE (stage_id, tournament_id),
     CONSTRAINT ck_stages_name CHECK (length(trim(name)) BETWEEN 1 AND 80)
 );
 CREATE TABLE matches (
@@ -120,8 +121,20 @@ CREATE TABLE matches (
     score_team2 INT NOT NULL DEFAULT 0,
     next_match_id INT REFERENCES matches(match_id) ON DELETE SET NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
-    CHECK (team1_id IS NULL OR team2_id IS NULL OR team1_id <> team2_id)
+    scheduled_at TIMESTAMPTZ,
+    CONSTRAINT fk_matches_stage_tournament FOREIGN KEY (stage_id, tournament_id)
+        REFERENCES stages(stage_id, tournament_id) ON DELETE RESTRICT,
+    CONSTRAINT ck_matches_status CHECK (status IN ('PENDING', 'ONGOING', 'COMPLETED', 'CANCELLED')),
+    CONSTRAINT ck_matches_round CHECK (round_no > 0),
+    CONSTRAINT ck_matches_scores CHECK (score_team1 >= 0 AND score_team2 >= 0),
+    CONSTRAINT ck_matches_distinct_teams CHECK (team1_id IS NULL OR team2_id IS NULL OR team1_id <> team2_id),
+    CONSTRAINT ck_matches_winner_team CHECK (winner_id IS NULL OR winner_id = team1_id OR winner_id = team2_id),
+    CONSTRAINT ck_matches_result CHECK ((status = 'COMPLETED' AND winner_id IS NOT NULL)
+                                        OR (status <> 'COMPLETED' AND winner_id IS NULL))
 );
+CREATE INDEX ix_matches_tournament_stage ON matches (tournament_id, stage_id, round_no, match_id);
+CREATE INDEX ix_matches_team1 ON matches (team1_id);
+CREATE INDEX ix_matches_team2 ON matches (team2_id);
 CREATE TABLE tournament_rosters (
     roster_id SERIAL PRIMARY KEY,
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
