@@ -10,9 +10,7 @@ def catalog_group(page: Page, heading: str):
 
 
 def test_admin_can_manage_catalog_and_viewer_cannot(page: Page, demo_password: str):
-    page.get_by_label("Tên đăng nhập").fill("demo_viewer")
-    page.get_by_label("Mật khẩu").fill(demo_password)
-    page.get_by_role("button", name="Đăng nhập").click()
+    login(page, "demo_viewer", demo_password)
     expect(page.get_by_role("heading", name="Tài khoản đã xác thực")).to_be_visible()
     expect(page.get_by_role("button", name="Thêm publisher")).to_have_count(0)
     expect(page.locator(".catalog-panel")).to_contain_text(

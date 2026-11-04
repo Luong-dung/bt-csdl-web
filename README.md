@@ -48,8 +48,8 @@ Sau đó chạy lại `alembic upgrade head` và `python seed.py` trong thư m�
 Lệnh `python seed.py` dùng cấu hình PostgreSQL trong `backend/.env`. Chạy migration hoặc tạo schema trước khi seed; script không tự tạo bảng.
 
 - Role: `ADMIN`, `ORGANIZER`, `REFEREE`, `TEAM_MANAGER`, `PLAYER`, `VIEWER`.
-- Nhà phát hành: Riot Games và Valve.
-- Game: League of Legends, VALORANT, Counter-Strike 2 và Dota 2.
+- Nhà phát hành: Riot Games và Garena.
+- Game: Teamfight Tactics, League of Legends, VALORANT, Liên Quân Mobile và Free Fire.
 - Khu vực: `GLOBAL` → `APAC` → `VN` → `VN-HCM`.
 
 Script chạy trong một transaction, chỉ thêm bản ghi còn thiếu và giữ nguyên dữ liệu đã có. Có thể chạy lại mà không tạo bản ghi trùng. ID được database cấp tự động; seed không tạo tài khoản hay gán quyền cho người dùng. Tên role là dữ liệu nền cho phần phân quyền W42-02.
