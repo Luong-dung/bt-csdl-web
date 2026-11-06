@@ -55,19 +55,28 @@ class ResultInput(BaseModel):
         return self
 
 
-def match_read(db: Session, match: Match) -> MatchRead:
-    team_ids = [tid for tid in (match.team1_id, match.team2_id) if tid is not None]
+def match_reads(db: Session, matches: list[Match]) -> list[MatchRead]:
+    """Batch names so a 100-row page costs two lookups, not two per match."""
+    team_ids = {tid for match in matches for tid in (match.team1_id, match.team2_id) if tid is not None}
+    stage_ids = {match.stage_id for match in matches}
     names = dict(db.query(Team.team_id, Team.name).filter(Team.team_id.in_(team_ids)).all()) if team_ids else {}
-    stage_name = db.query(Stage.name).filter(Stage.stage_id == match.stage_id).scalar()
+    stages = dict(db.query(Stage.stage_id, Stage.name).filter(Stage.stage_id.in_(stage_ids)).all()) if stage_ids else {}
 
     def team(team_id):
         return None if team_id is None else MatchTeam(team_id=team_id, name=names[team_id])
 
-    result = None
-    if match.status == 'COMPLETED':
-        result = MatchResult(score_team1=match.score_team1, score_team2=match.score_team2,
-                             winner_id=match.winner_id)
-    return MatchRead(match_id=match.match_id, tournament_id=match.tournament_id, stage_id=match.stage_id,
-                     stage_name=stage_name, round_no=match.round_no, team1=team(match.team1_id),
-                     team2=team(match.team2_id), scheduled_at=as_utc(match.scheduled_at),
-                     status=match.status, result=result)
+    def read(match):
+        result = None
+        if match.status == 'COMPLETED':
+            result = MatchResult(score_team1=match.score_team1, score_team2=match.score_team2,
+                                 winner_id=match.winner_id)
+        return MatchRead(match_id=match.match_id, tournament_id=match.tournament_id, stage_id=match.stage_id,
+                         stage_name=stages[match.stage_id], round_no=match.round_no, team1=team(match.team1_id),
+                         team2=team(match.team2_id), scheduled_at=as_utc(match.scheduled_at),
+                         status=match.status, result=result)
+
+    return [read(match) for match in matches]
+
+
+def match_read(db: Session, match: Match) -> MatchRead:
+    return match_reads(db, [match])[0]
