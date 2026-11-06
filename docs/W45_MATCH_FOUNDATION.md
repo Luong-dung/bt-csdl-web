@@ -111,7 +111,7 @@ Tất cả nằm dưới `/api/v1/tournaments/{tournament_id}/matches`; code ở
 | Hủy | `POST /{match_id}/status` `{"status":"CANCELLED"}` | Quản lý giải | 200, audit `MATCH_CANCELLED`; đã CANCELLED thì 200 không audit |
 | Capability | `GET /{match_id}/capabilities` | Đăng nhập, chỉ trả quyền của chính mình | 200, `Cache-Control: private, no-store` |
 
-**Body tạo:** `stage_id`, `round_no`, `team1_id`, `team2_id` (số nguyên strict > 0, bắt buộc), `scheduled_at` (tùy chọn). **Body sửa:** gửi ít nhất một trường trong số đó; chỉ `scheduled_at` được nhận `null` (xóa lịch). `scheduled_at` phải là chuỗi ISO 8601 có offset; thiếu offset, số Unix hoặc giờ vượt phạm vi UTC đều trả 422. Trường lạ như `status`, `winner_id`, `score_team1` trả 422.
+**Body tạo:** `stage_id`, `round_no`, `team1_id`, `team2_id` (số nguyên strict > 0, bắt buộc), `scheduled_at` (tùy chọn). **Body sửa:** gửi ít nhất một trường trong số đó; chỉ `scheduled_at` được nhận `null` (xóa lịch). `scheduled_at` phải là chuỗi ISO 8601 có offset; thiếu offset, số Unix (kể cả chuỗi toàn chữ số như `"20261105"`, `"1762344000"`) hoặc giờ vượt phạm vi UTC đều trả 422. Trường lạ như `status`, `winner_id`, `score_team1` trả 422.
 
 **Capability trận:**
 

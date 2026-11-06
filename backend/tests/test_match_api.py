@@ -167,6 +167,35 @@ def test_create_rejects_bad_payload(access, session_factory, match_case, change)
     assert logs(session_factory) == []
 
 
+NUMERIC_SCHEDULES = ['20261105', '1762344000', '1762344000000', '1762344000.5']
+
+
+@pytest.mark.parametrize('value', NUMERIC_SCHEDULES)
+def test_create_rejects_numeric_schedule_string(access, session_factory, match_case, value):
+    client, headers, _, teams, _ = access
+    response = client.post(base(match_case['tid']), headers=headers('admin'),
+                           json=new_body(match_case, teams, scheduled_at=value))
+    assert response.status_code == 422
+    assert logs(session_factory) == []
+
+
+@pytest.mark.parametrize('value', NUMERIC_SCHEDULES)
+def test_update_rejects_numeric_schedule_string(access, session_factory, match_case, value):
+    client, headers, *_ = access
+    response = client.patch(detail(match_case), headers=headers('admin'), json={'scheduled_at': value})
+    assert response.status_code == 422
+    assert client.get(detail(match_case)).json()['scheduled_at'] is None
+    assert logs(session_factory) == []
+
+
+def test_update_null_schedule_still_clears(access, match_case):
+    client, headers, *_ = access
+    path = detail(match_case)
+    assert client.patch(path, headers=headers('admin'), json={'scheduled_at': '2026-11-05T12:00:00+07:00'}).status_code == 200
+    cleared = client.patch(path, headers=headers('admin'), json={'scheduled_at': None})
+    assert cleared.status_code == 200 and cleared.json()['scheduled_at'] is None
+
+
 @pytest.mark.parametrize('value', ['0001-01-01T00:00:00+07:00', '9999-12-31T23:00:00-07:00'])
 def test_create_rejects_schedule_outside_utc_range(access, match_case, value):
     client, headers, _, teams, _ = access

@@ -5,6 +5,7 @@ Every writer locks tournament -> match and rechecks permission after the wait (s
 Result submission lives in ``routes.match_results``.
 """
 
+import re
 from contextlib import contextmanager
 from typing import Annotated, Literal
 
@@ -36,9 +37,15 @@ PositiveId = Annotated[StrictInt, Field(gt=0, le=INT_MAX)]
 EDITABLE_FIELDS = ['round_no', 'scheduled_at', 'stage_id', 'team1_id', 'team2_id']
 
 
+_ISO_DATETIME_PREFIX = re.compile(r'[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt ][0-9]{2}:[0-9]{2}')
+
+
 def _iso_text_only(value):
-    # AwareDatetime would also read a JSON number as a Unix timestamp; the contract only takes ISO text.
-    if value is not None and not isinstance(value, str):
+    # AwareDatetime also reads a JSON number or an all-digit string ("20261105", "1762344000") as a
+    # Unix timestamp; the contract only takes ISO 8601 date-time text, so check the shape first.
+    if value is None:
+        return value
+    if not isinstance(value, str) or not _ISO_DATETIME_PREFIX.match(value):
         raise ValueError('Giờ thi đấu phải là chuỗi ISO 8601 kèm múi giờ')
     return value
 
