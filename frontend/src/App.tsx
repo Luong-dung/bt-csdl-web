@@ -62,6 +62,7 @@ type TournamentCapabilities = {
   can_change_status: boolean; can_review_registrations: boolean;
   can_approve_registrations: boolean; roster_locked: boolean;
   can_lock_roster: boolean; can_manage_stages?: boolean;
+  can_manage_matches?: boolean;
   editable_fields: string[]; allowed_status_transitions: string[];
 };
 type RosterRole = "PLAYER" | "SUBSTITUTE";
@@ -107,8 +108,106 @@ type Stage = {
   name: string;
   sequence_order: number;
 };
+type MatchTeam = { team_id: number; name: string };
+type MatchResult = { score_team1: number; score_team2: number; winner_id: number };
+type MatchStatus = "PENDING" | "ONGOING" | "COMPLETED" | "CANCELLED";
+type MatchItem = {
+  match_id: number;
+  tournament_id: number;
+  stage_id: number;
+  stage_name: string;
+  round_no: number;
+  team1: MatchTeam | null;
+  team2: MatchTeam | null;
+  scheduled_at: string | null;
+  status: MatchStatus;
+  result: MatchResult | null;
+};
+type MatchCapabilities = {
+  match_id: number;
+  can_update: boolean;
+  can_delete: boolean;
+  can_start: boolean;
+  can_submit_result: boolean;
+  can_cancel: boolean;
+  editable_fields: string[];
+};
 const APPROVED_TEAMS_PER_PAGE = 10;
 const REGISTRATIONS_PER_PAGE = 10;
+const MATCHES_PER_PAGE = 10;
+
+function getLocalTimezoneLabel(date: Date = new Date()): string {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absMinutes = Math.abs(offsetMinutes);
+  const hours = String(Math.floor(absMinutes / 60)).padStart(2, "0");
+  const minutes = String(absMinutes % 60).padStart(2, "0");
+  const tzName = Intl.DateTimeFormat(undefined, { timeZoneName: "short" })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
+  const utcOffset = `UTC${sign}${hours}:${minutes}`;
+  return tzName && tzName !== utcOffset ? `${tzName} (${utcOffset})` : utcOffset;
+}
+
+function getLocalTimezoneLabelForInput(localValue: string, fallbackDate?: string | null): string {
+  const trimmed = localValue.trim();
+  if (trimmed) {
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return getLocalTimezoneLabel(parsed);
+    }
+  }
+  if (fallbackDate) {
+    const parsedFallback = new Date(fallbackDate);
+    if (!Number.isNaN(parsedFallback.getTime())) {
+      return getLocalTimezoneLabel(parsedFallback);
+    }
+  }
+  return getLocalTimezoneLabel();
+}
+
+function formatMatchLocalSchedule(scheduledAt: string | null): string {
+  if (!scheduledAt) return "Chưa xếp lịch";
+  const date = new Date(scheduledAt);
+  if (Number.isNaN(date.getTime())) return scheduledAt;
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year} ${hours}:${minutes} (${getLocalTimezoneLabel(date)})`;
+}
+
+function toDatetimeLocalInputValue(scheduledAt: string | null): string {
+  if (!scheduledAt) return "";
+  const date = new Date(scheduledAt);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+function localInputToIsoWithOffset(localValue: string): string | null {
+  const trimmed = localValue.trim();
+  if (!trimmed) return null;
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) return "__INVALID__";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absMinutes = Math.abs(offsetMinutes);
+  const offHours = String(Math.floor(absMinutes / 60)).padStart(2, "0");
+  const offMins = String(absMinutes % 60).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offHours}:${offMins}`;
+}
 type GlobalCapabilities = { can_manage_catalog: boolean; can_create_tournament: boolean };
 type TeamCapabilities = { team_id: number; can_manage_members: boolean; can_register_for_tournament: boolean };
 type AuthMode = "login" | "register";
@@ -605,6 +704,34 @@ export default function App() {
 
   const [approvedTeamsTotal, setApprovedTeamsTotal] = useState(0);
   const [approvedTeamsPage, setApprovedTeamsPage] = useState(0);
+  const [allApprovedTeams, setAllApprovedTeams] = useState<ApprovedTeam[]>([]);
+
+  const [matches, setMatches] = useState<MatchItem[]>([]);
+  const [matchesTotal, setMatchesTotal] = useState(0);
+  const [matchesPage, setMatchesPage] = useState(0);
+  const [matchesLoading, setMatchesLoading] = useState(false);
+  const [matchesError, setMatchesError] = useState("");
+  const [matchesNotice, setMatchesNotice] = useState("");
+  const [matchStageFilter, setMatchStageFilter] = useState("");
+  const [matchTeamFilter, setMatchTeamFilter] = useState("");
+  const [matchStatusFilter, setMatchStatusFilter] = useState("");
+  const [matchCapabilitiesMap, setMatchCapabilitiesMap] = useState<Record<number, MatchCapabilities>>({});
+  const [matchActionLoading, setMatchActionLoading] = useState(false);
+  const [isCreatingMatch, setIsCreatingMatch] = useState(false);
+  const [newMatchStageId, setNewMatchStageId] = useState("");
+  const [newMatchRoundNo, setNewMatchRoundNo] = useState("");
+  const [newMatchTeam1Id, setNewMatchTeam1Id] = useState("");
+  const [newMatchTeam2Id, setNewMatchTeam2Id] = useState("");
+  const [newMatchScheduledAt, setNewMatchScheduledAt] = useState("");
+  const [matchFormError, setMatchFormError] = useState("");
+  const [editingMatchId, setEditingMatchId] = useState<number | null>(null);
+  const [editingMatchEditableFields, setEditingMatchEditableFields] = useState<string[]>([]);
+  const [editMatchStageId, setEditMatchStageId] = useState("");
+  const [editMatchRoundNo, setEditMatchRoundNo] = useState("");
+  const [editMatchTeam1Id, setEditMatchTeam1Id] = useState("");
+  const [editMatchTeam2Id, setEditMatchTeam2Id] = useState("");
+  const [editMatchScheduledAt, setEditMatchScheduledAt] = useState("");
+  const [editMatchFormError, setEditMatchFormError] = useState("");
 
   const [registrationTotal, setRegistrationTotal] = useState(0);
   const [registrationPage, setRegistrationPage] = useState(0);
@@ -613,11 +740,45 @@ export default function App() {
   const tournamentViewVersion = useRef(0);
   const rosterTeamVersion = useRef(0);
   const activeRosterTeamIdRef = useRef<number | null>(null);
+  const matchesListVersion = useRef(0);
+  const matchesRef = useRef<MatchItem[]>([]);
+  matchesRef.current = matches;
 
-  const resetStagesState = () => {
-    setStages([]);
-    setStagesLoading(false);
-    setStagesError("");
+  const resetMatchesAuthState = () => {
+    setMatchesNotice("");
+    setMatchCapabilitiesMap({});
+    setMatchActionLoading(false);
+    setIsCreatingMatch(false);
+    setNewMatchStageId("");
+    setNewMatchRoundNo("");
+    setNewMatchTeam1Id("");
+    setNewMatchTeam2Id("");
+    setNewMatchScheduledAt("");
+    setMatchFormError("");
+    setEditingMatchId(null);
+    setEditingMatchEditableFields([]);
+    setEditMatchStageId("");
+    setEditMatchRoundNo("");
+    setEditMatchTeam1Id("");
+    setEditMatchTeam2Id("");
+    setEditMatchScheduledAt("");
+    setEditMatchFormError("");
+  };
+
+  const resetMatchesState = () => {
+    matchesListVersion.current += 1;
+    setMatches([]);
+    setMatchesTotal(0);
+    setMatchesPage(0);
+    setMatchesLoading(false);
+    setMatchesError("");
+    setMatchStageFilter("");
+    setMatchTeamFilter("");
+    setMatchStatusFilter("");
+    resetMatchesAuthState();
+  };
+
+  const resetStagesAuthState = () => {
     setStagesNotice("");
     setStageActionLoading(false);
     setIsCreatingStage(false);
@@ -627,6 +788,13 @@ export default function App() {
     setEditingStageId(null);
     setEditingStageName("");
     setEditingStageOrder("");
+  };
+
+  const resetStagesState = () => {
+    setStages([]);
+    setStagesLoading(false);
+    setStagesError("");
+    resetStagesAuthState();
   };
 
   const resetRosterState = () => {
@@ -660,14 +828,12 @@ export default function App() {
     setAllTournamentRegistrations([]);
     setRegistrationTotal(0);
     setRegistrationPage(0);
-    setApprovedTeamsTotal(0);
-    setApprovedTeamsPage(0);
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
     resetRosterState();
-    resetStagesState();
-    setRosterLock(null);
+    resetStagesAuthState();
+    resetMatchesAuthState();
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -942,14 +1108,12 @@ export default function App() {
     setAllTournamentRegistrations([]);
     setRegistrationTotal(0);
     setRegistrationPage(0);
-    setApprovedTeamsTotal(0);
-    setApprovedTeamsPage(0);
     setManagedTeamsForTournament([]);
     setRegistrationError("");
     setRegistrationNotice("");
     resetRosterState();
-    resetStagesState();
-    setRosterLock(null);
+    resetStagesAuthState();
+    resetMatchesAuthState();
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -1201,6 +1365,7 @@ export default function App() {
     setApprovedTeams([]);
     setApprovedTeamsTotal(0);
     setApprovedTeamsPage(0);
+    setAllApprovedTeams([]);
     setManagedTeamsForTournament([]);
     setRegistrations([]);
     setAllTournamentRegistrations([]);
@@ -1211,6 +1376,7 @@ export default function App() {
     setRegistrationStatusFilter("");
     resetRosterState();
     resetStagesState();
+    resetMatchesState();
     setRosterLock(null);
     setLockLoading(false);
     setLockError("");
@@ -1253,11 +1419,31 @@ export default function App() {
     }
   };
 
+  const fetchAllApprovedTeams = async (tournamentId: number): Promise<ApprovedTeam[]> => {
+    let all: ApprovedTeam[] = [];
+    let offset = 0;
+    const limit = 100;
+    while (true) {
+      const res = await fetch(`${API}/tournaments/${tournamentId}/teams?offset=${offset}&limit=${limit}`);
+      if (!res.ok) {
+        throw new RequestError("Không thể tải danh sách đội đã duyệt", res.status);
+      }
+      const total = Number(res.headers.get("X-Total-Count") ?? 0);
+      const data = (await res.json()) as ApprovedTeam[];
+      all = all.concat(data);
+      if (all.length >= total || data.length < limit) break;
+      offset += limit;
+    }
+    return all;
+  };
+
   const loadApprovedTeams = async (
     tournamentId: number,
     page = approvedTeamsPage,
-    expectedVersion?: number
+    expectedVersion?: number,
+    refreshAll = true
   ): Promise<{ list: ApprovedTeam[]; total: number }> => {
+    const sessionV = sessionVersion.current;
     try {
       const offset = page * APPROVED_TEAMS_PER_PAGE;
       const res = await fetch(`${API}/tournaments/${tournamentId}/teams?offset=${offset}&limit=${APPROVED_TEAMS_PER_PAGE}`);
@@ -1267,11 +1453,30 @@ export default function App() {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list, total };
       setApprovedTeams(list);
       setApprovedTeamsTotal(total);
+      if (refreshAll) {
+        if (page === 0 && list.length >= total) {
+          setAllApprovedTeams(list);
+        } else {
+          void (async () => {
+            try {
+              const fullList = await fetchAllApprovedTeams(tournamentId);
+              if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+              if (sessionVersion.current !== sessionV) return;
+              setAllApprovedTeams(fullList);
+            } catch {
+              // keep existing allApprovedTeams on background failure
+            }
+          })();
+        }
+      }
       return { list, total };
     } catch (reason) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
       setApprovedTeams([]);
       setApprovedTeamsTotal(0);
+      if (refreshAll) {
+        setAllApprovedTeams([]);
+      }
       setRegistrationError((reason as Error).message);
       return { list: [], total: 0 };
     }
@@ -1282,7 +1487,7 @@ export default function App() {
     setApprovedTeamsPage(newPage);
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
-    const { list } = await loadApprovedTeams(selectedTournament.tournament_id, newPage, version);
+    const { list } = await loadApprovedTeams(selectedTournament.tournament_id, newPage, version, false);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
     if (token && list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
       void loadApprovedTeamRosterStatuses(selectedTournament.tournament_id, list, token, version, sessionV);
@@ -1631,6 +1836,18 @@ export default function App() {
       ) {
         return;
       }
+      if (matches.length > 0) {
+        void loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        );
+      }
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -1787,6 +2004,563 @@ export default function App() {
         sessionVersion.current === startingSession
       ) {
         setStageActionLoading(false);
+      }
+    }
+  };
+
+  const loadMatchCapabilitiesForList = async (
+    tournamentId: number,
+    matchList: MatchItem[],
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number,
+    expectedListVersion?: number
+  ) => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    if (!authToken || matchList.length === 0) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
+      if (expectedListVersion !== undefined && matchesListVersion.current !== expectedListVersion) return;
+      setMatchCapabilitiesMap({});
+      return;
+    }
+    try {
+      let unauthorized = false;
+      const results = await Promise.all(
+        matchList.map(async (m) => {
+          try {
+            return await request<MatchCapabilities>(
+              `/tournaments/${tournamentId}/matches/${m.match_id}/capabilities`,
+              {},
+              authToken
+            );
+          } catch (err) {
+            if (err instanceof RequestError && err.status === 401) {
+              unauthorized = true;
+            }
+            return null;
+          }
+        })
+      );
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
+      if (sessionVersion.current !== sessionV) return;
+      if (expectedListVersion !== undefined && matchesListVersion.current !== expectedListVersion) return;
+      if (unauthorized) {
+        handleAuthExpired();
+        return;
+      }
+      const nextMap: Record<number, MatchCapabilities> = {};
+      for (const cap of results) {
+        if (cap) {
+          nextMap[cap.match_id] = cap;
+        }
+      }
+      setMatchCapabilitiesMap(nextMap);
+    } catch {
+      // ignore individual capability fetch errors
+    }
+  };
+
+  const loadTournamentMatches = async (
+    tournamentId: number,
+    stageFilter = matchStageFilter,
+    teamFilter = matchTeamFilter,
+    statusFilter = matchStatusFilter,
+    page = matchesPage,
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<{ list: MatchItem[]; total: number }> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    const listV = ++matchesListVersion.current;
+    setMatchesLoading(true);
+    setMatchesError("");
+    try {
+      const offset = page * MATCHES_PER_PAGE;
+      const params = new URLSearchParams({
+        offset: String(offset),
+        limit: String(MATCHES_PER_PAGE),
+      });
+      if (stageFilter) params.set("stage_id", stageFilter);
+      if (teamFilter) params.set("team_id", teamFilter);
+      if (statusFilter) params.set("status", statusFilter);
+
+      const res = await fetch(`${API}/tournaments/${tournamentId}/matches?${params}`);
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { detail?: string | ValidationError[] } | null;
+        const detail = body?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+              : "Không thể tải danh sách trận đấu";
+        throw new RequestError(msg, res.status);
+      }
+      const total = Number(res.headers.get("X-Total-Count") ?? 0);
+      const list = (await res.json()) as MatchItem[];
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list, total };
+      if (sessionVersion.current !== sessionV) return { list, total };
+      if (matchesListVersion.current !== listV) return { list, total };
+
+      setMatches(list);
+      setMatchesTotal(total);
+      if (authToken && list.length > 0) {
+        const listIds = new Set(list.map((m) => m.match_id));
+        setMatchCapabilitiesMap((prev) => {
+          const filtered: Record<number, MatchCapabilities> = {};
+          for (const id of listIds) {
+            if (prev[id]) filtered[id] = prev[id];
+          }
+          return filtered;
+        });
+        await loadMatchCapabilitiesForList(tournamentId, list, authToken, expectedVersion, sessionV, listV);
+      } else {
+        setMatchCapabilitiesMap({});
+      }
+      return { list, total };
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
+      if (sessionVersion.current !== sessionV) return { list: [], total: 0 };
+      if (matchesListVersion.current !== listV) return { list: [], total: 0 };
+      setMatches([]);
+      setMatchesTotal(0);
+      setMatchCapabilitiesMap({});
+      setMatchesError((reason as Error).message || "Không thể tải danh sách trận đấu.");
+      return { list: [], total: 0 };
+    } finally {
+      if (
+        (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) &&
+        sessionVersion.current === sessionV &&
+        matchesListVersion.current === listV
+      ) {
+        setMatchesLoading(false);
+      }
+    }
+  };
+
+  const handleMatchFilterChange = async (
+    nextStageFilter: string,
+    nextTeamFilter: string,
+    nextStatusFilter: string
+  ) => {
+    setMatchStageFilter(nextStageFilter);
+    setMatchTeamFilter(nextTeamFilter);
+    setMatchStatusFilter(nextStatusFilter);
+    setMatchesPage(0);
+    setMatchCapabilitiesMap({});
+    if (!selectedTournament) return;
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    await loadTournamentMatches(
+      selectedTournament.tournament_id,
+      nextStageFilter,
+      nextTeamFilter,
+      nextStatusFilter,
+      0,
+      token,
+      version,
+      sessionV
+    );
+  };
+
+  const handleMatchesPageChange = async (newPage: number) => {
+    if (!selectedTournament) return;
+    setMatchesPage(newPage);
+    setMatchCapabilitiesMap({});
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    await loadTournamentMatches(
+      selectedTournament.tournament_id,
+      matchStageFilter,
+      matchTeamFilter,
+      matchStatusFilter,
+      newPage,
+      token,
+      version,
+      sessionV
+    );
+  };
+
+  const handleCreateMatch = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+
+    const stageIdNum = Number(newMatchStageId);
+    const roundNoNum = Number(newMatchRoundNo);
+    const team1IdNum = Number(newMatchTeam1Id);
+    const team2IdNum = Number(newMatchTeam2Id);
+
+    if (!newMatchStageId || !Number.isInteger(stageIdNum) || stageIdNum <= 0 || !stages.some((s) => s.stage_id === stageIdNum)) {
+      setMatchFormError("Vui lòng chọn vòng đấu hợp lệ của giải.");
+      return;
+    }
+    if (!newMatchRoundNo.trim() || !Number.isInteger(roundNoNum) || roundNoNum <= 0) {
+      setMatchFormError("Thứ tự trận (Round) phải là số nguyên dương (>= 1).");
+      return;
+    }
+    if (
+      !newMatchTeam1Id ||
+      !newMatchTeam2Id ||
+      !Number.isInteger(team1IdNum) ||
+      team1IdNum <= 0 ||
+      !Number.isInteger(team2IdNum) ||
+      team2IdNum <= 0
+    ) {
+      setMatchFormError("Vui lòng chọn đầy đủ Đội 1 và Đội 2 từ danh sách đội đã duyệt.");
+      return;
+    }
+    if (team1IdNum === team2IdNum) {
+      setMatchFormError("Hai đội thi đấu phải khác nhau (một đội không thể tự đấu với chính mình).");
+      return;
+    }
+    const isoScheduledAt = localInputToIsoWithOffset(newMatchScheduledAt);
+    if (isoScheduledAt === "__INVALID__") {
+      setMatchFormError("Thời gian thi đấu không hợp lệ.");
+      return;
+    }
+
+    const payload: {
+      stage_id: number;
+      round_no: number;
+      team1_id: number;
+      team2_id: number;
+      scheduled_at?: string | null;
+    } = {
+      stage_id: stageIdNum,
+      round_no: roundNoNum,
+      team1_id: team1IdNum,
+      team2_id: team2IdNum,
+    };
+    if (isoScheduledAt !== null) {
+      payload.scheduled_at = isoScheduledAt;
+    }
+
+    setMatchActionLoading(true);
+    setMatchFormError("");
+    setMatchesNotice("");
+    try {
+      await request<MatchItem>(
+        `/tournaments/${currentTournamentId}/matches`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      setIsCreatingMatch(false);
+      setNewMatchStageId("");
+      setNewMatchRoundNo("");
+      setNewMatchTeam1Id("");
+      setNewMatchTeam2Id("");
+      setNewMatchScheduledAt("");
+      setMatchesNotice("Đã tạo trận đấu mới thành công.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        matchesPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      const errMsg = (reason as Error).message || "Không thể tạo trận đấu.";
+      setMatchFormError(errMsg);
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession),
+          loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleUpdateMatch = async (match: MatchItem, e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+
+    const matchCaps = matchCapabilitiesMap[match.match_id];
+    const editableFields =
+      matchCaps && matchCaps.editable_fields.length > 0
+        ? matchCaps.editable_fields
+        : editingMatchEditableFields;
+
+    if (editableFields.length === 0) {
+      setEditMatchFormError("Trận đấu này không có trường nào được phép chỉnh sửa.");
+      return;
+    }
+
+    const stageIdNum = Number(editMatchStageId);
+    const roundNoNum = Number(editMatchRoundNo);
+    const currentTeam1Id = match.team1?.team_id ?? null;
+    const currentTeam2Id = match.team2?.team_id ?? null;
+    const team1IdNum = editMatchTeam1Id ? Number(editMatchTeam1Id) : null;
+    const team2IdNum = editMatchTeam2Id ? Number(editMatchTeam2Id) : null;
+
+    if (editableFields.includes("stage_id")) {
+      if (!editMatchStageId || !Number.isInteger(stageIdNum) || stageIdNum <= 0 || !stages.some((s) => s.stage_id === stageIdNum)) {
+        setEditMatchFormError("Vui lòng chọn vòng đấu hợp lệ của giải.");
+        return;
+      }
+    }
+    if (editableFields.includes("round_no")) {
+      if (!editMatchRoundNo.trim() || !Number.isInteger(roundNoNum) || roundNoNum <= 0) {
+        setEditMatchFormError("Thứ tự trận (Round) phải là số nguyên dương (>= 1).");
+        return;
+      }
+    }
+
+    const stageChanged = editableFields.includes("stage_id") && stageIdNum !== match.stage_id;
+    const roundChanged = editableFields.includes("round_no") && roundNoNum !== match.round_no;
+    const team1Changed = editableFields.includes("team1_id") && team1IdNum !== currentTeam1Id;
+    const team2Changed = editableFields.includes("team2_id") && team2IdNum !== currentTeam2Id;
+
+    if (team1Changed || (editableFields.includes("team1_id") && !editMatchTeam1Id)) {
+      if (team1IdNum === null || !Number.isInteger(team1IdNum) || team1IdNum <= 0) {
+        setEditMatchFormError("Vui lòng chọn đầy đủ Đội 1 và Đội 2 từ danh sách đội đã duyệt.");
+        return;
+      }
+    }
+    if (team2Changed || (editableFields.includes("team2_id") && !editMatchTeam2Id)) {
+      if (team2IdNum === null || !Number.isInteger(team2IdNum) || team2IdNum <= 0) {
+        setEditMatchFormError("Vui lòng chọn đầy đủ Đội 1 và Đội 2 từ danh sách đội đã duyệt.");
+        return;
+      }
+    }
+    const effectiveTeam1Id = editableFields.includes("team1_id") ? team1IdNum : currentTeam1Id;
+    const effectiveTeam2Id = editableFields.includes("team2_id") ? team2IdNum : currentTeam2Id;
+    if ((team1Changed || team2Changed) && effectiveTeam1Id !== null && effectiveTeam1Id === effectiveTeam2Id) {
+      setEditMatchFormError("Hai đội thi đấu phải khác nhau (một đội không thể tự đấu với chính mình).");
+      return;
+    }
+
+    const scheduledAtChanged =
+      editableFields.includes("scheduled_at") &&
+      editMatchScheduledAt.trim() !== toDatetimeLocalInputValue(match.scheduled_at);
+
+    let isoScheduledAt: string | null = null;
+    if (scheduledAtChanged) {
+      isoScheduledAt = localInputToIsoWithOffset(editMatchScheduledAt);
+      if (isoScheduledAt === "__INVALID__") {
+        setEditMatchFormError("Thời gian thi đấu không hợp lệ.");
+        return;
+      }
+    }
+
+    const payload: Record<string, number | string | null> = {};
+    if (stageChanged) payload.stage_id = stageIdNum;
+    if (roundChanged) payload.round_no = roundNoNum;
+    if (team1Changed) payload.team1_id = team1IdNum;
+    if (team2Changed) payload.team2_id = team2IdNum;
+    if (scheduledAtChanged) payload.scheduled_at = isoScheduledAt;
+
+    if (Object.keys(payload).length === 0) {
+      setEditMatchFormError("Bạn chưa thay đổi thông tin nào của trận đấu.");
+      return;
+    }
+
+    setMatchActionLoading(true);
+    setEditMatchFormError("");
+    setMatchesNotice("");
+    try {
+      await request<MatchItem>(
+        `/tournaments/${currentTournamentId}/matches/${match.match_id}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      setEditingMatchId(null);
+      setEditingMatchEditableFields([]);
+      setEditMatchFormError("");
+      setMatchesNotice("Đã cập nhật trận đấu thành công.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        matchesPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      const errMsg = (reason as Error).message || "Không thể cập nhật trận đấu.";
+      setEditMatchFormError(errMsg);
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession),
+          loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleDeleteMatch = async (match: MatchItem) => {
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    const t1Name = match.team1?.name ?? "Chưa xác định";
+    const t2Name = match.team2?.name ?? "Chưa xác định";
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa trận đấu "${t1Name} vs ${t2Name}" (${match.stage_name} - Round #${match.round_no})?`)) {
+      return;
+    }
+
+    setMatchActionLoading(true);
+    setMatchesError("");
+    setMatchesNotice("");
+    try {
+      await request(
+        `/tournaments/${currentTournamentId}/matches/${match.match_id}`,
+        {
+          method: "DELETE",
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (editingMatchId === match.match_id) {
+        setEditingMatchId(null);
+        setEditingMatchEditableFields([]);
+        setEditMatchFormError("");
+      }
+      const nextPage = matches.length === 1 && matchesPage > 0 ? matchesPage - 1 : matchesPage;
+      setMatchesPage(nextPage);
+      setMatchesNotice("Đã xóa trận đấu.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        nextPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setMatchesError((reason as Error).message || "Không thể xóa trận đấu.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
       }
     }
   };
@@ -2121,6 +2895,19 @@ export default function App() {
         void loadApprovedTeamRosterStatuses(currentTournamentId, approvedData.list, token, currentTournamentVersion, currentSession);
       }
 
+      const currentMatches = matchesRef.current;
+      const currentListVersion = matchesListVersion.current;
+      if (token && currentMatches.length > 0) {
+        void loadMatchCapabilitiesForList(
+          currentTournamentId,
+          currentMatches,
+          token,
+          currentTournamentVersion,
+          currentSession,
+          currentListVersion
+        );
+      }
+
       if (activeRosterTeamIdRef.current) {
         await loadTeamRosterData(activeRosterTeamIdRef.current, currentTournamentVersion, rosterTeamVersion.current, false, currentSession);
       }
@@ -2176,6 +2963,7 @@ export default function App() {
       loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, currentSession),
       loadRosterLock(tournament.tournament_id, version),
       loadTournamentStages(tournament.tournament_id, version, currentSession),
+      loadTournamentMatches(tournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, token, version, currentSession),
     ]);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
     if (token && approvedData?.list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
@@ -2188,6 +2976,8 @@ export default function App() {
 
   useEffect(() => {
     if (!selectedTournament) return;
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
     if (!token) {
       setTournamentCapabilities(null);
       setCapabilityError("");
@@ -2195,21 +2985,32 @@ export default function App() {
       setAllTournamentRegistrations([]);
       setRegistrationTotal(0);
       setRegistrationPage(0);
-      setApprovedTeamsTotal(0);
-      setApprovedTeamsPage(0);
       setManagedTeamsForTournament([]);
       setRegistrationError("");
       setRegistrationNotice("");
       resetRosterState();
-      resetStagesState();
-      setRosterLock(null);
+      resetStagesAuthState();
+      resetMatchesAuthState();
       setLockError("");
       setLockNotice("");
       setApprovedRosterStatuses({});
+      void Promise.all([
+        loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
+        loadRosterLock(selectedTournament.tournament_id, version),
+        loadTournamentStages(selectedTournament.tournament_id, version, sessionV),
+        loadTournamentMatches(
+          selectedTournament.tournament_id,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          "",
+          version,
+          sessionV
+        ),
+      ]);
       return;
     }
-    const version = tournamentViewVersion.current;
-    const sessionV = sessionVersion.current;
     void (async () => {
       const managedTeams = await loadManagedTeamsForTournament(selectedTournament.game_id, token, version, sessionV);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
@@ -2219,6 +3020,7 @@ export default function App() {
         loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
         loadRosterLock(selectedTournament.tournament_id, version),
         loadTournamentStages(selectedTournament.tournament_id, version, sessionV),
+        loadTournamentMatches(selectedTournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, token, version, sessionV),
       ]);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
@@ -2439,6 +3241,7 @@ export default function App() {
     setRegistrationNotice("");
     resetRosterState();
     resetStagesState();
+    resetMatchesState();
     setTournamentCapabilities(null);
     setCapabilityError("");
     setRosterLock(null);
@@ -2449,6 +3252,7 @@ export default function App() {
     setRosterStatusWarning("");
     setApprovedTeamsPage(0);
     setApprovedTeamsTotal(0);
+    setAllApprovedTeams([]);
     setRegistrationPage(0);
     setRegistrationTotal(0);
     try {
@@ -2461,6 +3265,7 @@ export default function App() {
       const approvedPromise = loadApprovedTeams(tournamentId, 0, version);
       const lockPromise = loadRosterLock(tournamentId, version);
       const stagesPromise = loadTournamentStages(tournamentId, version, sessionV);
+      const matchesPromise = loadTournamentMatches(tournamentId, "", "", "", 0, token, version, sessionV);
 
       const [managedTeams, caps, approvedData] = await Promise.all([
         managedTeamsPromise,
@@ -2468,6 +3273,7 @@ export default function App() {
         approvedPromise,
         lockPromise,
         stagesPromise,
+        matchesPromise,
       ]);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
 
@@ -2510,21 +3316,72 @@ export default function App() {
 
   const changeTournamentStatus = async (status: string) => {
     if (!token || !selectedTournament) return;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
     setTournamentLoading(true);
     setError("");
     try {
-      const updated = await request<Tournament>(`/tournaments/${selectedTournament.tournament_id}/status`, {
+      const updated = await request<Tournament>(`/tournaments/${currentTournamentId}/status`, {
         method: "POST", body: JSON.stringify({ status }),
-      }, token);
+      }, startingToken);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
       setSelectedTournament(updated);
-      await loadTournamentCapabilities(updated.tournament_id, token, tournamentViewVersion.current, sessionVersion.current);
-      await loadRosterLock(updated.tournament_id);
+      if (status === "COMPLETED" || status === "CANCELLED") {
+        setIsCreatingMatch(false);
+        setEditingMatchId(null);
+        setEditingMatchEditableFields([]);
+      }
+      const currentMatches = matchesRef.current;
+      const currentListVersion = matchesListVersion.current;
+      await loadTournamentCapabilities(updated.tournament_id, startingToken, currentTournamentVersion, startingSession);
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (currentMatches.length > 0) {
+        await loadMatchCapabilitiesForList(
+          updated.tournament_id,
+          currentMatches,
+          startingToken,
+          currentTournamentVersion,
+          startingSession,
+          currentListVersion
+        );
+      }
+      await loadRosterLock(updated.tournament_id, currentTournamentVersion);
       await loadTournaments();
-      setNotice(`Đã chuyển trạng thái giải sang ${status}.`);
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setNotice(`Đã chuyển trạng thái giải sang ${status}.`);
+      }
     } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession
+      ) {
+        return;
+      }
       setError((reason as Error).message);
     } finally {
-      setTournamentLoading(false);
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setTournamentLoading(false);
+      }
     }
   };
 
@@ -3713,6 +4570,541 @@ export default function App() {
                 );
               })}
             </div>
+          )}
+        </div>
+
+        <div className="matches-section" data-testid="tournament-matches-section">
+          <div className="section-header">
+            <div>
+              <h4>Trận đấu &amp; Lịch thi đấu ({matchesTotal})</h4>
+              <p className="muted small-text">
+                Thời gian thi đấu hiển thị theo múi giờ địa phương (
+                {getLocalTimezoneLabelForInput(
+                  isCreatingMatch ? newMatchScheduledAt : editingMatchId !== null ? editMatchScheduledAt : "",
+                  matches.find((m) => Boolean(m.scheduled_at))?.scheduled_at ?? selectedTournament.start_date ?? null
+                )}
+                ).
+              </p>
+            </div>
+            <div className="match-header-actions">
+              {matchesLoading && matches.length > 0 && (
+                <span className="matches-refreshing-indicator" data-testid="matches-refreshing-indicator">
+                  <span className="spinner" /> Đang cập nhật...
+                </span>
+              )}
+              {tournamentCapabilities?.can_manage &&
+                !tournamentCapabilities?.can_manage_matches &&
+                (selectedTournament.status === "UPCOMING" || selectedTournament.status === "ONGOING") &&
+                !(tournamentCapabilities?.roster_locked || rosterLock?.locked) && (
+                  <span className="muted small-text match-lock-hint">
+                    Khóa đội hình giải đấu để bắt đầu tạo và xếp lịch trận đấu.
+                  </span>
+                )}
+              {tournamentCapabilities?.can_manage_matches && !isCreatingMatch && (
+                <button
+                  type="button"
+                  className="button small"
+                  onClick={() => {
+                    setIsCreatingMatch(true);
+                    setEditingMatchId(null);
+                    setEditingMatchEditableFields([]);
+                    setEditMatchFormError("");
+                    setNewMatchStageId(stages[0] ? String(stages[0].stage_id) : "");
+                    setNewMatchRoundNo("1");
+                    setNewMatchTeam1Id(allApprovedTeams[0] ? String(allApprovedTeams[0].team_id) : "");
+                    setNewMatchTeam2Id(allApprovedTeams[1] ? String(allApprovedTeams[1].team_id) : "");
+                    setNewMatchScheduledAt("");
+                    setMatchFormError("");
+                  }}
+                >
+                  + Tạo trận đấu
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="matches-filters" data-testid="matches-filters">
+            <label>
+              Vòng đấu
+              <select
+                name="match_stage_filter"
+                aria-label="Lọc theo vòng đấu"
+                value={matchStageFilter}
+                disabled={matchesLoading}
+                onChange={(e) => void handleMatchFilterChange(e.target.value, matchTeamFilter, matchStatusFilter)}
+              >
+                <option value="">Tất cả vòng đấu</option>
+                {stages.map((st) => (
+                  <option key={st.stage_id} value={String(st.stage_id)}>
+                    #{st.sequence_order} - {st.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Đội tuyển
+              <select
+                name="match_team_filter"
+                aria-label="Lọc theo đội tuyển"
+                value={matchTeamFilter}
+                disabled={matchesLoading}
+                onChange={(e) => void handleMatchFilterChange(matchStageFilter, e.target.value, matchStatusFilter)}
+              >
+                <option value="">Tất cả đội tuyển</option>
+                {allApprovedTeams.map((tm) => (
+                  <option key={tm.team_id} value={String(tm.team_id)}>
+                    {tm.name} (#{tm.tag})
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Trạng thái trận
+              <select
+                name="match_status_filter"
+                aria-label="Lọc theo trạng thái trận"
+                value={matchStatusFilter}
+                disabled={matchesLoading}
+                onChange={(e) => void handleMatchFilterChange(matchStageFilter, matchTeamFilter, e.target.value)}
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="PENDING">PENDING (Sắp diễn ra)</option>
+                <option value="ONGOING">ONGOING (Đang diễn ra)</option>
+                <option value="COMPLETED">COMPLETED (Đã kết thúc)</option>
+                <option value="CANCELLED">CANCELLED (Đã hủy)</option>
+              </select>
+            </label>
+            {(matchStageFilter || matchTeamFilter || matchStatusFilter) && (
+              <button
+                type="button"
+                className="button secondary small match-filter-reset"
+                disabled={matchesLoading}
+                onClick={() => void handleMatchFilterChange("", "", "")}
+              >
+                Xóa bộ lọc
+              </button>
+            )}
+          </div>
+
+          {matchesNotice && <div className="notice-banner">{matchesNotice}</div>}
+          {matchesError && (
+            <div className="error-banner" data-testid="matches-error-banner">
+              <span>{matchesError}</span>
+              <button
+                type="button"
+                className="button secondary small"
+                onClick={() =>
+                  void loadTournamentMatches(
+                    selectedTournament.tournament_id,
+                    matchStageFilter,
+                    matchTeamFilter,
+                    matchStatusFilter,
+                    matchesPage,
+                    token,
+                    tournamentViewVersion.current,
+                    sessionVersion.current
+                  )
+                }
+              >
+                Thử lại
+              </button>
+            </div>
+          )}
+
+          {isCreatingMatch && (tournamentCapabilities?.can_manage_matches || Boolean(matchFormError) || matchActionLoading) && (
+            <form
+              className="match-form create-form"
+              noValidate
+              onSubmit={(e) => void handleCreateMatch(e)}
+              data-testid="match-create-form"
+            >
+              <h5>Tạo trận đấu mới</h5>
+              {matchFormError && <div className="error-banner">{matchFormError}</div>}
+              {(stages.length === 0 || allApprovedTeams.length < 2) && (
+                <p className="muted small-text text-warning">
+                  Lưu ý: Giải đấu cần có ít nhất 1 vòng đấu và 2 đội đã duyệt (APPROVED) để tạo trận đấu.
+                </p>
+              )}
+              <div className="match-form-grid">
+                <label>
+                  Vòng đấu <span className="required">*</span>
+                  <select
+                    name="stage_id"
+                    value={newMatchStageId}
+                    onChange={(e) => setNewMatchStageId(e.target.value)}
+                    disabled={matchActionLoading}
+                  >
+                    <option value="">-- Chọn vòng đấu --</option>
+                    {stages.map((st) => (
+                      <option key={st.stage_id} value={String(st.stage_id)}>
+                        #{st.sequence_order} - {st.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Thứ tự trận (Round #) <span className="required">*</span>
+                  <input
+                    type="number"
+                    name="round_no"
+                    min="1"
+                    step="1"
+                    placeholder="Ví dụ: 1"
+                    value={newMatchRoundNo}
+                    onChange={(e) => setNewMatchRoundNo(e.target.value)}
+                    disabled={matchActionLoading}
+                  />
+                </label>
+                <label>
+                  Đội 1 <span className="required">*</span>
+                  <select
+                    name="team1_id"
+                    value={newMatchTeam1Id}
+                    onChange={(e) => setNewMatchTeam1Id(e.target.value)}
+                    disabled={matchActionLoading}
+                  >
+                    <option value="">-- Chọn Đội 1 --</option>
+                    {allApprovedTeams.map((tm) => (
+                      <option key={tm.team_id} value={String(tm.team_id)}>
+                        {tm.name} (#{tm.tag})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Đội 2 <span className="required">*</span>
+                  <select
+                    name="team2_id"
+                    value={newMatchTeam2Id}
+                    onChange={(e) => setNewMatchTeam2Id(e.target.value)}
+                    disabled={matchActionLoading}
+                  >
+                    <option value="">-- Chọn Đội 2 --</option>
+                    {allApprovedTeams.map((tm) => (
+                      <option key={tm.team_id} value={String(tm.team_id)}>
+                        {tm.name} (#{tm.tag})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="wide-field">
+                  Giờ thi đấu ({getLocalTimezoneLabelForInput(newMatchScheduledAt, selectedTournament.start_date)})
+                  <input
+                    type="datetime-local"
+                    name="scheduled_at"
+                    value={newMatchScheduledAt}
+                    onChange={(e) => setNewMatchScheduledAt(e.target.value)}
+                    disabled={matchActionLoading}
+                  />
+                </label>
+              </div>
+              <div className="form-actions">
+                <button type="submit" className="button small" disabled={matchActionLoading}>
+                  {matchActionLoading ? <><span className="spinner" /> Đang lưu...</> : "Lưu trận đấu"}
+                </button>
+                <button
+                  type="button"
+                  className="button secondary small"
+                  disabled={matchActionLoading}
+                  onClick={() => {
+                    setIsCreatingMatch(false);
+                    setMatchFormError("");
+                  }}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          )}
+
+          {matchesLoading && matches.length === 0 ? (
+            <div className="loading-state">
+              <span className="spinner" /> Đang tải danh sách trận đấu...
+            </div>
+          ) : matches.length === 0 ? (
+            <p className="muted" data-testid="matches-empty-state">
+              {matchStageFilter || matchTeamFilter || matchStatusFilter
+                ? "Không có trận đấu nào khớp với bộ lọc hiện tại."
+                : "Giải đấu chưa có trận đấu nào được xếp lịch."}
+            </p>
+          ) : (
+            <>
+              <div className="match-list" data-testid="match-list">
+                {matches.map((match) => {
+                  const isEditing = editingMatchId === match.match_id;
+                  const matchCaps = matchCapabilitiesMap[match.match_id];
+                  const editableMatchFields =
+                    matchCaps && matchCaps.editable_fields.length > 0
+                      ? matchCaps.editable_fields
+                      : isEditing
+                        ? editingMatchEditableFields
+                        : [];
+                  const canUpdateMatch = Boolean(
+                    token && matchCaps?.can_update && matchCaps.editable_fields.length > 0
+                  );
+                  const canDeleteMatch = Boolean(token && matchCaps?.can_delete);
+                  const showCompletedResult = match.status === "COMPLETED" && match.result !== null;
+                  const isTeam1Winner =
+                    showCompletedResult && match.team1 !== null && match.result!.winner_id === match.team1.team_id;
+                  const isTeam2Winner =
+                    showCompletedResult && match.team2 !== null && match.result!.winner_id === match.team2.team_id;
+
+                  return (
+                    <div
+                      className={`match-card ${isEditing ? "editing" : ""}`}
+                      key={match.match_id}
+                      data-testid={`match-card-${match.match_id}`}
+                      data-match-id={match.match_id}
+                      data-match-status={match.status}
+                    >
+                      {isEditing ? (
+                        <form
+                          className="match-inline-edit"
+                          noValidate
+                          onSubmit={(e) => void handleUpdateMatch(match, e)}
+                          data-testid={`match-edit-form-${match.match_id}`}
+                        >
+                          <h5>Chỉnh sửa trận đấu #{match.match_id}</h5>
+                          {editMatchFormError && <div className="error-banner">{editMatchFormError}</div>}
+                          <div className="match-form-grid">
+                            {editableMatchFields.includes("stage_id") && (
+                              <label>
+                                Vòng đấu <span className="required">*</span>
+                                <select
+                                  name="stage_id"
+                                  value={editMatchStageId}
+                                  onChange={(e) => setEditMatchStageId(e.target.value)}
+                                  disabled={matchActionLoading}
+                                >
+                                  <option value="">-- Chọn vòng đấu --</option>
+                                  {stages.map((st) => (
+                                    <option key={st.stage_id} value={String(st.stage_id)}>
+                                      #{st.sequence_order} - {st.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                            {editableMatchFields.includes("round_no") && (
+                              <label>
+                                Thứ tự trận (Round #) <span className="required">*</span>
+                                <input
+                                  type="number"
+                                  name="round_no"
+                                  min="1"
+                                  step="1"
+                                  value={editMatchRoundNo}
+                                  onChange={(e) => setEditMatchRoundNo(e.target.value)}
+                                  disabled={matchActionLoading}
+                                />
+                              </label>
+                            )}
+                            {editableMatchFields.includes("team1_id") && (
+                              <label>
+                                Đội 1 <span className="required">*</span>
+                                <select
+                                  name="team1_id"
+                                  value={editMatchTeam1Id}
+                                  onChange={(e) => setEditMatchTeam1Id(e.target.value)}
+                                  disabled={matchActionLoading}
+                                >
+                                  <option value="">-- Chọn Đội 1 --</option>
+                                  {match.team1 && !allApprovedTeams.some((tm) => tm.team_id === match.team1!.team_id) && (
+                                    <option value={String(match.team1.team_id)}>
+                                      {match.team1.name}
+                                    </option>
+                                  )}
+                                  {allApprovedTeams.map((tm) => (
+                                    <option key={tm.team_id} value={String(tm.team_id)}>
+                                      {tm.name} (#{tm.tag})
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                            {editableMatchFields.includes("team2_id") && (
+                              <label>
+                                Đội 2 <span className="required">*</span>
+                                <select
+                                  name="team2_id"
+                                  value={editMatchTeam2Id}
+                                  onChange={(e) => setEditMatchTeam2Id(e.target.value)}
+                                  disabled={matchActionLoading}
+                                >
+                                  <option value="">-- Chọn Đội 2 --</option>
+                                  {match.team2 && !allApprovedTeams.some((tm) => tm.team_id === match.team2!.team_id) && (
+                                    <option value={String(match.team2.team_id)}>
+                                      {match.team2.name}
+                                    </option>
+                                  )}
+                                  {allApprovedTeams.map((tm) => (
+                                    <option key={tm.team_id} value={String(tm.team_id)}>
+                                      {tm.name} (#{tm.tag})
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            )}
+                            {editableMatchFields.includes("scheduled_at") && (
+                              <label className="wide-field">
+                                Giờ thi đấu ({getLocalTimezoneLabelForInput(editMatchScheduledAt, match.scheduled_at)})
+                                <div className="match-schedule-input-row">
+                                  <input
+                                    type="datetime-local"
+                                    name="scheduled_at"
+                                    value={editMatchScheduledAt}
+                                    onChange={(e) => setEditMatchScheduledAt(e.target.value)}
+                                    disabled={matchActionLoading}
+                                  />
+                                  {editMatchScheduledAt && (
+                                    <button
+                                      type="button"
+                                      className="button secondary small"
+                                      disabled={matchActionLoading}
+                                      onClick={() => setEditMatchScheduledAt("")}
+                                    >
+                                      Xóa lịch
+                                    </button>
+                                  )}
+                                </div>
+                              </label>
+                            )}
+                          </div>
+                          <div className="form-actions">
+                            <button type="submit" className="button small" disabled={matchActionLoading}>
+                              {matchActionLoading ? "Đang lưu..." : "Lưu"}
+                            </button>
+                            <button
+                              type="button"
+                              className="button secondary small"
+                              disabled={matchActionLoading}
+                              onClick={() => {
+                                setEditingMatchId(null);
+                                setEditingMatchEditableFields([]);
+                                setEditMatchFormError("");
+                              }}
+                            >
+                              Hủy
+                            </button>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="match-row">
+                          <div className="match-meta-top">
+                            <div className="match-badges">
+                              <span className="match-stage-badge">{match.stage_name}</span>
+                              <span className="match-round-badge">Round #{match.round_no}</span>
+                              <span className={`match-status-badge status-${match.status.toLowerCase()}`}>
+                                {match.status}
+                              </span>
+                            </div>
+                            <span className="match-schedule" data-testid={`match-schedule-${match.match_id}`}>
+                              🕒 {formatMatchLocalSchedule(match.scheduled_at)}
+                            </span>
+                          </div>
+
+                          <div className="match-body-row">
+                            <div className="match-teams-versus">
+                              <div className={`match-team-side team-left ${isTeam1Winner ? "is-winner" : ""}`}>
+                                <strong className="match-team-name">
+                                  {match.team1?.name ?? "Chưa xác định"}
+                                </strong>
+                                {isTeam1Winner && (
+                                  <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
+                                    🏆 Thắng
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="match-versus-box">
+                                {showCompletedResult ? (
+                                  <span className="match-score" data-testid={`match-score-${match.match_id}`}>
+                                    {match.result!.score_team1} - {match.result!.score_team2}
+                                  </span>
+                                ) : (
+                                  <span className="match-vs">VS</span>
+                                )}
+                              </div>
+
+                              <div className={`match-team-side team-right ${isTeam2Winner ? "is-winner" : ""}`}>
+                                <strong className="match-team-name">
+                                  {match.team2?.name ?? "Chưa xác định"}
+                                </strong>
+                                {isTeam2Winner && (
+                                  <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
+                                    🏆 Thắng
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {(canUpdateMatch || canDeleteMatch) && (
+                              <div className="match-actions">
+                                {canUpdateMatch && (
+                                  <button
+                                    type="button"
+                                    className="button secondary small"
+                                    disabled={matchActionLoading}
+                                    onClick={() => {
+                                      setIsCreatingMatch(false);
+                                      setMatchFormError("");
+                                      setEditingMatchId(match.match_id);
+                                      setEditingMatchEditableFields(matchCaps ? [...matchCaps.editable_fields] : []);
+                                      setEditMatchStageId(String(match.stage_id));
+                                      setEditMatchRoundNo(String(match.round_no));
+                                      setEditMatchTeam1Id(match.team1 ? String(match.team1.team_id) : "");
+                                      setEditMatchTeam2Id(match.team2 ? String(match.team2.team_id) : "");
+                                      setEditMatchScheduledAt(toDatetimeLocalInputValue(match.scheduled_at));
+                                      setEditMatchFormError("");
+                                    }}
+                                  >
+                                    Sửa
+                                  </button>
+                                )}
+                                {canDeleteMatch && (
+                                  <button
+                                    type="button"
+                                    className="button secondary small danger-link"
+                                    disabled={matchActionLoading}
+                                    onClick={() => void handleDeleteMatch(match)}
+                                  >
+                                    Xóa
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {matchesTotal > MATCHES_PER_PAGE && (
+                <div className="pagination-controls" data-testid="matches-pagination">
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={matchesPage === 0 || matchesLoading}
+                    onClick={() => void handleMatchesPageChange(matchesPage - 1)}
+                  >
+                    ‹ {t.pagePrev}
+                  </button>
+                  <span className="pagination-info">
+                    Trang {matchesPage + 1} / {Math.max(1, Math.ceil(matchesTotal / MATCHES_PER_PAGE))} (Tổng {matchesTotal} trận)
+                  </span>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={matchesPage >= Math.ceil(matchesTotal / MATCHES_PER_PAGE) - 1 || matchesLoading}
+                    onClick={() => void handleMatchesPageChange(matchesPage + 1)}
+                  >
+                    {t.pageNext} ›
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 

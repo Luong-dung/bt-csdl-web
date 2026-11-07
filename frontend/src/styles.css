@@ -2991,3 +2991,320 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
 .circuit-card.is-selected-circuit .circuit-action-indicator {
   color: #38bdf8;
 }
+
+/* ==========================================================================
+   Matches & Schedule Section (W45-05)
+   ========================================================================== */
+.matches-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid rgba(220, 210, 255, 0.14);
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.matches-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.matches-section .section-header h4 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.match-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.matches-refreshing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.match-lock-hint {
+  font-style: italic;
+}
+
+.matches-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(220, 210, 255, 0.12);
+}
+
+.matches-filters label {
+  margin: 0;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.match-filter-reset {
+  height: 38px;
+  justify-self: start;
+}
+
+.match-form,
+.match-inline-edit {
+  padding: 16px;
+  background: rgba(30, 41, 59, 0.55);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  margin-bottom: 16px;
+}
+
+.match-inline-edit {
+  margin-bottom: 0;
+}
+
+.match-form h5,
+.match-inline-edit h5 {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+  color: #f8fafc;
+}
+
+.match-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.match-form-grid .wide-field {
+  grid-column: 1 / -1;
+}
+
+.match-schedule-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-schedule-input-row input {
+  flex: 1;
+  min-width: 210px;
+}
+
+.match-form .form-actions,
+.match-inline-edit .form-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.match-card {
+  padding: 14px 16px;
+  background: rgba(37, 24, 78, 0.5);
+  border: 1px solid rgba(220, 210, 255, 0.16);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.match-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.match-card.editing {
+  border-color: #38bdf8;
+  background: rgba(30, 41, 59, 0.78);
+}
+
+.match-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.match-meta-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(220, 210, 255, 0.1);
+}
+
+.match-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-stage-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.32);
+  padding: 2px 8px;
+}
+
+.match-round-badge {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 2px 8px;
+}
+
+.match-status-badge {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.match-status-badge.status-pending {
+  color: #fde68a;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.match-status-badge.status-ongoing {
+  color: #67e8f9;
+  background: rgba(6, 182, 212, 0.18);
+  border-color: rgba(6, 182, 212, 0.45);
+}
+
+.match-status-badge.status-completed {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.38);
+}
+
+.match-status-badge.status-cancelled {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.match-schedule {
+  font-size: 12.5px;
+  color: #cbd5e1;
+  font-weight: 500;
+}
+
+.match-body-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.match-teams-versus {
+  flex: 1;
+  min-width: 240px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.match-team-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.match-team-side.team-left {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.match-team-side.team-right {
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.match-team-name {
+  font-size: 15px;
+  color: #f1f5f9;
+  word-break: break-word;
+}
+
+.match-team-side.is-winner .match-team-name {
+  color: #fde047;
+}
+
+.match-winner-badge {
+  font-size: 11px;
+  font-weight: 800;
+  color: #fde047;
+  background: rgba(234, 179, 8, 0.18);
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.match-versus-box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 4px 10px;
+  background: rgba(15, 23, 42, 0.75);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.match-score {
+  font-size: 15px;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: 0.05em;
+}
+
+.match-vs {
+  font-size: 12px;
+  font-weight: 800;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+}
+
+.match-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .match-teams-versus {
+    grid-template-columns: 1fr;
+    gap: 8px;
+    text-align: center;
+  }
+  .match-team-side.team-left,
+  .match-team-side.team-right {
+    justify-content: center;
+    text-align: center;
+  }
+  .match-versus-box {
+    justify-self: center;
+  }
+}
