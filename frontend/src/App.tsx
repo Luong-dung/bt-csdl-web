@@ -4711,7 +4711,7 @@ export default function App() {
             </div>
           )}
 
-          {isCreatingMatch && (tournamentCapabilities?.can_manage_matches || Boolean(matchFormError)) && (
+          {isCreatingMatch && (tournamentCapabilities?.can_manage_matches || Boolean(matchFormError) || matchActionLoading) && (
             <form
               className="match-form create-form"
               noValidate
