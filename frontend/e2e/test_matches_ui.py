@@ -38,7 +38,7 @@ def _register_and_login_api(page: Page, api_base_url: str, prefix: str, password
         data={
             "username": username,
             "email": f"{username}@example.com",
-            "full_name": f"Match UI {username}",
+            "real_name": f"Match UI {username}",
             "password": password,
         },
     )
@@ -48,7 +48,7 @@ def _register_and_login_api(page: Page, api_base_url: str, prefix: str, password
         f"{api_base_url}/auth/login",
         data={"username": username, "password": password},
     )
-    return user, auth["access_token"]
+    return {"user_id": user["user_id"], "username": username}, auth["access_token"]
 
 
 def _setup_locked_tournament_with_two_teams(
@@ -113,7 +113,7 @@ def _setup_locked_tournament_with_two_teams(
             "POST",
             f"{api_base_url}/teams/{team_id}/members",
             token=mgr_token,
-            data={"user_id": plr_user["user_id"], "role_in_team": "PLAYER"},
+            data={"username": plr_user["username"], "role_in_team": "PLAYER"},
         )
         reg = _api_request(
             page,
@@ -134,7 +134,7 @@ def _setup_locked_tournament_with_two_teams(
             "PUT",
             f"{api_base_url}/tournaments/{tournament_id}/teams/{team_id}/roster",
             token=mgr_token,
-            data={"user_ids": [plr_user["user_id"]]},
+            data={"members": [{"user_id": plr_user["user_id"], "role_in_team": "PLAYER"}]},
         )
         teams.append(team)
 
@@ -146,6 +146,7 @@ def _setup_locked_tournament_with_two_teams(
     )
 
     page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
     return {
         "tournament_id": tournament_id,
         "tournament_name": tournament_name,
@@ -215,6 +216,7 @@ def test_match_crud_partial_patch_and_local_schedule_ui(
         data={"scheduled_at": "2026-11-15T10:00:30Z"},
     )
     page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
     open_tournament(page, str(tournament_id), tournament_name)
 
     match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
@@ -303,6 +305,7 @@ def test_match_capability_strict_gating_and_403_refresh_preserves_form(
 
     # 2. Reload with real capabilities -> Sửa & Xóa are visible; then simulate 403 on PATCH -> refreshes capabilities while keeping form data
     page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
     open_tournament(page, str(tournament_id), tournament_name)
     match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
     expect(match_card.get_by_role("button", name="Sửa")).to_be_visible()
@@ -391,11 +394,9 @@ def test_match_list_preserved_after_logout(
     expect(match_card.get_by_role("button", name="Sửa")).to_be_visible()
 
     # Log out while viewing the tournament detail
-    page.get_by_role("button", name="Đăng xuất").click()
-    # Close auth modal if it opened on logout
-    close_modal_btn = page.locator(".auth-modal-close")
-    if close_modal_btn.is_visible():
-        close_modal_btn.click()
+    page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
+    expect(page.locator(".auth-modal-close")).to_be_visible()
+    page.locator(".auth-modal-close").click()
 
     # Public match list MUST remain visible after logout, while management buttons are hidden
     expect(matches_section).to_contain_text("Trận đấu & Lịch thi đấu (1)")
