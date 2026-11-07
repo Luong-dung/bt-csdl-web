@@ -732,6 +732,10 @@ export default function App() {
   const [editMatchTeam2Id, setEditMatchTeam2Id] = useState("");
   const [editMatchScheduledAt, setEditMatchScheduledAt] = useState("");
   const [editMatchFormError, setEditMatchFormError] = useState("");
+  const [scoringMatchId, setScoringMatchId] = useState<number | null>(null);
+  const [scoreTeam1Input, setScoreTeam1Input] = useState("");
+  const [scoreTeam2Input, setScoreTeam2Input] = useState("");
+  const [resultFormError, setResultFormError] = useState("");
 
   const [registrationTotal, setRegistrationTotal] = useState(0);
   const [registrationPage, setRegistrationPage] = useState(0);
@@ -763,6 +767,10 @@ export default function App() {
     setEditMatchTeam2Id("");
     setEditMatchScheduledAt("");
     setEditMatchFormError("");
+    setScoringMatchId(null);
+    setScoreTeam1Input("");
+    setScoreTeam2Input("");
+    setResultFormError("");
   };
 
   const resetMatchesState = () => {
@@ -1580,10 +1588,13 @@ export default function App() {
     expectedVersion?: number,
     managedTeams?: Team[],
     page = registrationPage,
-    expectedSessionVersion?: number
+    expectedSessionVersion?: number,
+    clearError = false
   ) => {
     const sessionV = expectedSessionVersion ?? sessionVersion.current;
-    setRegistrationError("");
+    if (clearError) {
+      setRegistrationError("");
+    }
     if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (sessionVersion.current !== sessionV) return;
@@ -1672,7 +1683,8 @@ export default function App() {
       version,
       undefined,
       newPage,
-      sessionV
+      sessionV,
+      true
     );
   };
 
@@ -2514,6 +2526,12 @@ export default function App() {
         setEditingMatchEditableFields([]);
         setEditMatchFormError("");
       }
+      if (scoringMatchId === match.match_id) {
+        setScoringMatchId(null);
+        setScoreTeam1Input("");
+        setScoreTeam2Input("");
+        setResultFormError("");
+      }
       const nextPage = matches.length === 1 && matchesPage > 0 ? matchesPage - 1 : matchesPage;
       setMatchesPage(nextPage);
       setMatchesNotice("Đã xóa trận đấu.");
@@ -2540,6 +2558,284 @@ export default function App() {
         return;
       }
       setMatchesError((reason as Error).message || "Không thể xóa trận đấu.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleStartMatch = async (match: MatchItem) => {
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+
+    setMatchActionLoading(true);
+    setMatchesError("");
+    setMatchesNotice("");
+    try {
+      await request<MatchItem>(
+        `/tournaments/${currentTournamentId}/matches/${match.match_id}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: "ONGOING" }),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (editingMatchId === match.match_id) {
+        setEditingMatchId(null);
+        setEditingMatchEditableFields([]);
+        setEditMatchFormError("");
+      }
+      setMatchesNotice("Đã bắt đầu trận đấu.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        matchesPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setMatchesError((reason as Error).message || "Không thể bắt đầu trận đấu.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentStages(currentTournamentId, currentTournamentVersion, startingSession),
+          loadApprovedTeams(currentTournamentId, approvedTeamsPage, currentTournamentVersion),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleCancelMatch = async (match: MatchItem) => {
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+    const t1Name = match.team1?.name ?? "Chưa xác định";
+    const t2Name = match.team2?.name ?? "Chưa xác định";
+    if (
+      !window.confirm(
+        `Bạn có chắc chắn muốn hủy trận đấu "${t1Name} vs ${t2Name}" (${match.stage_name} - Round #${match.round_no})? Thao tác này không thể hoàn tác.`
+      )
+    ) {
+      return;
+    }
+
+    setMatchActionLoading(true);
+    setMatchesError("");
+    setMatchesNotice("");
+    try {
+      await request<MatchItem>(
+        `/tournaments/${currentTournamentId}/matches/${match.match_id}/status`,
+        {
+          method: "POST",
+          body: JSON.stringify({ status: "CANCELLED" }),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (editingMatchId === match.match_id) {
+        setEditingMatchId(null);
+        setEditingMatchEditableFields([]);
+        setEditMatchFormError("");
+      }
+      if (scoringMatchId === match.match_id) {
+        setScoringMatchId(null);
+        setScoreTeam1Input("");
+        setScoreTeam2Input("");
+        setResultFormError("");
+      }
+      setMatchesNotice("Đã hủy trận đấu.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        matchesPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setMatchesError((reason as Error).message || "Không thể hủy trận đấu.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void Promise.all([
+          loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+          loadTournamentMatches(
+            currentTournamentId,
+            matchStageFilter,
+            matchTeamFilter,
+            matchStatusFilter,
+            matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === currentTournamentVersion &&
+        sessionVersion.current === startingSession
+      ) {
+        setMatchActionLoading(false);
+      }
+    }
+  };
+
+  const handleSubmitMatchResult = async (match: MatchItem, e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const startingSession = sessionVersion.current;
+    const startingToken = token;
+    const currentTournamentId = selectedTournament.tournament_id;
+    const currentTournamentVersion = tournamentViewVersion.current;
+
+    const rawScore1 = scoreTeam1Input.trim();
+    const rawScore2 = scoreTeam2Input.trim();
+    if (!/^\d+$/.test(rawScore1) || !/^\d+$/.test(rawScore2)) {
+      setResultFormError("Tỉ số của hai đội phải là số nguyên không âm (>= 0).");
+      return;
+    }
+    const score1 = Number(rawScore1);
+    const score2 = Number(rawScore2);
+    if (!Number.isSafeInteger(score1) || !Number.isSafeInteger(score2) || score1 < 0 || score2 < 0) {
+      setResultFormError("Tỉ số của hai đội phải là số nguyên không âm (>= 0).");
+      return;
+    }
+    if (score1 === score2) {
+      setResultFormError("W45 không hỗ trợ kết quả hòa: tỉ số hai đội phải khác nhau.");
+      return;
+    }
+
+    setMatchActionLoading(true);
+    setResultFormError("");
+    setMatchesNotice("");
+    try {
+      await request<MatchItem>(
+        `/tournaments/${currentTournamentId}/matches/${match.match_id}/result`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            score_team1: score1,
+            score_team2: score2,
+          }),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      setScoringMatchId(null);
+      setScoreTeam1Input("");
+      setScoreTeam2Input("");
+      setResultFormError("");
+      setMatchesNotice("Đã ghi nhận kết quả trận đấu thành công.");
+      await loadTournamentMatches(
+        currentTournamentId,
+        matchStageFilter,
+        matchTeamFilter,
+        matchStatusFilter,
+        matchesPage,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== currentTournamentVersion ||
+        sessionVersion.current !== startingSession ||
+        token !== startingToken
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      const errMsg = (reason as Error).message || "Không thể ghi nhận kết quả trận đấu.";
+      setResultFormError(errMsg);
       if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
         void Promise.all([
           loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
@@ -2951,23 +3247,42 @@ export default function App() {
       }
     }
   };
+  const retryTournamentCapabilities = async (tournament: Tournament) => {
+    const version = tournamentViewVersion.current;
+    const currentSession = sessionVersion.current;
+    const currentToken = token;
+    const caps = await loadTournamentCapabilities(tournament.tournament_id, currentToken, version, currentSession);
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
+    let teamsToCheck = approvedTeams;
+    if (teamsToCheck.length === 0) {
+      const approvedData = await loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version);
+      if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
+      teamsToCheck = approvedData.list;
+    }
+    if (currentToken && teamsToCheck.length > 0 && (caps?.can_manage || caps?.can_lock_roster)) {
+      await loadApprovedTeamRosterStatuses(tournament.tournament_id, teamsToCheck, currentToken, version, currentSession);
+    }
+  };
+
   const reloadTournamentDetailsData = async (tournament: Tournament) => {
     const version = tournamentViewVersion.current;
     const currentSession = sessionVersion.current;
+    const currentToken = token;
     setRegistrationError("");
-    const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, token, version, currentSession);
-    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
-    const [, approvedData] = await Promise.all([
-      loadTournamentCapabilities(tournament.tournament_id, token, version, currentSession),
+    const managedTeams = await loadManagedTeamsForTournament(tournament.game_id, currentToken, version, currentSession);
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
+    const [caps, approvedData] = await Promise.all([
+      loadTournamentCapabilities(tournament.tournament_id, currentToken, version, currentSession),
       loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version),
-      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, currentSession),
+      loadTournamentRegistrations(tournament.tournament_id, registrationStatusFilter, currentToken, version, managedTeams, registrationPage, currentSession),
       loadRosterLock(tournament.tournament_id, version),
       loadTournamentStages(tournament.tournament_id, version, currentSession),
-      loadTournamentMatches(tournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, token, version, currentSession),
+      loadTournamentMatches(tournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, currentToken, version, currentSession),
     ]);
-    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession) return;
-    if (token && approvedData?.list && (tournamentCapabilities?.can_manage || tournamentCapabilities?.can_lock_roster)) {
-      void loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, token, version, currentSession);
+    if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
+    const effectiveCaps = caps ?? tournamentCapabilities;
+    if (currentToken && approvedData?.list && (effectiveCaps?.can_manage || effectiveCaps?.can_lock_roster)) {
+      await loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, currentToken, version, currentSession);
     }
     if (activeRosterTeamIdRef.current) {
       await loadTeamRosterData(activeRosterTeamIdRef.current, version, rosterTeamVersion.current, false, currentSession);
@@ -3228,7 +3543,8 @@ export default function App() {
       version,
       undefined,
       0,
-      sessionV
+      sessionV,
+      true
     );
   };
 
@@ -3338,6 +3654,10 @@ export default function App() {
         setIsCreatingMatch(false);
         setEditingMatchId(null);
         setEditingMatchEditableFields([]);
+        setScoringMatchId(null);
+        setScoreTeam1Input("");
+        setScoreTeam2Input("");
+        setResultFormError("");
       }
       const currentMatches = matchesRef.current;
       const currentListVersion = matchesListVersion.current;
@@ -4256,7 +4576,7 @@ export default function App() {
           <div><span>{t.detailArea}</span><strong>{areas.find((area) => area.area_id === selectedTournament.area_id)?.name ?? t.detailGlobalArea}</strong></div>
         </div>
         {selectedTournament.description && <p className="detail-description">{selectedTournament.description}</p>}
-        {capabilityError && <div className="error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void loadTournamentCapabilities(selectedTournament.tournament_id, token, tournamentViewVersion.current, sessionVersion.current)}>{t.retry}</button></div>}
+        {capabilityError && <div className="error-banner" data-testid="capability-error-banner"><span>{capabilityError}</span><button className="button secondary" onClick={() => void retryTournamentCapabilities(selectedTournament)}>{t.retry}</button></div>}
                 {tournamentCapabilities?.can_manage && <div className="manage-panel">
           <div className="panel-title"><h4>{t.detailOpsTitle}</h4></div>
           {selectedTournament.status === "UPCOMING" && (
@@ -4273,7 +4593,24 @@ export default function App() {
                     <strong>{t.detailConditionsTitle}</strong>
                     <p>{t.detailConditionsHelp}</p>
                     {rosterStatusWarning && (
-                      <p className="condition-warning-detail text-warning">⚠️ {rosterStatusWarning}</p>
+                      <p className="condition-warning-detail text-warning" data-testid="roster-status-warning">
+                        ⚠️ {rosterStatusWarning}{" "}
+                        <button
+                          type="button"
+                          className="link-button"
+                          onClick={() =>
+                            void loadApprovedTeamRosterStatuses(
+                              selectedTournament.tournament_id,
+                              approvedTeams,
+                              token,
+                              tournamentViewVersion.current,
+                              sessionVersion.current
+                            )
+                          }
+                        >
+                          {t.retry}
+                        </button>
+                      </p>
                     )}
                     {approvedTeams.length === 0 ? (
                       <p className="condition-warning-detail text-warning">{t.detailNoApprovedTeamsWarning}</p>
@@ -4609,6 +4946,10 @@ export default function App() {
                     setEditingMatchId(null);
                     setEditingMatchEditableFields([]);
                     setEditMatchFormError("");
+                    setScoringMatchId(null);
+                    setScoreTeam1Input("");
+                    setScoreTeam2Input("");
+                    setResultFormError("");
                     setNewMatchStageId(stages[0] ? String(stages[0].stage_id) : "");
                     setNewMatchRoundNo("1");
                     setNewMatchTeam1Id(allApprovedTeams[0] ? String(allApprovedTeams[0].team_id) : "");
@@ -4711,7 +5052,7 @@ export default function App() {
             </div>
           )}
 
-          {isCreatingMatch && (tournamentCapabilities?.can_manage_matches || Boolean(matchFormError) || matchActionLoading) && (
+          {isCreatingMatch && (
             <form
               className="match-form create-form"
               noValidate
@@ -4832,6 +5173,7 @@ export default function App() {
               <div className="match-list" data-testid="match-list">
                 {matches.map((match) => {
                   const isEditing = editingMatchId === match.match_id;
+                  const isScoring = scoringMatchId === match.match_id;
                   const matchCaps = matchCapabilitiesMap[match.match_id];
                   const editableMatchFields =
                     matchCaps && matchCaps.editable_fields.length > 0
@@ -4843,15 +5185,35 @@ export default function App() {
                     token && matchCaps?.can_update && matchCaps.editable_fields.length > 0
                   );
                   const canDeleteMatch = Boolean(token && matchCaps?.can_delete);
+                  const canStartMatch = Boolean(token && matchCaps?.can_start);
+                  const canSubmitMatchResult = Boolean(token && matchCaps?.can_submit_result);
+                  const canCancelMatch = Boolean(token && matchCaps?.can_cancel);
+                  const hasAnyMatchActions =
+                    canStartMatch ||
+                    canSubmitMatchResult ||
+                    canUpdateMatch ||
+                    canCancelMatch ||
+                    canDeleteMatch;
                   const showCompletedResult = match.status === "COMPLETED" && match.result !== null;
                   const isTeam1Winner =
                     showCompletedResult && match.team1 !== null && match.result!.winner_id === match.team1.team_id;
                   const isTeam2Winner =
                     showCompletedResult && match.team2 !== null && match.result!.winner_id === match.team2.team_id;
 
+                  const rawPreviewS1 = scoreTeam1Input.trim();
+                  const rawPreviewS2 = scoreTeam2Input.trim();
+                  const isPreviewValidInts =
+                    isScoring &&
+                    /^\d+$/.test(rawPreviewS1) &&
+                    /^\d+$/.test(rawPreviewS2) &&
+                    Number.isSafeInteger(Number(rawPreviewS1)) &&
+                    Number.isSafeInteger(Number(rawPreviewS2));
+                  const previewS1 = isPreviewValidInts ? Number(rawPreviewS1) : null;
+                  const previewS2 = isPreviewValidInts ? Number(rawPreviewS2) : null;
+
                   return (
                     <div
-                      className={`match-card ${isEditing ? "editing" : ""}`}
+                      className={`match-card ${isEditing || isScoring ? "editing" : ""}`}
                       key={match.match_id}
                       data-testid={`match-card-${match.match_id}`}
                       data-match-id={match.match_id}
@@ -4989,92 +5351,228 @@ export default function App() {
                           </div>
                         </form>
                       ) : (
-                        <div className="match-row">
-                          <div className="match-meta-top">
-                            <div className="match-badges">
-                              <span className="match-stage-badge">{match.stage_name}</span>
-                              <span className="match-round-badge">Round #{match.round_no}</span>
-                              <span className={`match-status-badge status-${match.status.toLowerCase()}`}>
-                                {match.status}
+                        <>
+                          <div className="match-row">
+                            <div className="match-meta-top">
+                              <div className="match-badges">
+                                <span className="match-stage-badge">{match.stage_name}</span>
+                                <span className="match-round-badge">Round #{match.round_no}</span>
+                                <span className={`match-status-badge status-${match.status.toLowerCase()}`}>
+                                  {match.status}
+                                </span>
+                              </div>
+                              <span className="match-schedule" data-testid={`match-schedule-${match.match_id}`}>
+                                🕒 {formatMatchLocalSchedule(match.scheduled_at)}
                               </span>
                             </div>
-                            <span className="match-schedule" data-testid={`match-schedule-${match.match_id}`}>
-                              🕒 {formatMatchLocalSchedule(match.scheduled_at)}
-                            </span>
-                          </div>
 
-                          <div className="match-body-row">
-                            <div className="match-teams-versus">
-                              <div className={`match-team-side team-left ${isTeam1Winner ? "is-winner" : ""}`}>
-                                <strong className="match-team-name">
-                                  {match.team1?.name ?? "Chưa xác định"}
-                                </strong>
-                                {isTeam1Winner && (
-                                  <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
-                                    🏆 Thắng
-                                  </span>
-                                )}
+                            <div className="match-body-row">
+                              <div className="match-teams-versus">
+                                <div className={`match-team-side team-left ${isTeam1Winner ? "is-winner" : ""}`}>
+                                  <strong className="match-team-name">
+                                    {match.team1?.name ?? "Chưa xác định"}
+                                  </strong>
+                                  {isTeam1Winner && (
+                                    <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
+                                      🏆 Thắng
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="match-versus-box">
+                                  {showCompletedResult ? (
+                                    <span className="match-score" data-testid={`match-score-${match.match_id}`}>
+                                      {match.result!.score_team1} - {match.result!.score_team2}
+                                    </span>
+                                  ) : (
+                                    <span className="match-vs">VS</span>
+                                  )}
+                                </div>
+
+                                <div className={`match-team-side team-right ${isTeam2Winner ? "is-winner" : ""}`}>
+                                  <strong className="match-team-name">
+                                    {match.team2?.name ?? "Chưa xác định"}
+                                  </strong>
+                                  {isTeam2Winner && (
+                                    <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
+                                      🏆 Thắng
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
-                              <div className="match-versus-box">
-                                {showCompletedResult ? (
-                                  <span className="match-score" data-testid={`match-score-${match.match_id}`}>
-                                    {match.result!.score_team1} - {match.result!.score_team2}
-                                  </span>
-                                ) : (
-                                  <span className="match-vs">VS</span>
-                                )}
-                              </div>
-
-                              <div className={`match-team-side team-right ${isTeam2Winner ? "is-winner" : ""}`}>
-                                <strong className="match-team-name">
-                                  {match.team2?.name ?? "Chưa xác định"}
-                                </strong>
-                                {isTeam2Winner && (
-                                  <span className="match-winner-badge" data-testid={`match-winner-${match.match_id}`}>
-                                    🏆 Thắng
-                                  </span>
-                                )}
-                              </div>
+                              {hasAnyMatchActions && (
+                                <div className="match-actions" data-testid={`match-actions-${match.match_id}`}>
+                                  {canStartMatch && (
+                                    <button
+                                      type="button"
+                                      className="button small"
+                                      data-testid={`match-start-btn-${match.match_id}`}
+                                      disabled={matchActionLoading}
+                                      onClick={() => void handleStartMatch(match)}
+                                    >
+                                      Bắt đầu
+                                    </button>
+                                  )}
+                                  {canSubmitMatchResult && !isScoring && (
+                                    <button
+                                      type="button"
+                                      className="button small"
+                                      data-testid={`match-result-btn-${match.match_id}`}
+                                      disabled={matchActionLoading}
+                                      onClick={() => {
+                                        setIsCreatingMatch(false);
+                                        setMatchFormError("");
+                                        setEditingMatchId(null);
+                                        setEditingMatchEditableFields([]);
+                                        setEditMatchFormError("");
+                                        setScoringMatchId(match.match_id);
+                                        setScoreTeam1Input("");
+                                        setScoreTeam2Input("");
+                                        setResultFormError("");
+                                      }}
+                                    >
+                                      Nhập kết quả
+                                    </button>
+                                  )}
+                                  {canUpdateMatch && (
+                                    <button
+                                      type="button"
+                                      className="button secondary small"
+                                      data-testid={`match-edit-btn-${match.match_id}`}
+                                      disabled={matchActionLoading}
+                                      onClick={() => {
+                                        setIsCreatingMatch(false);
+                                        setMatchFormError("");
+                                        setScoringMatchId(null);
+                                        setScoreTeam1Input("");
+                                        setScoreTeam2Input("");
+                                        setResultFormError("");
+                                        setEditingMatchId(match.match_id);
+                                        setEditingMatchEditableFields(matchCaps ? [...matchCaps.editable_fields] : []);
+                                        setEditMatchStageId(String(match.stage_id));
+                                        setEditMatchRoundNo(String(match.round_no));
+                                        setEditMatchTeam1Id(match.team1 ? String(match.team1.team_id) : "");
+                                        setEditMatchTeam2Id(match.team2 ? String(match.team2.team_id) : "");
+                                        setEditMatchScheduledAt(toDatetimeLocalInputValue(match.scheduled_at));
+                                        setEditMatchFormError("");
+                                      }}
+                                    >
+                                      Sửa
+                                    </button>
+                                  )}
+                                  {canCancelMatch && (
+                                    <button
+                                      type="button"
+                                      className="button secondary small danger-link"
+                                      data-testid={`match-cancel-btn-${match.match_id}`}
+                                      disabled={matchActionLoading}
+                                      onClick={() => void handleCancelMatch(match)}
+                                    >
+                                      Hủy trận
+                                    </button>
+                                  )}
+                                  {canDeleteMatch && (
+                                    <button
+                                      type="button"
+                                      className="button secondary small danger-link"
+                                      data-testid={`match-delete-btn-${match.match_id}`}
+                                      disabled={matchActionLoading}
+                                      onClick={() => void handleDeleteMatch(match)}
+                                    >
+                                      Xóa
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
-
-                            {(canUpdateMatch || canDeleteMatch) && (
-                              <div className="match-actions">
-                                {canUpdateMatch && (
-                                  <button
-                                    type="button"
-                                    className="button secondary small"
-                                    disabled={matchActionLoading}
-                                    onClick={() => {
-                                      setIsCreatingMatch(false);
-                                      setMatchFormError("");
-                                      setEditingMatchId(match.match_id);
-                                      setEditingMatchEditableFields(matchCaps ? [...matchCaps.editable_fields] : []);
-                                      setEditMatchStageId(String(match.stage_id));
-                                      setEditMatchRoundNo(String(match.round_no));
-                                      setEditMatchTeam1Id(match.team1 ? String(match.team1.team_id) : "");
-                                      setEditMatchTeam2Id(match.team2 ? String(match.team2.team_id) : "");
-                                      setEditMatchScheduledAt(toDatetimeLocalInputValue(match.scheduled_at));
-                                      setEditMatchFormError("");
-                                    }}
-                                  >
-                                    Sửa
-                                  </button>
-                                )}
-                                {canDeleteMatch && (
-                                  <button
-                                    type="button"
-                                    className="button secondary small danger-link"
-                                    disabled={matchActionLoading}
-                                    onClick={() => void handleDeleteMatch(match)}
-                                  >
-                                    Xóa
-                                  </button>
-                                )}
-                              </div>
-                            )}
                           </div>
-                        </div>
+
+                          {isScoring && (
+                            <form
+                              className="match-inline-result-form"
+                              noValidate
+                              onSubmit={(e) => void handleSubmitMatchResult(match, e)}
+                              data-testid={`match-result-form-${match.match_id}`}
+                            >
+                              <h5>Nhập kết quả trận đấu #{match.match_id}</h5>
+                              {resultFormError && (
+                                <div className="error-banner" data-testid={`match-result-error-${match.match_id}`}>
+                                  {resultFormError}
+                                </div>
+                              )}
+                              <div className="match-result-grid">
+                                <label>
+                                  Tỉ số {match.team1?.name ?? "Đội 1"} <span className="required">*</span>
+                                  <input
+                                    type="number"
+                                    name="score_team1"
+                                    min="0"
+                                    step="1"
+                                    placeholder="0"
+                                    value={scoreTeam1Input}
+                                    onChange={(e) => setScoreTeam1Input(e.target.value)}
+                                    disabled={matchActionLoading}
+                                  />
+                                </label>
+                                <label>
+                                  Tỉ số {match.team2?.name ?? "Đội 2"} <span className="required">*</span>
+                                  <input
+                                    type="number"
+                                    name="score_team2"
+                                    min="0"
+                                    step="1"
+                                    placeholder="0"
+                                    value={scoreTeam2Input}
+                                    onChange={(e) => setScoreTeam2Input(e.target.value)}
+                                    disabled={matchActionLoading}
+                                  />
+                                </label>
+                              </div>
+                              {previewS1 !== null && previewS2 !== null && (
+                                <div
+                                  className={`match-winner-preview ${
+                                    previewS1 === previewS2 ? "is-draw-warning" : "is-winner-confirmed"
+                                  }`}
+                                  data-testid={`match-result-winner-preview-${match.match_id}`}
+                                >
+                                  {previewS1 === previewS2 ? (
+                                    <span>⚠️ W45 không hỗ trợ kết quả hòa: tỉ số hai đội phải khác nhau.</span>
+                                  ) : (
+                                    <span>
+                                      Xác nhận đội thắng:{" "}
+                                      <strong>
+                                        🏆{" "}
+                                        {previewS1 > previewS2
+                                          ? match.team1?.name ?? "Đội 1"
+                                          : match.team2?.name ?? "Đội 2"}
+                                      </strong>{" "}
+                                      ({previewS1} - {previewS2})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              <div className="form-actions">
+                                <button type="submit" className="button small" disabled={matchActionLoading}>
+                                  {matchActionLoading ? "Đang lưu..." : "Xác nhận & Lưu kết quả"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button secondary small"
+                                  disabled={matchActionLoading}
+                                  onClick={() => {
+                                    setScoringMatchId(null);
+                                    setScoreTeam1Input("");
+                                    setScoreTeam2Input("");
+                                    setResultFormError("");
+                                  }}
+                                >
+                                  Hủy
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </>
                       )}
                     </div>
                   );
