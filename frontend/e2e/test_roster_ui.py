@@ -25,8 +25,11 @@ def test_approved_team_roster_selection_and_organizer_lock(
     # 1. Organizer creates tournament
     tournament_name, tournament_id = create_tournament(page, demo_password)
     other_tournament_name = f"Browser Other Tournament {unique_username('other-tour')[-8:]}"
-    page.locator(".tournament-create summary").click()
-    page.get_by_label("Tên giải đấu").fill(other_tournament_name)
+    tournament_name_input = page.get_by_label("Tên giải đấu")
+    if not tournament_name_input.is_visible():
+        page.locator(".tournament-create summary").click()
+        expect(tournament_name_input).to_be_visible()
+    tournament_name_input.fill(other_tournament_name)
     page.get_by_label("Tựa game").select_option(label="VALORANT")
     page.get_by_label("Bắt đầu").fill((date.today() + timedelta(days=7)).isoformat())
     page.get_by_role("button", name="Tạo giải đấu").click()

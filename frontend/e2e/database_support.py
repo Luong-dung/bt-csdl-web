@@ -82,8 +82,9 @@ def seed_match_pagination(
             cursor.executemany(
                 """
                 INSERT INTO matches
-                    (tournament_id, stage_id, round_no, team1_id, team2_id, status)
-                VALUES (%s, %s, %s, %s, %s, 'PENDING')
+                    (tournament_id, stage_id, round_no, team1_id, team2_id,
+                     score_team1, score_team2, status)
+                VALUES (%s, %s, %s, %s, %s, 0, 0, 'PENDING')
                 """,
                 [
                     (tournament_id, stage_id, round_no, team1_id, team2_id)
