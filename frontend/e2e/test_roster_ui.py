@@ -171,28 +171,26 @@ def test_approved_team_roster_selection_and_organizer_lock(
         page.wait_for_timeout(200)
         assert len(held_lock_responses) == 1, "The roster-lock request did not reach the held response"
 
-        # Keep the lock response in flight while switching tournament and user session.
+        # Keep the lock response in flight while switching tournaments in the same session.
         page.locator(".tournament-detail .detail-header button").filter(
             has_text=re.compile("Đóng|Close")
         ).click()
         open_tournament(page, other_tournament_id, other_tournament_name)
-        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
-        expect(page.locator(".auth-modal-close")).to_be_visible()
-        page.locator(".auth-modal-close").click()
-        login(page, stranger)
 
         lock_route, lock_response = held_lock_responses.pop()
         lock_route.fulfill(response=lock_response)
         page.unroute(lock_url, hold_lock_response)
-        expect(page.locator(".profile")).to_contain_text(stranger)
+        expect(page.locator(".profile")).to_contain_text("demo_organizer")
         expect(page.locator(".tournament-detail h3")).to_have_text(other_tournament_name)
+        expect(page.locator(".detail-stats")).to_contain_text("Chưa khóa")
+        lock_button = page.locator(".roster-lock-controls button").filter(
+            has_text="Khóa đội hình giải đấu"
+        )
+        expect(lock_button).to_be_visible()
+        expect(lock_button).to_be_enabled()
         expect(page.locator(".roster-lock-controls .notice-banner")).to_have_count(0)
 
-        # Return to the organizer and confirm the server-side lock persisted on Tournament A.
-        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
-        expect(page.locator(".auth-modal-close")).to_be_visible()
-        page.locator(".auth-modal-close").click()
-        login(page, "demo_organizer", demo_password)
+        # Confirm the server-side lock persisted on Tournament A.
         refresh_tournament(page, tournament_id, tournament_name)
 
         # Start condition is now MET

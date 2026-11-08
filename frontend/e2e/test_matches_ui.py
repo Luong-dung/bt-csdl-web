@@ -754,6 +754,88 @@ def test_match_start_response_is_ignored_after_session_change(
         page.unroute(start_url, hold_start_response)
 
 
+def test_match_start_response_is_ignored_after_tournament_change(
+    page: Page, api_base_url: str, demo_password: str
+):
+    ctx = _setup_locked_tournament_with_two_teams(page, api_base_url, demo_password)
+    tournament_id = ctx["tournament_id"]
+    tournament_name = ctx["tournament_name"]
+    organizer_token = ctx["organizer_token"]
+    match = _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tournament_id}/matches",
+        token=organizer_token,
+        data={
+            "stage_id": ctx["stage_1"]["stage_id"],
+            "round_no": 1,
+            "team1_id": ctx["team_1"]["team_id"],
+            "team2_id": ctx["team_2"]["team_id"],
+        },
+    )
+    match_id = match["match_id"]
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tournament_id}/status",
+        token=organizer_token,
+        data={"status": "ONGOING"},
+    )
+
+    games = _api_request(page, "GET", f"{api_base_url}/catalog/games")
+    game_id = next(game["game_id"] for game in games if game["slug"] == "valorant")
+    other_tournament_name = f"Match UI Other {unique_username('other-tour')[-8:]}"
+    other_tournament = _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments",
+        token=organizer_token,
+        data={
+            "name": other_tournament_name,
+            "game_id": game_id,
+            "format": "SINGLE_ELIM",
+            "start_date": (date.today() + timedelta(days=7)).isoformat(),
+        },
+    )
+
+    open_tournament(page, str(tournament_id), tournament_name)
+    held_responses = []
+    start_url = f"**/api/v1/tournaments/{tournament_id}/matches/{match_id}/status"
+
+    def hold_start_response(route):
+        response = route.fetch()
+        held_responses.append((route, response))
+
+    page.route(start_url, hold_start_response)
+    try:
+        match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
+        match_card.locator(f'[data-testid="match-start-btn-{match_id}"]').click()
+        page.wait_for_timeout(200)
+        assert len(held_responses) == 1, "The start request did not reach the held response"
+
+        page.locator(".tournament-detail .detail-header button").filter(
+            has_text=re.compile("Đóng|Close")
+        ).click()
+        open_tournament(
+            page,
+            str(other_tournament["tournament_id"]),
+            other_tournament_name,
+        )
+
+        route, response = held_responses.pop()
+        route.fulfill(response=response)
+        page.unroute(start_url, hold_start_response)
+
+        expect(page.locator(".tournament-detail h3")).to_have_text(other_tournament_name)
+        matches_section = page.locator('[data-testid="tournament-matches-section"]')
+        expect(matches_section.locator(".match-card")).to_have_count(0)
+        expect(matches_section.locator(".notice-banner")).to_have_count(0)
+    finally:
+        for route, response in held_responses:
+            route.fulfill(response=response)
+        page.unroute(start_url, hold_start_response)
+
+
 def test_scoped_referee_match_operations_ui(
     page: Page, browser: Browser, app_base_url: str, api_base_url: str, demo_password: str
 ):
