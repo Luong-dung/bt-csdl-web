@@ -1,4 +1,5 @@
 import re
+from datetime import date, timedelta
 from playwright.sync_api import Browser, Page, expect
 
 from helpers import create_team, login, register_user, unique_username
@@ -23,6 +24,16 @@ def test_approved_team_roster_selection_and_organizer_lock(
 ):
     # 1. Organizer creates tournament
     tournament_name, tournament_id = create_tournament(page, demo_password)
+    other_tournament_name = f"Browser Other Tournament {unique_username('other-tour')[-8:]}"
+    page.locator(".tournament-create summary").click()
+    page.get_by_label("Tên giải đấu").fill(other_tournament_name)
+    page.get_by_label("Tựa game").select_option(label="VALORANT")
+    page.get_by_label("Bắt đầu").fill((date.today() + timedelta(days=7)).isoformat())
+    page.get_by_role("button", name="Tạo giải đấu").click()
+    expect(page.locator(".message.success")).to_contain_text("Đã tạo giải đấu mới")
+    other_card = page.locator(".tournament-card").filter(has_text=other_tournament_name)
+    other_tournament_id = other_card.get_attribute("data-tournament-id")
+    assert other_tournament_id is not None
 
     # 2. Manager creates team and adds a PLAYER member
     manager_page = browser.new_page(viewport={"width": 1440, "height": 1000})
@@ -144,9 +155,42 @@ def test_approved_team_roster_selection_and_organizer_lock(
 
         # 5. Organizer locks tournament roster in parallel session
         refresh_tournament(page, tournament_id, tournament_name)
+        lock_url = f"**/api/v1/tournaments/{tournament_id}/roster-lock"
+        held_lock_responses = []
+
+        def hold_lock_response(route):
+            response = route.fetch()
+            held_lock_responses.append((route, response))
+
+        page.route(lock_url, hold_lock_response)
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(".roster-lock-controls button").filter(has_text="Khóa đội hình giải đấu").click()
-        expect(page.locator(".roster-lock-controls .notice-banner")).to_contain_text("Đã khóa đội hình giải đấu thành công")
+        page.wait_for_timeout(200)
+        assert len(held_lock_responses) == 1, "The roster-lock request did not reach the held response"
+
+        # Keep the lock response in flight while switching tournament and user session.
+        page.locator(".tournament-detail .detail-header button").filter(
+            has_text=re.compile("Đóng|Close")
+        ).click()
+        open_tournament(page, other_tournament_id, other_tournament_name)
+        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
+        expect(page.locator(".auth-modal-close")).to_be_visible()
+        page.locator(".auth-modal-close").click()
+        login(page, stranger)
+
+        lock_route, lock_response = held_lock_responses.pop()
+        lock_route.fulfill(response=lock_response)
+        page.unroute(lock_url, hold_lock_response)
+        expect(page.locator(".profile")).to_contain_text(stranger)
+        expect(page.locator(".tournament-detail h3")).to_have_text(other_tournament_name)
+        expect(page.locator(".roster-lock-controls .notice-banner")).to_have_count(0)
+
+        # Return to the organizer and confirm the server-side lock persisted on Tournament A.
+        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
+        expect(page.locator(".auth-modal-close")).to_be_visible()
+        page.locator(".auth-modal-close").click()
+        login(page, "demo_organizer", demo_password)
+        refresh_tournament(page, tournament_id, tournament_name)
 
         # Start condition is now MET
         expect(page.locator(".condition-item.met")).to_contain_text("Đội hình giải đấu đã được khóa")

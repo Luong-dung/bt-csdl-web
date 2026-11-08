@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from playwright.sync_api import Browser, Page, expect
 
-from database_support import assign_tournament_referee
+from database_support import assign_tournament_referee, seed_match_pagination
 from helpers import login, register_user, unique_username
 from test_tournaments import open_tournament
 
@@ -53,7 +53,7 @@ def _register_and_login_api(page: Page, api_base_url: str, prefix: str, password
 
 
 def _setup_locked_tournament_with_two_teams(
-    page: Page, api_base_url: str, demo_password: str
+    page: Page, api_base_url: str, demo_password: str, *, lock_roster: bool = True
 ) -> dict:
     login(page, "demo_organizer", demo_password)
     organizer_token = page.evaluate("localStorage.getItem('esports_access_token')")
@@ -145,12 +145,13 @@ def _setup_locked_tournament_with_two_teams(
             }
         )
 
-    _api_request(
-        page,
-        "POST",
-        f"{api_base_url}/tournaments/{tournament_id}/roster-lock",
-        token=organizer_token,
-    )
+    if lock_roster:
+        _api_request(
+            page,
+            "POST",
+            f"{api_base_url}/tournaments/{tournament_id}/roster-lock",
+            token=organizer_token,
+        )
 
     page.reload()
     expect(page.locator(".profile")).to_contain_text("demo_organizer")
@@ -572,6 +573,179 @@ def test_match_lifecycle_start_cancel_and_result_submission_ui(
     expect(card_3_after.locator(".team-left")).to_contain_text("🏆 Thắng")
 
 
+def test_locked_roster_match_creation_start_and_result_e2e_mobile(
+    page: Page, api_base_url: str, demo_password: str
+):
+    ctx = _setup_locked_tournament_with_two_teams(
+        page, api_base_url, demo_password, lock_roster=False
+    )
+    tournament_id = ctx["tournament_id"]
+    tournament_name = ctx["tournament_name"]
+    stage_1 = ctx["stage_1"]
+    team_1 = ctx["team_1"]
+    team_2 = ctx["team_2"]
+
+    open_tournament(page, str(tournament_id), tournament_name)
+    page.once("dialog", lambda dialog: dialog.accept())
+    page.locator(".roster-lock-controls button").filter(
+        has_text="Khóa đội hình giải đấu"
+    ).click()
+    expect(page.locator(".roster-lock-controls .notice-banner")).to_contain_text(
+        "Đã khóa đội hình giải đấu thành công"
+    )
+    expect(page.locator(".condition-item.met")).to_contain_text(
+        "Đội hình giải đấu đã được khóa"
+    )
+
+    matches_section = page.locator('[data-testid="tournament-matches-section"]')
+    matches_section.get_by_role("button", name="+ Tạo trận đấu").click()
+    create_form = matches_section.locator('[data-testid="match-create-form"]')
+    create_form.locator('select[name="stage_id"]').select_option(str(stage_1["stage_id"]))
+    create_form.locator('input[name="round_no"]').fill("1")
+    create_form.locator('select[name="team1_id"]').select_option(str(team_1["team_id"]))
+    create_form.locator('select[name="team2_id"]').select_option(str(team_2["team_id"]))
+    create_form.get_by_role("button", name="Lưu trận đấu").click()
+
+    expect(matches_section.locator(".notice-banner")).to_contain_text(
+        "Đã tạo trận đấu mới thành công."
+    )
+    match_card = matches_section.locator(".match-card").first
+    match_id = match_card.get_attribute("data-match-id")
+    assert match_id is not None
+
+    page.locator(".manage-panel .status-actions").get_by_role(
+        "button", name=re.compile("ONGOING")
+    ).click()
+    expect(page.locator(".tournament-detail .detail-stats")).to_contain_text("ONGOING")
+    match_card.locator(f'[data-testid="match-start-btn-{match_id}"]').click()
+    expect(match_card.locator(".match-status-badge")).to_have_text("ONGOING")
+
+    page.set_viewport_size({"width": 390, "height": 844})
+    assert page.evaluate(
+        "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+    ), "Match management layout overflows the 390px mobile viewport"
+
+    match_card.locator(f'[data-testid="match-result-btn-{match_id}"]').click()
+    result_form = match_card.locator(f'[data-testid="match-result-form-{match_id}"]')
+    expect(result_form).to_be_visible()
+    result_form.locator('input[name="score_team1"]').fill("3")
+    result_form.locator('input[name="score_team2"]').fill("1")
+    result_form.get_by_role("button", name="Xác nhận & Lưu kết quả").click()
+
+    expect(match_card.locator(".match-status-badge")).to_have_text("COMPLETED")
+    expect(match_card.locator(f'[data-testid="match-score-{match_id}"]')).to_have_text("3 - 1")
+    expect(match_card.locator(".team-left")).to_contain_text("🏆 Thắng")
+
+    page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
+    open_tournament(page, str(tournament_id), tournament_name)
+    persisted_match = page.locator(f'[data-testid="match-card-{match_id}"]')
+    expect(persisted_match.locator(".match-status-badge")).to_have_text("COMPLETED")
+    expect(persisted_match.locator(f'[data-testid="match-score-{match_id}"]')).to_have_text("3 - 1")
+
+
+def test_match_pagination_shows_all_55_matches_once(
+    page: Page, api_base_url: str, demo_password: str
+):
+    ctx = _setup_locked_tournament_with_two_teams(page, api_base_url, demo_password)
+    match_ids = seed_match_pagination(
+        ctx["tournament_id"],
+        ctx["stage_1"]["stage_id"],
+        ctx["team_1"]["team_id"],
+        ctx["team_2"]["team_id"],
+    )
+
+    open_tournament(page, str(ctx["tournament_id"]), ctx["tournament_name"])
+    matches_section = page.locator('[data-testid="tournament-matches-section"]')
+    pagination = matches_section.locator('[data-testid="matches-pagination"]')
+    page_info = pagination.locator(".pagination-info")
+    displayed_ids: list[int] = []
+
+    for page_number in range(1, 7):
+        expect(page_info).to_contain_text(f"Trang {page_number} / 6 (Tổng 55 trận)")
+        displayed_ids.extend(
+            int(match_id)
+            for match_id in matches_section.locator(".match-card").evaluate_all(
+                "cards => cards.map(card => card.dataset.matchId)"
+            )
+        )
+        if page_number < 6:
+            pagination.get_by_role("button", name=re.compile("Sau")).click()
+
+    assert displayed_ids == match_ids
+    assert len(set(displayed_ids)) == 55
+
+
+def test_match_start_response_is_ignored_after_session_change(
+    page: Page, api_base_url: str, demo_password: str
+):
+    ctx = _setup_locked_tournament_with_two_teams(page, api_base_url, demo_password)
+    tournament_id = ctx["tournament_id"]
+    tournament_name = ctx["tournament_name"]
+    organizer_token = ctx["organizer_token"]
+    match = _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tournament_id}/matches",
+        token=organizer_token,
+        data={
+            "stage_id": ctx["stage_1"]["stage_id"],
+            "round_no": 1,
+            "team1_id": ctx["team_1"]["team_id"],
+            "team2_id": ctx["team_2"]["team_id"],
+        },
+    )
+    match_id = match["match_id"]
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tournament_id}/status",
+        token=organizer_token,
+        data={"status": "ONGOING"},
+    )
+    open_tournament(page, str(tournament_id), tournament_name)
+
+    held_responses = []
+    start_url = f"**/api/v1/tournaments/{tournament_id}/matches/{match_id}/status"
+
+    def hold_start_response(route):
+        response = route.fetch()
+        held_responses.append((route, response))
+
+    page.route(start_url, hold_start_response)
+    try:
+        match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
+        match_card.locator(f'[data-testid="match-start-btn-{match_id}"]').click()
+        page.wait_for_timeout(200)
+        assert len(held_responses) == 1, "The start request did not reach the held response"
+
+        viewer, _viewer_token = _register_and_login_api(
+            page, api_base_url, "match-viewer", demo_password
+        )
+        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
+        expect(page.locator(".auth-modal-close")).to_be_visible()
+        page.locator(".auth-modal-close").click()
+        login(page, viewer["username"], demo_password)
+
+        route, response = held_responses.pop()
+        route.fulfill(response=response)
+        expect(page.locator(".profile")).to_contain_text(viewer["username"])
+        expect(
+            page.locator('[data-testid="tournament-matches-section"] .notice-banner')
+        ).to_have_count(0)
+
+        page.reload()
+        expect(page.locator(".profile")).to_contain_text(viewer["username"])
+        open_tournament(page, str(tournament_id), tournament_name)
+        public_match = page.locator(f'[data-testid="match-card-{match_id}"]')
+        expect(public_match.locator(".match-status-badge")).to_have_text("ONGOING")
+        expect(public_match.locator(f'[data-testid="match-start-btn-{match_id}"]')).to_have_count(0)
+    finally:
+        for route, response in held_responses:
+            route.fulfill(response=response)
+        page.unroute(start_url, hold_start_response)
+
+
 def test_scoped_referee_match_operations_ui(
     page: Page, browser: Browser, app_base_url: str, api_base_url: str, demo_password: str
 ):
@@ -865,5 +1039,3 @@ def test_retry_tournament_capabilities_loads_player_roster_badge(
     finally:
         page.unroute(cap_url)
         page.unroute(reg_url)
-
-
