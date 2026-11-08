@@ -16,7 +16,7 @@ import pytest
 from sqlalchemy import event, select
 
 from core.tournaments import lock_tournament
-from modules.identity.models import RoleAssignment
+from modules.identity.models import AuditLog, RoleAssignment
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import make_client
 from test_permissions import access, organizer_tournament
