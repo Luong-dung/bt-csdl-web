@@ -58,6 +58,51 @@ def assign_tournament_referee(username: str, tournament_id: int) -> None:
                 raise RuntimeError(f"Could not assign scoped REFEREE role to {username}")
 
 
+def seed_match_pagination(
+    tournament_id: int,
+    stage_id: int,
+    team1_id: int,
+    team2_id: int,
+    *,
+    match_count: int = 55,
+) -> list[int]:
+    """Seed match rows for browser pagination only in the disposable E2E DB."""
+    database_url = os.environ.get("E2E_DATABASE_URL")
+    expected_database = os.environ.get("E2E_DB_NAME")
+    if not database_url or not expected_database or not expected_database.endswith("_test"):
+        raise RuntimeError("Match pagination E2E requires E2E_DATABASE_URL and an E2E_DB_NAME ending in _test")
+    if match_count <= 50:
+        raise ValueError("Match pagination E2E needs more than 50 matches")
+
+    with psycopg2.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            if cursor.fetchone()[0] != expected_database:
+                raise RuntimeError("Refusing match setup outside the configured E2E database")
+            cursor.executemany(
+                """
+                INSERT INTO matches
+                    (tournament_id, stage_id, round_no, team1_id, team2_id,
+                     score_team1, score_team2, status)
+                VALUES (%s, %s, %s, %s, %s, 0, 0, 'PENDING')
+                """,
+                [
+                    (tournament_id, stage_id, round_no, team1_id, team2_id)
+                    for round_no in range(1, match_count + 1)
+                ],
+            )
+            cursor.execute(
+                """
+                SELECT match_id
+                FROM matches
+                WHERE tournament_id = %s AND stage_id = %s AND round_no BETWEEN 1 AND %s
+                ORDER BY round_no
+                """,
+                (tournament_id, stage_id, match_count),
+            )
+            return [row[0] for row in cursor.fetchall()]
+
+
 def seed_large_tournament_pagination(
     tournament_id: int, manager_username: str, *, registered_count: int = 51
 ) -> dict[str, object]:
