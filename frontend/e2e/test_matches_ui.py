@@ -798,6 +798,8 @@ def test_match_start_response_is_ignored_after_tournament_change(
         },
     )
 
+    page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
     open_tournament(page, str(tournament_id), tournament_name)
     held_responses = []
     start_url = f"**/api/v1/tournaments/{tournament_id}/matches/{match_id}/status"
