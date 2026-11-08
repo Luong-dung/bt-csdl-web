@@ -7,7 +7,8 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
-from modules.identity.models import AuditLog, RoleAssignment
+from core.security import create_access_token
+from modules.identity.models import AuditLog, RoleAssignment, User
 from modules.teams.models import Team, TeamMembership
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import session_factory
@@ -257,6 +258,7 @@ def test_full_match_lifecycle_audit_chain_and_idempotency(access, session_factor
         json={'status': 'ONGOING'},
     )
     assert replay_start.status_code == 200
+    assert len(match_audit_logs(session_factory, tid=tid, match_id=mid)) == 3
 
     # Step 4: Submit Result (COMPLETED)
     result_res = client.put(
@@ -389,16 +391,153 @@ def test_audit_failure_fault_injection_rollback_on_all_match_writes(access, sess
         m = db.get(Match, mid)
         assert m is not None and m.match_id == mid
 
+    with session_factory.begin() as db:
+        match = db.get(Match, mid)
+        match.status = 'ONGOING'
+
+    with pytest.raises(RuntimeError, match="Simulated audit storage outage"):
+        client.put(
+            f"{match_url(tid, mid)}/result",
+            headers=auth,
+            json={'score_team1': 2, 'score_team2': 1},
+        )
+    with session_factory() as db:
+        match = db.get(Match, mid)
+        assert match.status == 'ONGOING'
+        assert (match.score_team1, match.score_team2, match.winner_id) == (0, 0, None)
+    assert match_audit_logs(session_factory, tid=tid, match_id=mid) == []
+
 
 # ==============================================================================
 # Part 3: Comprehensive Permission Matrix and Scoped Referee Enforcement
 # ==============================================================================
 
+@pytest.mark.parametrize('scope', [None, 'GLOBAL'])
+def test_referee_without_tournament_assignment_cannot_write(access, session_factory, match_case, scope):
+    """A base REFEREE role or a GLOBAL REFEREE assignment grants no match-write access."""
+    client, headers, users, teams, roles = access
+    tid = match_case['tid']
+    mid = match_case['match']
+    auth = headers('referee')
+
+    if scope == 'GLOBAL':
+        with session_factory.begin() as db:
+            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
+                                  scope_type='GLOBAL', scope_id=None))
+
+    capabilities = client.get(f"{match_url(tid, mid)}/capabilities", headers=auth).json()
+    assert {key: capabilities[key] for key in (
+        'can_update', 'can_delete', 'can_start', 'can_submit_result', 'can_cancel',
+    )} == {
+        'can_update': False, 'can_delete': False, 'can_start': False,
+        'can_submit_result': False, 'can_cancel': False,
+    }
+
+    assert client.post(
+        match_url(tid),
+        headers=auth,
+        json={'stage_id': match_case['stage'], 'round_no': 2,
+              'team1_id': teams['Alpha'], 'team2_id': teams['Beta']},
+    ).status_code == 403
+    assert client.patch(match_url(tid, mid), headers=auth, json={'round_no': 2}).status_code == 403
+    assert client.delete(match_url(tid, mid), headers=auth).status_code == 403
+    assert client.post(f"{match_url(tid, mid)}/status", headers=auth,
+                       json={'status': 'ONGOING'}).status_code == 403
+    assert client.post(f"{match_url(tid, mid)}/status", headers=auth,
+                       json={'status': 'CANCELLED'}).status_code == 403
+    assert client.put(f"{match_url(tid, mid)}/result", headers=auth,
+                      json={'score_team1': 1, 'score_team2': 0}).status_code == 403
+
+
+def test_tournament_scoped_organizer_assignment_permissions(access, session_factory, match_case):
+    """An ORGANIZER assignment grants all manager writes only in its assigned tournament."""
+    client, _, users, teams, roles = access
+    tid = match_case['tid']
+    other_tid = match_case['other']
+    mid = match_case['match']
+
+    with session_factory.begin() as db:
+        scoped_user = User(username='scoped_organizer', email='scoped_organizer@example.com',
+                           password_hash='unused', role_id=roles['VIEWER'])
+        foreign_user = User(username='foreign_organizer', email='foreign_organizer@example.com',
+                            password_hash='unused', role_id=roles['VIEWER'])
+        db.add_all([scoped_user, foreign_user])
+        db.flush()
+        scoped_user_id, foreign_user_id = scoped_user.user_id, foreign_user.user_id
+        db.add_all([
+            RoleAssignment(user_id=scoped_user_id, role_id=roles['ORGANIZER'],
+                           scope_type='TOURNAMENT', scope_id=tid),
+            RoleAssignment(user_id=foreign_user_id, role_id=roles['ORGANIZER'],
+                           scope_type='TOURNAMENT', scope_id=other_tid),
+        ])
+
+    def auth(user_id):
+        return {'Authorization': f"Bearer {create_access_token({'sub': str(user_id)})}"}
+
+    scoped_auth = auth(scoped_user_id)
+    foreign_auth = auth(foreign_user_id)
+
+    scoped_caps = client.get(f"{match_url(tid, mid)}/capabilities", headers=scoped_auth).json()
+    assert scoped_caps['can_update'] is True
+    assert scoped_caps['can_delete'] is True
+    assert scoped_caps['can_start'] is True
+    assert scoped_caps['can_submit_result'] is False
+    assert scoped_caps['can_cancel'] is True
+
+    foreign_caps = client.get(f"{match_url(tid, mid)}/capabilities", headers=foreign_auth).json()
+    assert {key: foreign_caps[key] for key in (
+        'can_update', 'can_delete', 'can_start', 'can_submit_result', 'can_cancel',
+    )} == {
+        'can_update': False, 'can_delete': False, 'can_start': False,
+        'can_submit_result': False, 'can_cancel': False,
+    }
+    assert client.post(
+        match_url(tid),
+        headers=foreign_auth,
+        json={'stage_id': match_case['stage'], 'round_no': 30,
+              'team1_id': teams['Alpha'], 'team2_id': teams['Beta']},
+    ).status_code == 403
+    assert client.patch(match_url(tid, mid), headers=foreign_auth, json={'round_no': 2}).status_code == 403
+    assert client.delete(match_url(tid, mid), headers=foreign_auth).status_code == 403
+    assert client.post(f"{match_url(tid, mid)}/status", headers=foreign_auth,
+                       json={'status': 'ONGOING'}).status_code == 403
+    assert client.post(f"{match_url(tid, mid)}/status", headers=foreign_auth,
+                       json={'status': 'CANCELLED'}).status_code == 403
+    assert client.put(f"{match_url(tid, mid)}/result", headers=foreign_auth,
+                      json={'score_team1': 1, 'score_team2': 0}).status_code == 403
+
+    created = client.post(
+        match_url(tid),
+        headers=scoped_auth,
+        json={'stage_id': match_case['stage'], 'round_no': 30,
+              'team1_id': teams['Alpha'], 'team2_id': teams['Beta']},
+    )
+    assert created.status_code == 201, created.text
+    created_id = created.json()['match_id']
+    assert client.patch(match_url(tid, created_id), headers=scoped_auth,
+                        json={'round_no': 31}).status_code == 200
+    assert client.delete(match_url(tid, created_id), headers=scoped_auth).status_code == 204
+
+    assert client.post(f"{match_url(tid, mid)}/status", headers=scoped_auth,
+                       json={'status': 'ONGOING'}).status_code == 200
+    assert client.put(f"{match_url(tid, mid)}/result", headers=scoped_auth,
+                      json={'score_team1': 2, 'score_team2': 1}).status_code == 200
+
+    cancelled = client.post(
+        match_url(tid),
+        headers=scoped_auth,
+        json={'stage_id': match_case['stage'], 'round_no': 32,
+              'team1_id': teams['Alpha'], 'team2_id': teams['Beta']},
+    )
+    assert cancelled.status_code == 201, cancelled.text
+    assert client.post(f"{match_url(tid, cancelled.json()['match_id'])}/status",
+                       headers=scoped_auth, json={'status': 'CANCELLED'}).status_code == 200
+
+
 def test_comprehensive_match_permission_matrix(access, session_factory, match_case):
     """Verifies all authorization roles and scopes across all match endpoints."""
     client, headers, users, teams, roles = access
     tid = match_case['tid']
-    other_tid = match_case['other']
     mid = match_case['match']
 
     # 1. Quản lý giải (ADMIN and ORGANIZER creator) have full access
@@ -450,19 +589,7 @@ def test_comprehensive_match_permission_matrix(access, session_factory, match_ca
         json={'score_team1': 2, 'score_team2': 1},
     ).status_code == 200
 
-    # 3. Referee scoped to another tournament has NO write capabilities here
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(
-            user_id=users['viewer'],
-            role_id=roles['REFEREE'],
-            scope_type='TOURNAMENT',
-            scope_id=other_tid,
-        ))
-    other_ref_auth = headers('viewer')
-    assert client.post(f"{match_url(tid, mid)}/status", headers=other_ref_auth, json={'status': 'ONGOING'}).status_code == 403
-    assert client.put(f"{match_url(tid, mid)}/result", headers=other_ref_auth, json={'score_team1': 1, 'score_team2': 0}).status_code == 403
-
-    # 4. Conflict of interest: referee who plays for / belongs to a participating team
+    # 3. Conflict of interest: referee who plays for / belongs to a participating team
     with session_factory.begin() as db:
         m2 = Match(tournament_id=tid, stage_id=match_case['stage'], round_no=10,
                    team1_id=teams['Alpha'], team2_id=teams['Beta'], status='ONGOING')
@@ -559,3 +686,28 @@ def test_match_creation_and_update_link_validations(access, session_factory, mat
     })
     assert res.status_code == 409
     assert "khóa đội hình" in res.json()['detail']
+
+    created = client.post(match_url(tid), headers=auth, json={
+        'stage_id': stage_id, 'round_no': 40, 'team1_id': teams['Alpha'], 'team2_id': teams['Beta'],
+        'scheduled_at': '2026-11-20T19:00:00+07:00',
+    })
+    assert created.status_code == 201, created.text
+    match_id = created.json()['match_id']
+    assert [log.action for log in match_audit_logs(session_factory, tid, match_id)] == ['MATCH_CREATED']
+
+    invalid_updates = [
+        {'stage_id': other_stage},
+        {'team1_id': una_id},
+        {'team2_id': teams['Alpha']},
+        {'team1_id': og_id},
+    ]
+    for update in invalid_updates:
+        response = client.patch(match_url(tid, match_id), headers=auth, json=update)
+        assert response.status_code == 422, (update, response.text)
+        assert [log.action for log in match_audit_logs(session_factory, tid, match_id)] == ['MATCH_CREATED']
+
+    # This offset denotes the same instant as the +07:00 value used at creation.
+    equivalent_time = client.patch(match_url(tid, match_id), headers=auth,
+                                   json={'scheduled_at': '2026-11-20T12:00:00Z'})
+    assert equivalent_time.status_code == 200, equivalent_time.text
+    assert [log.action for log in match_audit_logs(session_factory, tid, match_id)] == ['MATCH_CREATED']

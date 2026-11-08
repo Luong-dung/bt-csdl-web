@@ -3,6 +3,7 @@
 Validates:
 - Concurrent match creation vs stage deletion (FK RESTRICT & tournament lock)
 - Concurrent match start vs match cancellation (row lock serialization)
+- Concurrent match cancellation vs result submission
 - Referee assignment revocation while waiting for tournament lock (rechecks permission -> 403)
 - Tournament completion while waiting for tournament lock (rechecks status -> 409)
 """
@@ -32,6 +33,17 @@ def match_url(tid, match_id=None):
 def stage_url(tid, stage_id=None):
     base = f'/api/v1/tournaments/{tid}/stages'
     return f'{base}/{stage_id}' if stage_id is not None else base
+
+
+def audit_actions(session_factory, tournament_id, match_id=None):
+    with session_factory() as db:
+        rows = list(db.scalars(select(AuditLog).order_by(AuditLog.log_id)))
+    return [
+        row.action for row in rows
+        if row.details.get('tournament_id') == tournament_id
+        and (match_id is None or row.details.get('match_id') == match_id)
+        and (row.action.startswith('MATCH_') or row.action.startswith('TOURNAMENT_STAGE_'))
+    ]
 
 
 @pytest.fixture
@@ -133,8 +145,10 @@ def test_concurrent_match_create_and_stage_delete(access, session_factory, empty
         matches_in_stage = list(db.scalars(select(Match).where(Match.stage_id == stage_id)))
         if remaining_stage is None:
             assert len(matches_in_stage) == 0
+            assert audit_actions(session_factory, tid) == ['TOURNAMENT_STAGE_DELETED']
         else:
             assert len(matches_in_stage) == 1
+            assert audit_actions(session_factory, tid) == ['MATCH_CREATED']
 
 
 def test_concurrent_match_start_and_cancel(access, session_factory, match_case):
@@ -171,10 +185,62 @@ def test_concurrent_match_start_and_cancel(access, session_factory, match_case):
         start_code = f_start.result(timeout=10)
         cancel_code = f_cancel.result(timeout=10)
 
-    assert sorted([start_code, cancel_code]) in ([200, 200], [200, 409])
+    codes = sorted([start_code, cancel_code])
+    assert codes in ([200, 200], [200, 409])
+    actions = audit_actions(session_factory, tid, mid)
+    if codes == [200, 200]:
+        assert actions == ['MATCH_STARTED', 'MATCH_CANCELLED']
+    else:
+        assert actions == ['MATCH_CANCELLED']
     with session_factory() as db:
         final_match = db.get(Match, mid)
         assert final_match.status == 'CANCELLED'
+
+
+def test_concurrent_match_cancel_and_result(access, session_factory, match_case):
+    """Exactly one of cancellation or result submission wins the shared tournament/match locks."""
+    _, headers, _, teams, _ = access
+    tid = match_case['tid']
+    mid = match_case['match']
+    with session_factory.begin() as db:
+        db.get(Match, mid).status = 'ONGOING'
+
+    def cancel_match():
+        with make_client(session_factory, logged_in=False) as client:
+            return client.post(
+                f"{match_url(tid, mid)}/status",
+                headers=headers('organizer'),
+                json={'status': 'CANCELLED'},
+            ).status_code
+
+    def submit_result():
+        with make_client(session_factory, logged_in=False) as client:
+            return client.put(
+                f"{match_url(tid, mid)}/result",
+                headers=headers('organizer'),
+                json={'score_team1': 2, 'score_team2': 1},
+            ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        cancel_future = pool.submit(cancel_match)
+        result_future = pool.submit(submit_result)
+        cancel_code = cancel_future.result(timeout=10)
+        result_code = result_future.result(timeout=10)
+
+    assert sorted([cancel_code, result_code]) == [200, 409]
+    with session_factory() as db:
+        final_match = db.get(Match, mid)
+        if cancel_code == 200:
+            assert final_match.status == 'CANCELLED'
+            assert (final_match.score_team1, final_match.score_team2, final_match.winner_id) == (0, 0, None)
+            assert audit_actions(session_factory, tid, mid) == ['MATCH_CANCELLED']
+        else:
+            assert result_code == 200
+            assert final_match.status == 'COMPLETED'
+            assert (final_match.score_team1, final_match.score_team2, final_match.winner_id) == (
+                2, 1, teams['Alpha'],
+            )
+            assert audit_actions(session_factory, tid, mid) == ['MATCH_RESULT_SUBMITTED']
 
 
 def test_start_rechecks_referee_revocation_under_lock(access, session_factory, match_case):
@@ -233,6 +299,7 @@ def test_start_rechecks_referee_revocation_under_lock(access, session_factory, m
     with session_factory() as db:
         match = db.get(Match, mid)
         assert match.status == 'PENDING'
+    assert 'MATCH_STARTED' not in audit_actions(session_factory, tid, mid)
 
 
 def test_start_rechecks_tournament_completion_under_lock(access, session_factory, match_case):
@@ -280,3 +347,4 @@ def test_start_rechecks_tournament_completion_under_lock(access, session_factory
     with session_factory() as db:
         match = db.get(Match, mid)
         assert match.status == 'PENDING'
+    assert 'MATCH_STARTED' not in audit_actions(session_factory, tid, mid)
