@@ -662,6 +662,10 @@ def test_match_pagination_shows_all_55_matches_once(
     displayed_ids: list[int] = []
 
     for page_number in range(1, 7):
+        first_expected_id = match_ids[(page_number - 1) * 10]
+        expect(
+            matches_section.locator(f'[data-testid="match-card-{first_expected_id}"]')
+        ).to_be_visible()
         expect(page_info).to_contain_text(f"Trang {page_number} / 6 (Tổng 55 trận)")
         displayed_ids.extend(
             int(match_id)
@@ -671,6 +675,10 @@ def test_match_pagination_shows_all_55_matches_once(
         )
         if page_number < 6:
             pagination.get_by_role("button", name=re.compile("Sau")).click()
+            next_first_expected_id = match_ids[page_number * 10]
+            expect(
+                matches_section.locator(f'[data-testid="match-card-{next_first_expected_id}"]')
+            ).to_be_visible()
 
     assert displayed_ids == match_ids
     assert len(set(displayed_ids)) == 55
