@@ -26,12 +26,12 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ### AI-2026-W46-DUNG-001 — Nền tảng bracket
 
-- **Người thực hiện/ngày:** DUNG, `2026-11-09`; **task:** W46-01; branch `feature/W46-01-bracket-foundation`, nền `8b0796f` sau PR #88.
+- **Người thực hiện/ngày:** DUNG, `2026-11-09`; **task:** W46-01; branch `feature/W46-01-bracket-foundation`, [PR #89](https://github.com/Luong-dung/bt-csdl-web/pull/89), nền `8b0796f` sau PR #88.
 - **Yêu cầu:** bắt đầu công việc tuần này theo kế hoạch đã merge; triển khai nền tảng trước các mutation phụ thuộc.
 - **Đã áp dụng:** hai bảng metadata phân biệt managed bracket với legacy next_match_id; round/position/đích-slot có FK/CHECK; migration `c46a01b00001`; input strict 2–64 đội; cây loại trực tiếp; validate đội/roster/stage; preview token có fingerprint/hạn 15 phút; helper khóa giải→source/đích theo ID và đọc lại quyền; capability `can_create_bracket`; contract bàn giao.
 - **Phạm vi chưa triển khai:** endpoint tạo/đọc bracket, standings và mutation chuyển winner/bảo vệ lifecycle thuộc W46-02/-03/-04. Không sửa dữ liệu nhánh đấu/standings lịch sử.
 - **Kiểm tra có mục tiêu:** PostgreSQL foundation/migration/khóa: 55 passed, gồm hai ca thu hồi quyền khi đang chờ khóa bằng connection độc lập. Nhóm migration hồi quy W45/roster/stage ở lượt trước: 66 passed. Schema SQL tham chiếu thực thi thành công trong schema tạm, rollback sau kiểm tra. Mọi kiểm tra PostgreSQL dùng DB `_test` riêng, không dùng DB ứng dụng.
-- **Kiểm tra toàn bộ:** SQLite toàn bộ: 728 passed/71 skipped (PostgreSQL-only); frontend build đạt; Browser E2E 28 passed trong 306,95 giây trên DB test riêng. Có warning deprecation anyio và hai warning quyền ghi cache pytest, không có test fail. PostgreSQL toàn bộ đang chạy; nhóm W46-01 có mục tiêu đã đạt 55 ca. Báo cáo E2E local: frontend/e2e-artifacts/w46-retest.xml (gitignore).
+- **Kiểm tra toàn bộ:** SQLite toàn bộ: 728 passed/71 skipped (PostgreSQL-only); frontend build đạt; Browser E2E 28 passed trong 306,95 giây trên DB test riêng. Có warning deprecation anyio và hai warning quyền ghi cache pytest, không có test fail. PostgreSQL toàn bộ: 793 passed, 1 failed do tmp_path không truy cập được thư mục tạm Windows, 5 deselected; ca test_postgres_fixture_runs_new_head chạy lại với --basetemp mới trong workspace đã đạt (1 passed). Không sửa code vì lỗi môi trường; không ghi lượt local đầu là toàn bộ xanh. Nhóm W46-01 có mục tiêu đã đạt 55 ca. CI [42591351984](https://github.com/Luong-dung/bt-csdl-web/actions/runs/42591351984) trên code head bb3f4c9 đạt cả Backend tests, Frontend build và Browser E2E; commit bổ sung sau đó chỉ cập nhật tài liệu/bằng chứng. Báo cáo E2E local: frontend/e2e-artifacts/w46-retest.xml (gitignore).
 - **Reviewer:** DOANH — chờ; **trạng thái:** `APPLIED`, chưa nghiệm thu/DONE.
 
 ### Chạy lại giao diện W45 ngày 2026-11-09
