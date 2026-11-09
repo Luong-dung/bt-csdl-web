@@ -147,10 +147,10 @@ Schema triển khai nằm tại [database/schema_postgres.sql](../database/schem
 
 ### Đang thực hiện
 
-- Hoàn thiện role assignment theo scope ở các endpoint nghiệp vụ.
-- Bổ sung API đăng ký/duyệt đội, khóa roster, nhập kết quả và standings.
-- Thêm audit service dùng chung.
-- Bổ sung test API, seed dữ liệu và CI GitHub Actions.
+- Cập nhật ngày 09/11/2026: đăng ký/duyệt đội, snapshot/khóa roster, stage, match thủ công và nhập kết quả đã có API/UI qua W44/W44(2)/W45; quyền trọng tài theo giải và audit nhập kết quả đã có kiểm thử. Build và Browser E2E local W45 đạt 28 test; xem [W45](./weeks/2026-W45.md) cho phạm vi và bằng chứng.
+- [Kế hoạch W46 — 09–15/11/2026](./weeks/2026-W46.md): một bracket loại trực tiếp/giải, preview và tạo theo thứ tự đội, chuyển winner cùng transaction, API/UI bracket và bảng kết quả dẫn xuất. Trạng thái ban đầu `0/8 DONE`, `8 TODO`; chưa có API/schema W46 được triển khai.
+- W46 chưa hỗ trợ bye, double elimination, round robin, điểm/tiền thưởng hoặc tổng hợp nhiều stage. `tournament_standings` hiện có chưa được dùng để lưu bảng kết quả W46; thiết kế dự kiến dẫn xuất từ match thuộc bracket và chốt contract ở W46-01.
+- Tiếp tục hoàn thiện role assignment/audit ở các nghiệp vụ còn thiếu, seed demo và kiểm thử theo phạm vi từng tuần; CI hiện đã chạy backend tests, frontend build/typecheck và Browser E2E, chưa có lint riêng.
 
 ## 10. Lộ trình 10 tuần
 

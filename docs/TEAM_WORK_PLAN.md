@@ -32,7 +32,7 @@ Mỗi tuần phải có đủ bốn phần:
 
 ## Tuần đang thực hiện
 
-Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và giữ lịch sử. W44 đã chốt; tuần kế tiếp W45 bắt đầu ngày 02/11:
+Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và giữ lịch sử. W44 và W45 đã chốt; đối chiếu tiến độ theo bảng tuần:
 
 - [2026-W42 — 12/10/2026 đến 18/10/2026](./weeks/2026-W42.md)
 - [2026-W43 — Tuần 2, 19/10/2026 đến 25/10/2026](./weeks/2026-W43.md): cập nhật 23/10/2026, `8/8 DONE`, `0 IN PROGRESS`, `0 TODO`; backend/PostgreSQL, frontend build và kiểm thử trình duyệt đạt. Chi tiết bằng chứng và giới hạn xác minh CI/review ghi trong W43.
@@ -41,9 +41,11 @@ Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và g
 
 - [W44(2) — 27/10/2026 đến 01/11/2026](./weeks/2026-W44-2.md): chốt nghiệm thu ngày 01/11/2026, **`8/8 DONE`, `0 REVIEW`, `0 IN PROGRESS`, `0 TODO`**. Hoàn thành roster/snapshot, khóa và điều kiện bắt đầu giải, stage, UI/phân trang, integration và Browser E2E. Cả 8 task đã review/merge; bằng chứng CI và kiểm tra local ghi tại [bảng tuần](./weeks/2026-W44-2.md). [Đánh giá từng người](./weeks/2026-W44-2.md#6-đánh-giá-cuối-đợt): DUNG 4,8; DOANH 4,8; DUONG 4,5; DUC 4,7 (điểm chốt W44(2) được nhóm trưởng xác nhận ngày 01/11/2026, thang 5).
 
-- [2026-W45 — 02/11/2026 đến 08/11/2026](./weeks/2026-W45.md): kế hoạch lập ngày 01/11, **`0/8 DONE`, `8 TODO`**, mỗi người hai task. Mục tiêu: lịch trận thủ công, vòng đời/nhập kết quả, quyền trọng tài theo giải, API/UI và integration/E2E; tiếp nhận retry badge roster và test đổi giải khi đang khóa từ W44(2). Bracket tự sinh và standings theo dõi sau W45.
+- [2026-W45 — 02/11/2026 đến 08/11/2026](./weeks/2026-W45.md): chốt 09/11, **`8/8 DONE`, `0 REVIEW`, `0 IN PROGRESS`, `0 TODO`**. Lịch trận thủ công, vòng đời/kết quả, quyền trọng tài, API/UI và integration/E2E đã approve/merge. CI cuối PR #87 trên `39d2e43` đạt cả ba job; hai góp ý retry badge/khóa roster in-flight đã đóng. Điểm bảng tuần là đề xuất, chưa ghi nhận demo thủ công riêng. Bracket/standings lập kế hoạch sau W45.
 
-W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 là tuần hiện tại (26/10–01/11), đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
+- [2026-W46 — 09/11/2026 đến 15/11/2026](./weeks/2026-W46.md): **`0/8 DONE`, `8 TODO`**, mỗi người hai task và hai review. DUNG: nền tảng và kết quả/chuyển winner; DOANH: tạo/đọc bracket và bảng kết quả; DUONG: UI preview/tạo và xem bracket; DUC: integration/race và Browser E2E. Phạm vi một bracket loại trực tiếp/giải, số đội là lũy thừa hai, không bye; bảng kết quả dẫn xuất từ bracket, chưa tính points/tiền thưởng. Đây là kế hoạch, chưa triển khai.
+
+W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 (26/10–01/11) đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
 ### Tiến độ đối chiếu W42 — 18/10/2026
 
@@ -62,7 +64,7 @@ Trạng thái đối chiếu GitHub ngày 18/10/2026 và [W42](./weeks/2026-W42.
 | Smoke tests | W42-07 `DONE` | PR #23 được Luong-dung approve và merge; CI đạt |
 | CI | W42-08 `DONE` | PR #24 được nomkjmchi approve và merge; CI đạt |
 
-Hoàn thành API không đồng nghĩa đã có giao diện thao tác. Luồng tạo/đăng ký giải, roster, lịch đấu, kết quả và standings vẫn thuộc phạm vi phát triển tiếp.
+Hoàn thành API không đồng nghĩa đã có giao diện thao tác. Luồng tạo/đăng ký giải, roster, lịch trận thủ công và kết quả đã có API/UI qua W44/W44(2)/W45. Bracket và bảng kết quả được lập kế hoạch W46, chưa coi là đã triển khai.
 
 ## 2. Ma trận phụ trách và review
 
@@ -166,14 +168,16 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 ### Tuần 7 — Match, bracket và standings
 
-**Ánh xạ tuần lịch:** [W45 (02–08/11)](./weeks/2026-W45.md) triển khai phần trận thủ công của W07-01 (W45-01/-03/-05), nhập kết quả W07-02 (W45-02/-06), quyền trọng tài và kiểm thử (W45-04/-07/-08). Phần tự sinh bracket của W07-01, standings W07-03 và bracket/bảng xếp hạng W07-04 dự kiến lập kế hoạch W46 sau nghiệm thu W45. Các dòng dưới vẫn TODO ở thời điểm lập kế hoạch; không coi có kế hoạch là đã triển khai. Phạm vi W06 đã được nghiệm thu qua W44(2); bảng W06 được Doanh nhận đồng bộ bằng PR riêng sau #75.
+**Ánh xạ tuần lịch:** W45 đã hoàn thành trận thủ công của W07-01, kết quả transaction W07-02, quyền trọng tài và kiểm thử. W07-01 còn tự sinh bracket nên giữ IN PROGRESS; standings W07-03 và bracket/bảng xếp hạng W07-04 chưa triển khai. Chi tiết tại [W45](./weeks/2026-W45.md). Phạm vi W06 đã DONE qua W44(2).
+
+**Kế hoạch W46:** W46-01/-02/-03/-05/-06 tiếp nhận bracket loại trực tiếp và chuyển winner; W46-04/-06 tiếp nhận bảng kết quả dẫn xuất; W46-07/-08 kiểm thử. Phạm vi standings W07-03 trong W46 chỉ là hạng/played/wins/losses của bracket, chưa có điểm/tiền thưởng hoặc tổng hợp nhiều stage. Giữ trạng thái lộ trình cho đến khi nghiệm thu thực tế.
 
 **Mục tiêu:** quản lý thi đấu từ lịch đến kết quả.
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
-| W07-01 | Tạo stage/match và nhánh đấu | `DOANH` | `DUNG` | Match API | `TODO` |
-| W07-02 | Nhập kết quả trong transaction | `DUNG` | `DOANH` | Result service | `TODO` |
+| W07-01 | Tạo stage/match và nhánh đấu | `DOANH` | `DUNG` | Match thủ công DONE qua W45; còn tự sinh bracket | `IN PROGRESS` |
+| W07-02 | Nhập kết quả trong transaction | `DUNG` | `DOANH` | Result API + transaction/audit, W45-02/-06/-07/-08 | `DONE` |
 | W07-03 | Tính standings và cập nhật đội thắng | `DOANH` | `DUC` | Standings API | `TODO` |
 | W07-04 | Hiển thị bracket và bảng xếp hạng | `DUONG` | `DOANH` | Competition UI | `TODO` |
 
