@@ -158,3 +158,43 @@ CREATE TABLE tournament_standings (
     prize_money NUMERIC(12,2) NOT NULL DEFAULT 0,
     PRIMARY KEY (tournament_id, team_id)
 );
+
+-- W46-01 managed bracket metadata; legacy matches are not adopted.
+ALTER TABLE matches ADD CONSTRAINT uq_matches_bracket_identity UNIQUE (match_id, tournament_id, stage_id);
+CREATE TABLE tournament_brackets (
+    bracket_id SERIAL NOT NULL,
+    tournament_id INTEGER NOT NULL,
+    stage_id INTEGER NOT NULL,
+    team_count INTEGER NOT NULL,
+    round_count INTEGER NOT NULL,
+    team_order JSON NOT NULL,
+    created_by INTEGER NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
+    PRIMARY KEY (bracket_id),
+    CONSTRAINT uq_bracket_tournament UNIQUE (tournament_id),
+    CONSTRAINT uq_bracket_stage UNIQUE (stage_id),
+    CONSTRAINT uq_bracket_identity UNIQUE (bracket_id, tournament_id, stage_id, round_count),
+    CONSTRAINT ck_bracket_size CHECK (team_count IN (2,4,8,16,32,64) AND team_count = (1 << round_count) AND round_count BETWEEN 1 AND 6),
+    FOREIGN KEY(tournament_id) REFERENCES tournaments (tournament_id) ON DELETE RESTRICT,
+    FOREIGN KEY(stage_id) REFERENCES stages (stage_id) ON DELETE RESTRICT,
+    FOREIGN KEY(created_by) REFERENCES users (user_id) ON DELETE RESTRICT
+);
+CREATE TABLE bracket_matches (
+    match_id INTEGER NOT NULL,
+    bracket_id INTEGER NOT NULL,
+    tournament_id INTEGER NOT NULL,
+    stage_id INTEGER NOT NULL,
+    round_count INTEGER NOT NULL,
+    round_index INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+    next_round INTEGER,
+    next_position INTEGER,
+    next_slot INTEGER,
+    PRIMARY KEY (match_id),
+    CONSTRAINT fk_bracket_match_identity FOREIGN KEY(match_id, tournament_id, stage_id) REFERENCES matches (match_id, tournament_id, stage_id) ON DELETE RESTRICT,
+    CONSTRAINT fk_bracket_match_bracket FOREIGN KEY(bracket_id, tournament_id, stage_id, round_count) REFERENCES tournament_brackets (bracket_id, tournament_id, stage_id, round_count) ON DELETE RESTRICT,
+    CONSTRAINT uq_bracket_match_position UNIQUE (bracket_id, round_index, position),
+    CONSTRAINT fk_bracket_match_destination FOREIGN KEY(bracket_id, next_round, next_position) REFERENCES bracket_matches (bracket_id, round_index, position) ON DELETE RESTRICT,
+    CONSTRAINT ck_bracket_match_position CHECK (round_count BETWEEN 1 AND 6 AND round_index BETWEEN 1 AND round_count AND position BETWEEN 1 AND (1 << (round_count-round_index))),
+    CONSTRAINT ck_bracket_match_destination CHECK ((round_index = round_count AND next_round IS NULL AND next_position IS NULL AND next_slot IS NULL) OR (round_index < round_count AND next_round IS NOT NULL AND next_position IS NOT NULL AND next_slot IS NOT NULL AND next_round = round_index+1 AND next_position = (position+1)/2 AND next_slot = 1+((position-1)%2)))
+);
