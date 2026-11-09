@@ -4,7 +4,8 @@
 
 - [Đặc tả đề tài và kế hoạch thực hiện](./PROJECT_SPECIFICATION.md)
 - [Kế hoạch chia việc và đánh giá theo tuần](./TEAM_WORK_PLAN.md)
-- [Kế hoạch tuần kế tiếp W45 — 02/11 đến 08/11/2026](./weeks/2026-W45.md)
+- [Kế hoạch và phân công W46 — 09/11 đến 15/11/2026](./weeks/2026-W46.md)
+- [Công việc và đánh giá W45 đã chốt — 02/11 đến 08/11/2026](./weeks/2026-W45.md)
 - [Công việc và đánh giá W44 đã chốt — 26/10 đến 01/11/2026](./weeks/2026-W44.md)
 - [Công việc và đánh giá W44(2) đã chốt — 27/10 đến 01/11/2026](./weeks/2026-W44-2.md)
 - [Contract nền tảng roster và khóa snapshot — W44-2-01](./W44_2_ROSTER_FOUNDATION.md)
