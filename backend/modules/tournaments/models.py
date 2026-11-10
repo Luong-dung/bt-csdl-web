@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, Date, DateTime, ForeignKey, ForeignKeyConstraint, Index, Integer, JSON, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 
@@ -109,6 +109,63 @@ class Match(Base):
         Index("ix_matches_tournament_stage", "tournament_id", "stage_id", "round_no", "match_id"),
         Index("ix_matches_team1", "team1_id"),
         Index("ix_matches_team2", "team2_id"),
+        UniqueConstraint('match_id', 'tournament_id', 'stage_id', name='uq_matches_bracket_identity'),
+    )
+
+
+class TournamentBracket(Base):
+    """Managed W46 bracket. Legacy Match.next_match_id never implies membership."""
+    __tablename__ = 'tournament_brackets'
+    bracket_id = Column(Integer, primary_key=True)
+    tournament_id = Column(Integer, ForeignKey('tournaments.tournament_id', ondelete='RESTRICT'), nullable=False)
+    stage_id = Column(Integer, ForeignKey('stages.stage_id', ondelete='RESTRICT'), nullable=False)
+    team_count = Column(Integer, nullable=False)
+    round_count = Column(Integer, nullable=False)
+    team_order = Column(JSON, nullable=False)
+    created_by = Column(Integer, ForeignKey('users.user_id', ondelete='RESTRICT'), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    __table_args__ = (
+        UniqueConstraint('tournament_id', name='uq_bracket_tournament'),
+        UniqueConstraint('stage_id', name='uq_bracket_stage'),
+        UniqueConstraint('bracket_id', 'tournament_id', 'stage_id', 'round_count', name='uq_bracket_identity'),
+        CheckConstraint('team_count IN (2,4,8,16,32,64) AND '
+                        'team_count = (1 << round_count) AND round_count BETWEEN 1 AND 6',
+                        name='ck_bracket_size'),
+    )
+
+
+class BracketMatch(Base):
+    __tablename__ = 'bracket_matches'
+    match_id = Column(Integer, primary_key=True)
+    bracket_id = Column(Integer, nullable=False)
+    tournament_id = Column(Integer, nullable=False)
+    stage_id = Column(Integer, nullable=False)
+    round_count = Column(Integer, nullable=False)
+    round_index = Column(Integer, nullable=False)
+    position = Column(Integer, nullable=False)
+    next_round = Column(Integer, nullable=True)
+    next_position = Column(Integer, nullable=True)
+    next_slot = Column(Integer, nullable=True)
+    __table_args__ = (
+        ForeignKeyConstraint(['match_id', 'tournament_id', 'stage_id'],
+                             ['matches.match_id', 'matches.tournament_id', 'matches.stage_id'],
+                             name='fk_bracket_match_identity', ondelete='RESTRICT'),
+        ForeignKeyConstraint(['bracket_id', 'tournament_id', 'stage_id', 'round_count'],
+                             ['tournament_brackets.bracket_id', 'tournament_brackets.tournament_id',
+                              'tournament_brackets.stage_id', 'tournament_brackets.round_count'],
+                             name='fk_bracket_match_bracket', ondelete='RESTRICT'),
+        UniqueConstraint('bracket_id', 'round_index', 'position', name='uq_bracket_match_position'),
+        ForeignKeyConstraint(['bracket_id', 'next_round', 'next_position'],
+                             ['bracket_matches.bracket_id', 'bracket_matches.round_index', 'bracket_matches.position'],
+                             name='fk_bracket_match_destination', ondelete='RESTRICT'),
+        CheckConstraint('round_count BETWEEN 1 AND 6 AND round_index BETWEEN 1 AND round_count '
+                        'AND position BETWEEN 1 AND (1 << (round_count-round_index))',
+                        name='ck_bracket_match_position'),
+        CheckConstraint('(round_index = round_count AND next_round IS NULL AND next_position IS NULL AND next_slot IS NULL) '
+                        'OR (round_index < round_count AND next_round IS NOT NULL AND next_position IS NOT NULL '
+                        'AND next_slot IS NOT NULL AND next_round = round_index+1 '
+                        'AND next_position = (position+1)/2 AND next_slot = 1+((position-1)%2))',
+                        name='ck_bracket_match_destination'),
     )
 
 
