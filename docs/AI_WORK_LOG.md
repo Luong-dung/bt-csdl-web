@@ -24,6 +24,14 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W46-DUNG-003 — Sửa review PR #89 trước merge
+
+- **Ngày:** `2026-11-10`; **yêu cầu:** sửa nốt #89 rồi merge vào main.
+- **Góp ý DOANH:** thêm audience để tách preview/access token; capability chỉ là hint nên UI cần giải thích input bị chặn; guard lifecycle thuộc W46-02; constraint kích thước có thể giữ để dễ đọc.
+- **Đã sửa:** preview JWT bắt buộc `aud=bracket-preview` ở cả phát hành/verify. Bổ sung kiểm tra token thiếu/sai audience, dùng preview vào auth và dùng access token vào preview; cập nhật các test purpose/tournament/fingerprint để vẫn có audience đúng và kiểm tra đúng từng lỗi.
+- **Bàn giao:** lý do chặn tạo bracket ghi rõ ở contract cho W46-03/-04/-05; guard sửa/xóa/hủy đã được triển khai ở PR #90, giữ dependency trước API tạo. Giữ constraint tập kích thước tường minh theo góp ý không chặn; không sửa migration đã được review.
+- **Kiểm tra:** Local SQLite foundation/capability 115 passed; PostgreSQL foundation/migration/khóa 58 passed trên DB test riêng. CI [42822726943](https://github.com/Luong-dung/bt-csdl-web/actions/runs/42822726943) trên head sửa 2bdb29e đạt cả 3 job; PR #89 đã merge vào main tại 481cd69 ngày 10/11/2026 bằng merge commit. Không tự tạo approve thay reviewer; user đã yêu cầu sửa và merge PR này.
+
 ### AI-2026-W46-DUNG-002 — Kết quả và chuyển winner nguyên tử
 
 - **Người thực hiện/ngày:** DUNG, `2026-11-10`; **task:** [W46-02 / PR #90](https://github.com/Luong-dung/bt-csdl-web/pull/90); branch `feature/W46-02-bracket-results`, kế thừa `a8297a2` của PR #89 đã được DOANH approve nhưng chưa merge. PR W46-02 phụ thuộc #89, không merge vào nhánh nền rồi bỏ sót tích hợp main.
@@ -32,7 +40,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 - **Kiểm chứng:** SQLite toàn bộ `python -m pytest -q -p no:cacheprovider`: **760 passed, 77 skipped**. PostgreSQL chạy `--postgres -m postgres` trên DB `_test` riêng với basetemp riêng trong workspace: **48 passed**, gồm **32 ca API + 6 race W46-02 mới**, 10 race W45 kế thừa. Không chạy lại toàn bộ PostgreSQL local; CI sẽ chạy đầy đủ.
 - **Race mới:** hai bán kết cùng điền chung kết, hai kết quả cùng/khác nhau, result chung kết với hoàn tất giải, result với hủy giải, và thu hồi quyền trọng tài khi chờ lock. Dùng HTTP/connection độc lập, kiểm dữ liệu cuối và audit.
 - **Frontend:** build đạt; toàn bộ Browser E2E kế thừa **28 passed trong 248,83 giây**, API/UI thật trên DB test riêng. JUnit local `frontend/e2e-artifacts/w46-02-retest.xml` (gitignore). Không tính 28 ca kế thừa là test W46-02 mới. Warning anyio deprecation/cache pytest hiện có không gây test fail; server test đã dừng.
-- **Bàn giao:** DUC review W46-02. Chưa có API tạo/đọc bracket hoặc standings (W46-03/-04). Không tự merge PR; trạng thái `APPLIED`/task `REVIEW`, CI chờ kích hoạt.
+- **Bàn giao:** DUC review W46-02. Chưa có API tạo/đọc bracket hoặc standings (W46-03/-04). Không tự merge PR; trạng thái `APPLIED`/task `REVIEW`. CI [42820359290](https://github.com/Luong-dung/bt-csdl-web/actions/runs/42820359290) trên d7de278 đã xanh cả 3 job; nhánh đã đồng bộ main sau #89, CI head mới sẽ tự chạy khi push.
 
 ### AI-2026-W46-DUNG-001 — Nền tảng bracket
 
@@ -42,7 +50,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 - **Phạm vi chưa triển khai:** endpoint tạo/đọc bracket, standings và mutation chuyển winner/bảo vệ lifecycle thuộc W46-02/-03/-04. Không sửa dữ liệu nhánh đấu/standings lịch sử.
 - **Kiểm tra có mục tiêu:** PostgreSQL foundation/migration/khóa: 55 passed, gồm hai ca thu hồi quyền khi đang chờ khóa bằng connection độc lập. Nhóm migration hồi quy W45/roster/stage ở lượt trước: 66 passed. Schema SQL tham chiếu thực thi thành công trong schema tạm, rollback sau kiểm tra. Mọi kiểm tra PostgreSQL dùng DB `_test` riêng, không dùng DB ứng dụng.
 - **Kiểm tra toàn bộ:** SQLite toàn bộ: 728 passed/71 skipped (PostgreSQL-only); frontend build đạt; Browser E2E 28 passed trong 306,95 giây trên DB test riêng. Có warning deprecation anyio và hai warning quyền ghi cache pytest, không có test fail. PostgreSQL toàn bộ: 793 passed, 1 failed do tmp_path không truy cập được thư mục tạm Windows, 5 deselected; ca test_postgres_fixture_runs_new_head chạy lại với --basetemp mới trong workspace đã đạt (1 passed). Không sửa code vì lỗi môi trường; không ghi lượt local đầu là toàn bộ xanh. Nhóm W46-01 có mục tiêu đã đạt 55 ca. CI [42591351984](https://github.com/Luong-dung/bt-csdl-web/actions/runs/42591351984) trên code head bb3f4c9 đạt cả Backend tests, Frontend build và Browser E2E; commit bổ sung sau đó chỉ cập nhật tài liệu/bằng chứng. Báo cáo E2E local: frontend/e2e-artifacts/w46-retest.xml (gitignore).
-- **Reviewer:** DOANH — chờ; **trạng thái:** `APPLIED`, chưa nghiệm thu/DONE.
+- **Reviewer:** DOANH approve nền a8297a2; bản sửa audience theo góp ý được user yêu cầu merge sau CI. PR #89 đã merge main tại 481cd69; **trạng thái:** `VERIFIED`, task W46-01 `DONE`.
 
 ### Chạy lại giao diện W45 ngày 2026-11-09
 
