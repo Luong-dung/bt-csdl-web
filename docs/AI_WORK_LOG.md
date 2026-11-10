@@ -26,7 +26,7 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ### AI-2026-W46-DUNG-002 — Kết quả và chuyển winner nguyên tử
 
-- **Người thực hiện/ngày:** DUNG, `2026-11-10`; **task:** W46-02; branch `feature/W46-02-bracket-results`, kế thừa `a8297a2` của PR #89 đã được DOANH approve nhưng chưa merge. PR W46-02 phụ thuộc #89, không merge vào nhánh nền rồi bỏ sót tích hợp main.
+- **Người thực hiện/ngày:** DUNG, `2026-11-10`; **task:** [W46-02 / PR #90](https://github.com/Luong-dung/bt-csdl-web/pull/90); branch `feature/W46-02-bracket-results`, kế thừa `a8297a2` của PR #89 đã được DOANH approve nhưng chưa merge. PR W46-02 phụ thuộc #89, không merge vào nhánh nền rồi bỏ sót tích hợp main.
 - **Yêu cầu:** tiếp tục công việc tuần; triển khai result/slot/audit và guard lifecycle theo contract W46.
 - **Đã áp dụng:** dùng helper khóa giải→source/đích theo ID và recheck quyền; chốt kết quả, điền đúng slot và audit chung transaction; replay chỉ đọc/kiểm tra nhất quán, không tự sửa slot; bảo vệ PATCH/DELETE/CANCEL managed matches; chặn match thủ công vào stage bracket; guard COMPLETED giải và capability tương ứng; cấm đổi format sau tạo bracket. Không tự hoàn tất giải hoặc áp dụng legacy next_match_id như managed edge.
 - **Kiểm chứng:** SQLite toàn bộ `python -m pytest -q -p no:cacheprovider`: **760 passed, 77 skipped**. PostgreSQL chạy `--postgres -m postgres` trên DB `_test` riêng với basetemp riêng trong workspace: **48 passed**, gồm **32 ca API + 6 race W46-02 mới**, 10 race W45 kế thừa. Không chạy lại toàn bộ PostgreSQL local; CI sẽ chạy đầy đủ.
