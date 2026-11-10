@@ -41,7 +41,7 @@ Module `backend/core/brackets.py`; caller sở hữu transaction, helper không 
 | `lock_bracket_context(db,tid,user)` | Chặn quyền trước chờ, khóa giải, tải lại user/assignment rồi kiểm tra quyền; trả tournament/user. Chưa chặn bracket tồn tại để caller xử lý replay |
 | `ensure_bracket_input(db,tournament,data)` | 409 lifecycle/format/roster/stage có trận; 422 stage sai giải, thiếu/thừa đội APPROVED, game sai hoặc thiếu PLAYER snapshot; trả fingerprint live input hợp lệ |
 | `bracket_plan(data)` | N−1 node theo round/position tăng dần, vòng đầu cặp liền kề, vòng sau TBD, cạnh/slot rõ ràng; không ghi DB |
-| `issue_preview_token(tid,fingerprint)` | JWT HS256 có purpose riêng, giải, fingerprint và hạn 15 phút; không phải access token |
+| `issue_preview_token(tid,fingerprint)` | JWT HS256 có purpose riêng, audience `bracket-preview` bắt buộc, giải, fingerprint và hạn 15 phút; không phải access token |
 | `verify_preview_token(token,tid,fingerprint)` | Token sai/hết hạn/khác giải/khác fingerprint → 409; không thay validation live |
 | `lock_bracket_match_context(db,tid,mid,user,checker)` | Dành W46-02: kiểm quyền trước chờ, khóa giải, tải metadata rồi khóa source/đích theo match_id tăng dần, đọc lại actor/match và kiểm quyền; trả `(tournament,match,destination_or_None,user)`; match thủ công/legacy không truyền đích |
 
@@ -58,6 +58,7 @@ Các route dưới đây **chưa triển khai trong W46-01**; W46-03/-04 phải 
 - Bảng hạng chỉ tính COMPLETED managed matches: đội chưa loại rank NULL, thua vòng R đội hạng R/2+1; winner chung kết hạng 1; không tự chia hạng 3/4. Chung kết COMPLETED và giải không CANCELLED → FINAL. Mỗi public response phải đọc một snapshot nhất quán (một SELECT dữ liệu nguồn, hoặc transaction REPEATABLE READ ngay từ đầu); không ghép các commit khác nhau.
 - Lỗi theo FastAPI: 401 auth → 422 body → 404 tài nguyên → 403 quyền → 409 lifecycle/existing/preview → 422 liên kết. Validation payload chạy trước handler; helper đầu vào kiểm lifecycle trước liên kết. Create replay vẫn kiểm quyền hiện tại; không phải đường ghi mới vào giải kết thúc.
 - Capability giải hiện đã có **`can_create_bracket`**, luôn `private, no-store`; UI dùng để hiển thị preview/tạo, API phải enforce lại. Referee đúng assignment vẫn không được tạo; đội của người gọi không tự cấp quyền.
+- W46-03/-04/-05 cần cho người dùng biết lý do không thể tạo (số đội không hỗ trợ, không có stage trống, đội chưa đủ điều kiện). Không coi capability hint là bằng chứng input hợp lệ; không chỉ hiển thị nút rồi bỏ qua lỗi 409/422. Góp ý review #89 được chuyển tiếp rõ sang phần API/UI này.
 - Response preview/create cũng phải `Cache-Control: private, no-store` khi W46-03 nối route, vì có token và dữ liệu quản lý; GET công khai không trả preview token.
 
 ## 6. Bàn giao W46-02

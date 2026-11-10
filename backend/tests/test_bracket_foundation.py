@@ -208,9 +208,11 @@ def test_direct_writes_reject_foreign_match_and_duplicate_bracket(access, sessio
         db.rollback()
 
 
-@pytest.mark.parametrize('kind', ['expired', 'wrong_purpose', 'wrong_tournament', 'wrong_fingerprint', 'tampered'])
+@pytest.mark.parametrize('kind', ['expired', 'wrong_purpose', 'wrong_tournament', 'wrong_fingerprint', 'tampered',
+                                 'wrong_audience', 'missing_audience'])
 def test_preview_cannot_be_reused_outside_snapshot(kind):
-    payload = dict(purpose='bracket-preview-v1', tid=1, fingerprint='abc', exp=datetime.now(timezone.utc)+timedelta(minutes=15))
+    payload = dict(purpose='bracket-preview-v1', aud='bracket-preview', tid=1, fingerprint='abc',
+                   exp=datetime.now(timezone.utc)+timedelta(minutes=15))
     if kind == 'expired':
         payload['exp'] = datetime.now(timezone.utc)-timedelta(seconds=1)
     elif kind == 'wrong_purpose':
@@ -219,9 +221,26 @@ def test_preview_cannot_be_reused_outside_snapshot(kind):
         payload['tid'] = 2
     elif kind == 'wrong_fingerprint':
         payload['fingerprint'] = 'def'
+    elif kind == 'wrong_audience':
+        payload['aud'] = 'access'
+    elif kind == 'missing_audience':
+        del payload['aud']
     token = jwt.encode(payload, get_settings().JWT_SECRET, algorithm='HS256')
     if kind == 'tampered':
         token = 'invalid.'+token
+    with pytest.raises(HTTPException) as error:
+        verify_preview_token(token, 1, 'abc')
+    assert error.value.status_code == 409
+
+
+def test_preview_and_access_tokens_cannot_be_substituted(access):
+    client, headers, *_ = access
+    preview = issue_preview_token(1, 'abc')
+    payload = jwt.decode(preview, get_settings().JWT_SECRET, algorithms=['HS256'], audience='bracket-preview')
+    assert payload['aud'] == 'bracket-preview'
+    verify_preview_token(preview, 1, 'abc')
+    assert client.get('/api/v1/auth/me', headers={'Authorization': 'Bearer '+preview}).status_code == 401
+    token = headers('organizer')['Authorization'].removeprefix('Bearer ')
     with pytest.raises(HTTPException) as error:
         verify_preview_token(token, 1, 'abc')
     assert error.value.status_code == 409

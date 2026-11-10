@@ -24,6 +24,14 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W46-DUNG-003 — Sửa review PR #89 trước merge
+
+- **Ngày:** `2026-11-10`; **yêu cầu:** sửa nốt #89 rồi merge vào main.
+- **Góp ý DOANH:** thêm audience để tách preview/access token; capability chỉ là hint nên UI cần giải thích input bị chặn; guard lifecycle thuộc W46-02; constraint kích thước có thể giữ để dễ đọc.
+- **Đã sửa:** preview JWT bắt buộc `aud=bracket-preview` ở cả phát hành/verify. Bổ sung kiểm tra token thiếu/sai audience, dùng preview vào auth và dùng access token vào preview; cập nhật các test purpose/tournament/fingerprint để vẫn có audience đúng và kiểm tra đúng từng lỗi.
+- **Bàn giao:** lý do chặn tạo bracket ghi rõ ở contract cho W46-03/-04/-05; guard sửa/xóa/hủy đã được triển khai ở PR #90, giữ dependency trước API tạo. Giữ constraint tập kích thước tường minh theo góp ý không chặn; không sửa migration đã được review.
+- **Kiểm tra:** Local SQLite foundation/capability 115 passed; PostgreSQL foundation/migration/khóa 58 passed trên DB test riêng. CI trên head mới chờ chạy, cập nhật kết quả trong PR #89 trước merge. Không tự tạo approve thay reviewer; user đã yêu cầu sửa và merge PR này.
+
 ### AI-2026-W46-DUNG-001 — Nền tảng bracket
 
 - **Người thực hiện/ngày:** DUNG, `2026-11-09`; **task:** W46-01; branch `feature/W46-01-bracket-foundation`, [PR #89](https://github.com/Luong-dung/bt-csdl-web/pull/89), nền `8b0796f` sau PR #88.

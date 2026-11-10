@@ -18,6 +18,7 @@ from modules.tournaments.bracket_schemas import BracketInput, BracketPlanMatch
 from modules.tournaments.models import BracketMatch, Match, Tournament, TournamentBracket, TournamentRegistration, TournamentRoster
 
 PREVIEW_TTL_SECONDS = 900
+PREVIEW_AUDIENCE = 'bracket-preview'
 
 
 def get_bracket(db: Session, tournament_id: int) -> TournamentBracket | None:
@@ -140,7 +141,8 @@ def bracket_plan(data: BracketInput) -> list[BracketPlanMatch]:
 
 
 def issue_preview_token(tournament_id: int, fingerprint: str) -> str:
-    return jwt.encode({'purpose': 'bracket-preview-v1', 'tid': tournament_id, 'fingerprint': fingerprint,
+    return jwt.encode({'purpose': 'bracket-preview-v1', 'aud': PREVIEW_AUDIENCE,
+                       'tid': tournament_id, 'fingerprint': fingerprint,
                        'exp': datetime.now(timezone.utc)+timedelta(seconds=PREVIEW_TTL_SECONDS)},
                       get_settings().JWT_SECRET, algorithm='HS256')
 
@@ -148,7 +150,8 @@ def issue_preview_token(tournament_id: int, fingerprint: str) -> str:
 def verify_preview_token(token: str, tournament_id: int, fingerprint: str) -> None:
     try:
         payload = jwt.decode(token, get_settings().JWT_SECRET, algorithms=['HS256'],
-                             options={'require': ['purpose', 'tid', 'fingerprint', 'exp']})
+                             audience=PREVIEW_AUDIENCE,
+                             options={'require': ['purpose', 'aud', 'tid', 'fingerprint', 'exp']})
     except jwt.InvalidTokenError:
         raise HTTPException(409, 'Preview hết hạn hoặc không hợp lệ, hãy xem lại bracket') from None
     if (payload['purpose'] != 'bracket-preview-v1' or payload['tid'] != tournament_id
