@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.audit import record_audit
+from core.brackets import ensure_manual_stage, managed_match
 from core.matches import (
     as_utc, can_cancel_match, can_manage_matches, can_start_match, can_submit_result, ensure_match_teams,
     ensure_match_writable_tournament, ensure_stage_in_tournament, get_match_or_404, lock_match_context,
@@ -156,6 +157,7 @@ def create_match(tournament_id: ResourceId, data: MatchCreate,
         tournament = get_managed_tournament(db, tournament_id, user)
         ensure_match_writable_tournament(tournament)
         ensure_stage_in_tournament(db, tournament_id, data.stage_id)
+        ensure_manual_stage(db, data.stage_id)
         ensure_match_teams(db, tournament, data.team1_id, data.team2_id)
         match = Match(**data.model_dump(exclude={'scheduled_at'}), tournament_id=tournament_id,
                       scheduled_at=to_utc(data.scheduled_at), status='PENDING', score_team1=0, score_team2=0)
@@ -180,10 +182,13 @@ def update_match(tournament_id: ResourceId, match_id: ResourceId, data: MatchUpd
         tournament, match, user = lock_match_context(db, tournament_id, match_id, user, can_manage_match)
         ensure_schedule_writable(db, tournament, match)
         changes = data.model_dump(exclude_unset=True)
+        if managed_match(db, match_id) is not None and set(changes) - {'scheduled_at'}:
+            raise HTTPException(409, 'Trận thuộc bracket chỉ được sửa lịch thi đấu')
         if 'scheduled_at' in changes:
             changes['scheduled_at'] = to_utc(changes['scheduled_at'])
         if 'stage_id' in changes:
             ensure_stage_in_tournament(db, tournament_id, changes['stage_id'])
+            ensure_manual_stage(db, changes['stage_id'])
         if 'team1_id' in changes or 'team2_id' in changes:
             team1_id, team2_id = changes.get('team1_id', match.team1_id), changes.get('team2_id', match.team2_id)
             if team1_id is None or team2_id is None:
@@ -210,6 +215,8 @@ def delete_match(tournament_id: ResourceId, match_id: ResourceId,
     with match_write(db):
         tournament, match, user = lock_match_context(db, tournament_id, match_id, user, can_manage_match)
         ensure_schedule_writable(db, tournament, match)
+        if managed_match(db, match_id) is not None:
+            raise HTTPException(409, 'Không xóa từng trận trong bracket')
         before = match_state(match)
         db.delete(match)
         db.flush()
@@ -251,6 +258,8 @@ def change_match_status(tournament_id: ResourceId, match_id: ResourceId, data: M
     checker = can_start_match if data.status == 'ONGOING' else can_cancel_match
     with match_write(db):
         tournament, match, user = lock_match_context(db, tournament_id, match_id, user, checker)
+        if data.status == 'CANCELLED' and managed_match(db, match_id) is not None:
+            raise HTTPException(409, 'Không hủy từng trận trong bracket; hãy hủy cả giải nếu cần')
         before = match_state(match)
         action = (start_match(db, tournament, match) if data.status == 'ONGOING'
                   else cancel_match(tournament, match))
@@ -273,12 +282,13 @@ def match_capabilities(tournament_id: ResourceId, match_id: ResourceId,
     match = get_match_or_404(db, tournament_id, match_id)
     editable = (can_manage_matches(tournament, user) and match_editable(tournament, match)
                 and not has_bracket_link(db, match))
+    managed = managed_match(db, match_id) is not None
     return MatchCapabilities(
         match_id=match_id,
         can_update=editable,
-        can_delete=editable,
+        can_delete=editable and not managed,
         can_start=match_startable(tournament, match) and can_start_match(db, tournament, match, user),
         can_submit_result=match_result_open(tournament, match) and can_submit_result(db, tournament, match, user),
-        can_cancel=match_cancellable(tournament, match) and can_cancel_match(db, tournament, match, user),
-        editable_fields=EDITABLE_FIELDS if editable else [],
+        can_cancel=not managed and match_cancellable(tournament, match) and can_cancel_match(db, tournament, match, user),
+        editable_fields=(['scheduled_at'] if managed else EDITABLE_FIELDS) if editable else [],
     )

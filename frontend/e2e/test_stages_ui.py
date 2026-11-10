@@ -1,9 +1,18 @@
 import json
 import re
+from time import monotonic
 from playwright.sync_api import Browser, Page, expect
 
 from helpers import create_team, login, register_user, unique_username
 from test_tournaments import create_tournament, open_tournament, refresh_tournament
+
+
+def wait_for_held_request(page: Page, requests: list):
+    # Pump Playwright events until the route handler actually holds the request.
+    deadline = monotonic() + 10
+    while not requests and monotonic() < deadline:
+        page.wait_for_timeout(50)
+    assert requests, "Expected request was not intercepted within 10 seconds"
 
 
 def test_stage_crud_and_reorder_ui(page: Page, browser: Browser, app_base_url: str, demo_password: str):
@@ -213,8 +222,7 @@ def test_session_switch_anti_stale_response_guard(
         ).click()
 
         # Wait until Organizer A's capabilities request is captured in held_capabilities
-        page.wait_for_timeout(300)
-        assert len(held_capabilities) >= 1
+        wait_for_held_request(page, held_capabilities)
 
         # While Organizer A's requests are in-flight, Organizer A logs out
         page.get_by_role("button", name="Đăng xuất").click()
@@ -298,7 +306,7 @@ def test_post_registration_session_switch_guard(
     try:
         # Manager A submits registration
         reg_form.get_by_role("button", name="Gửi đơn đăng ký").click()
-        page.wait_for_timeout(300)
+        wait_for_held_request(page, held_posts)
         assert len(held_posts) == 1
 
         # While Manager A's POST request is still in-flight, Manager A logs out
@@ -371,7 +379,7 @@ def test_stage_mutation_session_switch_guard(
     try:
         # Organizer A submits stage creation
         create_form.get_by_role("button", name="Lưu vòng đấu").click()
-        page.wait_for_timeout(300)
+        wait_for_held_request(page, held_posts)
         assert len(held_posts) == 1
 
         # While Organizer A's POST request is still in-flight, Organizer A logs out
@@ -452,7 +460,7 @@ def test_stage_load_session_switch_anti_stale_guard(
         ).click()
 
         # Wait until Organizer A's GET /stages request is captured
-        page.wait_for_timeout(300)
+        wait_for_held_request(page, held_stage_gets)
         assert len(held_stage_gets) == 1
 
         # 5. While Organizer A's GET request is in-flight, Organizer A logs out

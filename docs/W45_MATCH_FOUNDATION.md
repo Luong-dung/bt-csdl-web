@@ -141,6 +141,6 @@ Các cờ đã gộp quyền và vòng đời hiện tại, chỉ là gợi ý c
 ## 6. Giới hạn đã biết
 
 - `scheduled_at` không chống trùng lịch (chưa có thời lượng/sân).
-- `change_tournament_status` chưa chặn kết thúc/hủy giải khi còn trận PENDING/ONGOING. Các trận đó không thể ghi kết quả hoặc hủy sau khi giải kết thúc; người quản lý cần xử lý trận trước khi đóng giải. W45 chưa bổ sung điều kiện đóng giải.
+- W45 chưa chặn kết thúc giải khi còn trận dở. **Cập nhật W46-02:** chuyển COMPLETED bị 409 nếu còn PENDING/ONGOING; giải có bracket còn cần đủ các trận COMPLETED và chung kết có winner hợp lệ. CANCELLED giữ nguyên lịch sử trận dở và chặn ghi tiếp; replay kết quả đã chốt vẫn chỉ đọc, không sửa dữ liệu.
 - FK team của `matches` trong model không có ON DELETE; `schema_postgres.sql` ghi SET NULL. Đội đang có đăng ký bị chặn xóa bởi FK RESTRICT của `tournament_registrations`; nếu SET NULL chạm trận COMPLETED thì `ck_matches_winner_team` chặn. Theo dõi cùng mục FK khi có tính năng xóa giải/đội.
 - Kiểm tra bản sửa review ngày 2026-11-05: SQLite toàn bộ 557 passed/57 skipped; PostgreSQL foundation/migration 39 passed trên database tạm riêng (đã xóa sau test). Toàn bộ PostgreSQL và frontend/E2E chờ CI trên head mới.

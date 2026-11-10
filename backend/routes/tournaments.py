@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
+from core.brackets import get_bracket, tournament_completion_error
 from core.rosters import approved_teams_without_player
 from core.tournaments import get_managed_tournament, get_tournament_or_404
 from middleware.auth import get_current_user, require_role
@@ -36,11 +37,13 @@ TRANSITIONS = {
 ONGOING_EDITABLE = {"name", "description", "end_date"}
 
 
-def status_transitions(tournament: Tournament) -> set[str]:
-    """Starting requires a locked roster; legacy ONGOING tournaments keep their transitions."""
+def status_transitions(tournament: Tournament, db: Session) -> set[str]:
+    """Hints share the start/finish lifecycle gates enforced by status mutations."""
     allowed = set(TRANSITIONS[tournament.status])
     if tournament.status == "UPCOMING" and tournament.roster_locked_at is None:
         allowed.discard("ONGOING")
+    if 'COMPLETED' in allowed and tournament_completion_error(db, tournament):
+        allowed.discard('COMPLETED')
     return allowed
 REQUIRED_FIELDS = {"name", "game_id", "format", "start_date"}
 
@@ -200,6 +203,8 @@ def update_tournament(
 ):
     tournament = get_managed_tournament(db, tournament_id, user)
     changes = data.model_dump(exclude_unset=True)
+    if changes.get('format', tournament.format) != tournament.format and get_bracket(db, tournament_id) is not None:
+        raise HTTPException(409, detail='Không đổi thể thức khi đã tạo bracket')
     if changes.get("game_id", tournament.game_id) != tournament.game_id:
         registration = db.scalar(select(TournamentRegistration.registration_id).where(
             TournamentRegistration.tournament_id == tournament_id,
@@ -244,6 +249,10 @@ def change_tournament_status(
         if missing:
             raise HTTPException(status_code=409,
                                 detail=f"Đội đã duyệt chưa có tuyển thủ PLAYER trong đội hình: {missing}")
+    if data.status == 'COMPLETED':
+        reason = tournament_completion_error(db, tournament)
+        if reason:
+            raise HTTPException(409, detail=reason)
     before = {"status": tournament.status}
     tournament.status = data.status
     return commit_tournament(db, tournament, user, "TOURNAMENT_STATUS_CHANGED", before, {"status": data.status})

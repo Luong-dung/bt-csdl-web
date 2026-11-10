@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.matches import matches_writable
-from core.brackets import can_create_bracket
+from core.brackets import can_create_bracket, get_bracket
 from core.tournament_policy import registration_resolution_open, registrations_open, stages_editable
 from core.validation import ResourceId
 from middleware.auth import (
@@ -81,10 +81,12 @@ def tournament_capabilities(
     if tournament is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy giải đấu")
     allowed = can_manage_tournament(tournament, user)
-    transitions = sorted(status_transitions(tournament)) if allowed else []
+    transitions = sorted(status_transitions(tournament, db)) if allowed else []
     fields = []
     if transitions:
         fields = sorted(ONGOING_EDITABLE if tournament.status == "ONGOING" else TournamentUpdate.model_fields)
+        if get_bracket(db, tournament_id) is not None and 'format' in fields:
+            fields.remove('format')
     return TournamentCapabilities(
         tournament_id=tournament_id,
         can_manage=allowed,

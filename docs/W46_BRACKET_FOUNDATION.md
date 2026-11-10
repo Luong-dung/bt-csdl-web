@@ -1,6 +1,6 @@
 # W46-01 — Nền tảng bracket và contract bàn giao
 
-Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability; **chưa có endpoint tạo/đọc bracket hoặc tự chuyển winner**. W46-02/-03/-04 nối các phần đó sau review/merge nền tảng.
+Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability. **Cập nhật W46-02:** result API đã chuyển winner theo metadata và bảo vệ lifecycle, xem mục 7. Endpoint tạo/đọc bracket và standings vẫn thuộc W46-03/-04, chưa có trong W46-02.
 
 ## 1. Khảo sát và lựa chọn dữ liệu
 
@@ -67,5 +67,16 @@ Các route dưới đây **chưa triển khai trong W46-01**; W46-03/-04 phải 
 - Result + slot winner + audit cùng transaction, lỗi bất kỳ bước rollback cả ba. Replay cùng kết quả kiểm state đã nhất quán, không thêm audit/đội; khác kết quả 409. Slot khác đội hoặc đích không còn PENDING khi cần điền → 409.
 - Bảo vệ API/capability W45 với match có metadata: chỉ sửa scheduled_at khi PENDING; cấm xóa/hủy và đổi stage/round/đội. Chặn tạo match thủ công vào stage đã có header, kể cả trước khi đọc node.
 - Guard COMPLETED giải phải xét toàn bộ trận dở và chung kết bracket; CANCELLED giữ lịch sử và chặn ghi. Không tự hoàn tất giải khi ghi kết quả chung kết.
-- Đây là phần việc W46-02, chưa có enforcement trong lifecycle/result API của W46-01. Không đưa bracket vào sử dụng qua SQL hoặc route ngoài contract trước khi các guard này được tích hợp.
+- W46-01 ban đầu chỉ bàn giao contract, chưa enforce các guard này. W46-02 đã tích hợp vào result/lifecycle API theo mục 7; việc đưa route tạo vào sử dụng phải chờ các PR phụ thuộc được review/merge.
 - PR tạo bracket W46-03 phải ghi dependency vào các guard W46-02 và không merge route tạo trước guard. Có thể dựng preview/read và test độc lập trên branch trong lúc chờ; không để bracket đã tạo đi qua mutation W45 chưa được bảo vệ.
+
+## 7. Triển khai W46-02 — kết quả và lifecycle
+
+- Vẫn dùng `PUT /api/v1/tournaments/{tid}/matches/{mid}/result`, body/MatchRead W45 giữ contract. `lock_bracket_match_context` khóa giải rồi source/đích theo match_id tăng dần, tải lại actor và quyền sau chờ. Legacy `next_match_id` không làm phát sinh chuyển đội.
+- Source result + đúng slot đích + một audit `MATCH_RESULT_SUBMITTED` nằm trong một transaction. Lỗi audit, FK hoặc commit rollback cả ba. Chi tiết audit cũ giữ nguyên; match managed thêm `bracket_id` và `advancement={match_id,slot,before,after}`; chung kết `advancement=null`.
+- Ghi mới chỉ khi giải/trận ONGOING. Đích phải PENDING, slot rỗng hoặc đã chứa cùng winner và slot còn lại không chứa chính winner. Không tự bắt đầu trận đích, không tự hoàn tất giải.
+- Replay cùng kết quả trả 200, không audit/điền lại slot; đích đã bắt đầu vẫn replay được khi slot còn đúng winner. Slot bị mất/đổi thì 409, không tự sửa lại. Replay nhất quán sau COMPLETED/CANCELLED của giải là đọc thuần túy, vẫn kiểm quyền hiện tại; ghi kết quả mới bị chặn.
+- Managed match chỉ PATCH `scheduled_at` khi PENDING; cấm mọi field cấu trúc kể cả gửi lại cùng giá trị, cấm DELETE và POST status CANCELLED. Capability trả `can_delete=false`, `can_cancel=false`, `editable_fields=["scheduled_at"]` khi còn sửa được; TBD không có `can_start`.
+- Chặn POST match thủ công vào stage đã có header bracket và PATCH match thủ công sang stage đó bằng 409 trước khi ghi. Không dựa vào FK để biến lỗi thành 500. Cấm đổi format giải sau khi có bracket; capability giải bỏ field format tương ứng.
+- Guard COMPLETED áp dụng mọi giải: không còn match PENDING/ONGOING ở bất cứ stage nào. Nếu có bracket, cần đủ N−1 metadata/match COMPLETED và một chung kết có winner hợp lệ; bracket thiếu node hoặc có trận CANCELLED bị chặn. `allowed_status_transitions` dùng cùng checker để ẩn COMPLETED khi chưa đạt. CANCELLED giữ nguyên trạng thái lịch sử của từng match và chặn ghi tiếp.
+- Kiểm thử mới: 32 ca API và 6 ca PostgreSQL race bằng connection độc lập (hai bán kết, replay cùng/khác kết quả, chung kết/hoàn tất giải, hủy giải/kết quả, thu hồi trọng tài khi chờ). Coverage W45 được ghi riêng trong bảng tuần/work log.
