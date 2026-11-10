@@ -24,6 +24,16 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W46-DUNG-002 — Kết quả và chuyển winner nguyên tử
+
+- **Người thực hiện/ngày:** DUNG, `2026-11-10`; **task:** W46-02; branch `feature/W46-02-bracket-results`, kế thừa `a8297a2` của PR #89 đã được DOANH approve nhưng chưa merge. PR W46-02 phụ thuộc #89, không merge vào nhánh nền rồi bỏ sót tích hợp main.
+- **Yêu cầu:** tiếp tục công việc tuần; triển khai result/slot/audit và guard lifecycle theo contract W46.
+- **Đã áp dụng:** dùng helper khóa giải→source/đích theo ID và recheck quyền; chốt kết quả, điền đúng slot và audit chung transaction; replay chỉ đọc/kiểm tra nhất quán, không tự sửa slot; bảo vệ PATCH/DELETE/CANCEL managed matches; chặn match thủ công vào stage bracket; guard COMPLETED giải và capability tương ứng; cấm đổi format sau tạo bracket. Không tự hoàn tất giải hoặc áp dụng legacy next_match_id như managed edge.
+- **Kiểm chứng:** SQLite toàn bộ `python -m pytest -q -p no:cacheprovider`: **760 passed, 77 skipped**. PostgreSQL chạy `--postgres -m postgres` trên DB `_test` riêng với basetemp riêng trong workspace: **48 passed**, gồm **32 ca API + 6 race W46-02 mới**, 10 race W45 kế thừa. Không chạy lại toàn bộ PostgreSQL local; CI sẽ chạy đầy đủ.
+- **Race mới:** hai bán kết cùng điền chung kết, hai kết quả cùng/khác nhau, result chung kết với hoàn tất giải, result với hủy giải, và thu hồi quyền trọng tài khi chờ lock. Dùng HTTP/connection độc lập, kiểm dữ liệu cuối và audit.
+- **Frontend:** build đạt; toàn bộ Browser E2E kế thừa **28 passed trong 248,83 giây**, API/UI thật trên DB test riêng. JUnit local `frontend/e2e-artifacts/w46-02-retest.xml` (gitignore). Không tính 28 ca kế thừa là test W46-02 mới. Warning anyio deprecation/cache pytest hiện có không gây test fail; server test đã dừng.
+- **Bàn giao:** DUC review W46-02. Chưa có API tạo/đọc bracket hoặc standings (W46-03/-04). Không tự merge PR; trạng thái `APPLIED`/task `REVIEW`, CI chờ kích hoạt.
+
 ### AI-2026-W46-DUNG-001 — Nền tảng bracket
 
 - **Người thực hiện/ngày:** DUNG, `2026-11-09`; **task:** W46-01; branch `feature/W46-01-bracket-foundation`, [PR #89](https://github.com/Luong-dung/bt-csdl-web/pull/89), nền `8b0796f` sau PR #88.

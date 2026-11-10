@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.settings import get_settings
-from core.matches import as_utc, ensure_stage_in_tournament, get_match_or_404
+from core.matches import as_utc, ensure_stage_in_tournament, get_match_or_404, match_state
 from core.tournaments import get_tournament_or_404, lock_tournament_as
 from middleware.auth import can_manage_tournament
 from modules.identity.models import User
@@ -27,6 +27,53 @@ def get_bracket(db: Session, tournament_id: int) -> TournamentBracket | None:
 def managed_match(db: Session, match_id: int) -> BracketMatch | None:
     """Do not infer managed membership from legacy next_match_id."""
     return db.get(BracketMatch, match_id)
+
+
+def ensure_manual_stage(db: Session, stage_id: int) -> None:
+    if db.scalar(select(TournamentBracket.bracket_id).where(TournamentBracket.stage_id == stage_id)) is not None:
+        raise HTTPException(409, 'Không thêm hoặc chuyển trận thủ công vào stage của bracket')
+
+
+def advance_bracket_winner(db: Session, match: Match, destination: Match | None, winner_id: int,
+                           replay: bool = False) -> dict | None:
+    """Caller holds tournament and both match locks. Replay verifies, never repairs a slot."""
+    node = managed_match(db, match.match_id)
+    if node is None or node.next_round is None:
+        return None
+    if destination is None:
+        raise HTTPException(409, 'Bracket thiếu trận đích')
+    field = 'team1_id' if node.next_slot == 1 else 'team2_id'
+    existing = getattr(destination, field)
+    if replay:
+        if existing != winner_id:
+            raise HTTPException(409, 'Kết quả và đội ở trận sau không nhất quán')
+        return None
+    other = destination.team2_id if node.next_slot == 1 else destination.team1_id
+    if destination.status != 'PENDING' or existing not in (None, winner_id) or other == winner_id:
+        raise HTTPException(409, 'Không thể điền đội thắng vào trận sau đã thay đổi')
+    before = match_state(destination)
+    setattr(destination, field, winner_id)
+    return {'match_id': destination.match_id, 'slot': node.next_slot,
+            'before': before, 'after': match_state(destination)}
+
+
+def tournament_completion_error(db: Session, tournament: Tournament) -> str | None:
+    """Shared by the status mutation and its capability, after parent lock on writes."""
+    tid = tournament.tournament_id
+    if db.scalar(select(Match.match_id).where(Match.tournament_id == tid,
+                                             Match.status.in_(['PENDING', 'ONGOING'])).limit(1)) is not None:
+        return 'Cần xử lý hết các trận chưa kết thúc trước khi hoàn tất giải'
+    bracket = get_bracket(db, tid)
+    if bracket is not None:
+        rows = db.execute(select(BracketMatch.round_index, Match.status, Match.winner_id, Match.team1_id, Match.team2_id)
+                          .join(Match, Match.match_id == BracketMatch.match_id)
+                          .where(BracketMatch.bracket_id == bracket.bracket_id)).all()
+        finals = [r for r in rows if r.round_index == bracket.round_count]
+        if (len(rows) != bracket.team_count-1 or any(r.status != 'COMPLETED' for r in rows)
+                or len(finals) != 1 or finals[0].winner_id is None
+                or finals[0].winner_id not in (finals[0].team1_id, finals[0].team2_id)):
+            return 'Bracket chưa đầy đủ hoặc chưa có kết quả chung kết hợp lệ'
+    return None
 
 
 def can_create_bracket(db: Session, tournament: Tournament, user: User) -> bool:
