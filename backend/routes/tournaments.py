@@ -203,8 +203,6 @@ def update_tournament(
 ):
     tournament = get_managed_tournament(db, tournament_id, user)
     changes = data.model_dump(exclude_unset=True)
-    if changes.get('format', tournament.format) != tournament.format and get_bracket(db, tournament_id) is not None:
-        raise HTTPException(409, detail='Không đổi thể thức khi đã tạo bracket')
     if changes.get("game_id", tournament.game_id) != tournament.game_id:
         registration = db.scalar(select(TournamentRegistration.registration_id).where(
             TournamentRegistration.tournament_id == tournament_id,
@@ -215,6 +213,8 @@ def update_tournament(
         raise HTTPException(status_code=409, detail="Giải đấu đã kết thúc hoặc bị hủy, không thể chỉnh sửa")
     if tournament.status == "ONGOING" and set(changes) - ONGOING_EDITABLE:
         raise HTTPException(status_code=409, detail="Giải đang diễn ra chỉ được sửa tên, mô tả và ngày kết thúc")
+    if changes.get('format', tournament.format) != tournament.format and get_bracket(db, tournament_id) is not None:
+        raise HTTPException(409, detail='Không đổi thể thức khi đã tạo bracket')
     if changes.get("start_date", tournament.start_date) != tournament.start_date and changes["start_date"] < date.today():
         raise HTTPException(status_code=422, detail="Ngày bắt đầu không được ở quá khứ")
     end_date = changes.get("end_date", tournament.end_date)

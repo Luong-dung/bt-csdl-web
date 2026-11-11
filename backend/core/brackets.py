@@ -35,10 +35,12 @@ def ensure_manual_stage(db: Session, stage_id: int) -> None:
         raise HTTPException(409, 'Không thêm hoặc chuyển trận thủ công vào stage của bracket')
 
 
-def advance_bracket_winner(db: Session, match: Match, destination: Match | None, winner_id: int,
+def advance_bracket_winner(node: BracketMatch | None, destination: Match | None, winner_id: int,
                            replay: bool = False) -> dict | None:
-    """Caller holds tournament and both match locks. Replay verifies, never repairs a slot."""
-    node = managed_match(db, match.match_id)
+    """Caller holds tournament and both match locks and passes the source's metadata (or None).
+
+    Replay verifies, never repairs a slot.
+    """
     if node is None or node.next_round is None:
         return None
     if destination is None:

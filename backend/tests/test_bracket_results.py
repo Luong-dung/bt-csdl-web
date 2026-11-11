@@ -252,6 +252,17 @@ def test_format_cannot_change_after_bracket_creation(access, session_factory, br
     assert 'format' not in caps['editable_fields']
 
 
+@pytest.mark.parametrize('status', ['COMPLETED', 'CANCELLED'])
+def test_terminal_tournament_reports_lifecycle_before_bracket_format(access, session_factory, bracket_results, status):
+    client, headers, *_ = access
+    ids = bracket_results
+    with session_factory.begin() as db:
+        db.get(Tournament, ids['tid']).status = status
+    response = client.patch(f"/api/v1/tournaments/{ids['tid']}", headers=headers('organizer'), json={'format': 'ROUND_ROBIN'})
+    assert response.status_code == 409
+    assert response.json()['detail'] == 'Giải đấu đã kết thúc hoặc bị hủy, không thể chỉnh sửa'
+
+
 @pytest.mark.parametrize('kind,expected', [('admin', 200), ('organizer', 200), ('scoped', 200),
                                          ('foreign', 403), ('global', 403), ('role_only', 403), ('own_roster', 403)])
 def test_result_scope_is_enforced_for_managed_matches(access, session_factory, bracket_results, kind, expected):
