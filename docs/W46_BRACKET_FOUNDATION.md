@@ -1,6 +1,6 @@
 # W46-01 — Nền tảng bracket và contract bàn giao
 
-Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability. **Cập nhật W46-02:** result API đã chuyển winner theo metadata và bảo vệ lifecycle, xem mục 7. Endpoint tạo/đọc bracket và standings vẫn thuộc W46-03/-04, chưa có trong W46-02.
+Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability. **Cập nhật W46-02:** result API đã chuyển winner theo metadata và bảo vệ lifecycle, xem mục 7. **Cập nhật W46-03:** preview/tạo bracket đã có, xem mục 8. GET bracket và standings vẫn thuộc W46-04.
 
 ## 1. Khảo sát và lựa chọn dữ liệu
 
@@ -80,3 +80,13 @@ Các route dưới đây **chưa triển khai trong W46-01**; W46-03/-04 phải 
 - Chặn POST match thủ công vào stage đã có header bracket và PATCH match thủ công sang stage đó bằng 409 trước khi ghi. Không dựa vào FK để biến lỗi thành 500. Cấm đổi format giải sau khi có bracket; capability giải bỏ field format tương ứng.
 - Guard COMPLETED áp dụng mọi giải: không còn match PENDING/ONGOING ở bất cứ stage nào. Nếu có bracket, cần đủ N−1 metadata/match COMPLETED và một chung kết có winner hợp lệ; bracket thiếu node hoặc có trận CANCELLED bị chặn. `allowed_status_transitions` dùng cùng checker để ẩn COMPLETED khi chưa đạt. CANCELLED giữ nguyên trạng thái lịch sử của từng match và chặn ghi tiếp.
 - Kiểm thử mới: 32 ca API và 6 ca PostgreSQL race bằng connection độc lập (hai bán kết, replay cùng/khác kết quả, chung kết/hoàn tất giải, hủy giải/kết quả, thu hồi trọng tài khi chờ). Coverage W45 được ghi riêng trong bảng tuần/work log.
+
+## 8. Triển khai W46-03 — preview và tạo bracket
+
+- Route: [`backend/routes/brackets.py`](../backend/routes/brackets.py). Phụ thuộc guard W46-02 (đã merge ở PR #90/#91) nên bracket vừa tạo không đi qua mutation W45 chưa bảo vệ.
+- `POST /bracket/preview` body `BracketInput`: kiểm 404 → 403 (quản lý đúng giải/ADMIN) → 409 nếu giải đã có bracket → `ensure_bracket_input` (409 lifecycle/stage có trận, 422 stage sai giải/đội/game/PLAYER). Không khóa, không ghi DB/audit; luôn rollback. Response đúng mục 5 và **thêm `teams:[{team_id,name}]`** cùng thứ tự `team_ids` để UI hiển thị tên; tên chỉ để hiển thị, không thuộc fingerprint.
+- `POST /bracket` body `BracketCreate`: `lock_bracket_context` (403 trước chờ và sau khi tải lại actor) → nếu đã có header: cùng stage + team_order trả 200 bracket hiện có, không ghi/audit, bỏ qua token (kể cả hết hạn/rác); khác input trả 409. Chưa có: validate live lại sau khóa, verify token theo fingerprint live (409 nếu token sai/hết hạn/khác giải/khác input/roster đổi), rồi ghi header + N−1 `Match` PENDING (`round_no=round_index`, vòng 1 có hai đội, vòng sau NULL, `next_match_id` NULL) + metadata theo vòng giảm dần + một audit `BRACKET_CREATED` (`resource=bracket`, details: tournament/bracket/stage, team_ids, team_count, round_count, match_ids). Trả 201. Lỗi bất kỳ, kể cả audit, rollback toàn bộ; `IntegrityError` → 409.
+- Response tạo/replay là `BracketRead`: `{bracket_id,tournament_id,stage_id,team_count,round_count,team_ids,created_at,matches:[{round_index,position,next_round,next_position,next_slot,next_match_id,match:MatchRead}]}` theo `(round_index,position)`, `next_match_id` resolve từ metadata. W46-04 dùng lại DTO này cho GET công khai.
+- `PermissionCacheMiddleware` gắn `Cache-Control: private, no-store` cho **POST** `/bracket` và `/bracket/preview`, kể cả response lỗi; GET `/bracket` (W46-04) không bị gắn.
+- Tạo đồng thời: hai request tuần tự hóa qua khóa giải; request sau thấy header nên cùng input → 200 cùng bracket, khác input → 409. Unique `uq_bracket_tournament/stage` là lớp bảo vệ cuối.
+- Test mới: [`test_bracket_create.py`](../backend/tests/test_bracket_create.py) (23 ca: preview chỉ đọc, cây 2/4/8/64 đội đủ cạnh/slot, replay, token sai/hết hạn/khác giải/access token, roster đổi sau preview, validate lại khi tạo, ma trận lỗi 404/409/422, quyền viewer/TEAM_MANAGER/REFEREE TOURNAMENT/GLOBAL, ADMIN, fault injection audit, guard W46-02 trên bracket vừa tạo) và [`test_bracket_create_concurrency.py`](../backend/tests/test_bracket_create_concurrency.py) (2 ca PostgreSQL connection độc lập: cùng input → 201+200, khác input → 201+409; đúng một header/7 trận/7 node/1 audit).

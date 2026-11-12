@@ -10,6 +10,8 @@ PERMISSION_PATH = re.compile(
     r'|tournaments/[^/]+/teams/[^/]+/roster(?:/capabilities)?|tournaments/[^/]+/roster-lock'
     r'|tournaments/[^/]+/matches/[^/]+/capabilities)/?'
 )
+# Bracket preview/create carry a preview token and manager-only data; the public GET stays cacheable.
+BRACKET_WRITE_PATH = re.compile(r'/api/v1/tournaments/[^/]+/bracket(?:/preview)?/?')
 
 
 class PermissionCacheMiddleware:
@@ -17,7 +19,9 @@ class PermissionCacheMiddleware:
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
-        if scope['type'] != 'http' or not PERMISSION_PATH.fullmatch(scope['path']):
+        if scope['type'] != 'http' or not (
+                PERMISSION_PATH.fullmatch(scope['path'])
+                or (scope['method'] == 'POST' and BRACKET_WRITE_PATH.fullmatch(scope['path']))):
             await self.app(scope, receive, send)
             return
 
