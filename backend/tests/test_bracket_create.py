@@ -283,3 +283,36 @@ def test_supported_sizes_create_every_edge(access, session_factory, bracket_case
         assert target['round_index'] == node['round_index']+1
         incoming.setdefault(node['next_match_id'], []).append(node['next_slot'])
     assert all(sorted(slots) == [1, 2] for slots in incoming.values()) and len(incoming) == count//2-1
+
+
+def test_preview_token_is_bound_to_the_manager_who_previewed(access, session_factory, four):
+    client, headers, *_ = access
+    token = preview(client, headers, four).json()['preview_token']
+    assert jwt.decode(token, options={'verify_signature': False})['sub'] is not None
+    # Another manager (ADMIN) may create, but only with a preview of their own.
+    assert create(client, headers, four, token, name='admin').status_code == 409
+    assert counts(session_factory, four['tid'])[0] == 0
+    own = preview(client, headers, four, name='admin').json()['preview_token']
+    assert create(client, headers, four, own, name='admin').status_code == 201
+
+
+def test_replay_after_tournament_started_returns_current_state(access, session_factory, four):
+    client, headers, *_ = access
+    token = preview(client, headers, four).json()['preview_token']
+    created = create(client, headers, four, token).json()
+    with session_factory.begin() as db:
+        db.get(Tournament, four['tid']).status = 'ONGOING'
+    first = created['matches'][0]['match']['match_id']
+    match_url = f"/api/v1/tournaments/{four['tid']}/matches/{first}"
+    assert client.post(match_url+'/status', headers=headers('organizer'), json={'status': 'ONGOING'}).status_code == 200
+    assert client.put(match_url+'/result', headers=headers('organizer'),
+                      json={'score_team1': 2, 'score_team2': 0}).status_code == 200
+    before = counts(session_factory, four['tid'])
+    replay = create(client, headers, four, token)
+    assert replay.status_code == 200
+    nodes = replay.json()['matches']
+    assert nodes[0]['match']['status'] == 'COMPLETED' and nodes[0]['match']['result']['winner_id'] == four['order'][0]
+    assert nodes[2]['match']['team1']['team_id'] == four['order'][0]
+    assert counts(session_factory, four['tid']) == before
+    # Lifecycle still blocks a different input with 409, never a second bracket.
+    assert create(client, headers, four, token, order=four['order'][::-1]).status_code == 409
