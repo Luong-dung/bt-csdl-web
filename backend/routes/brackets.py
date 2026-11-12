@@ -5,6 +5,7 @@ locks the tournament, rechecks the actor, resolves an idempotent replay, then va
 live input again (the token never replaces that) and writes header + N-1 matches + metadata
 + one audit row in a single transaction. Any failure rolls everything back.
 """
+import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
@@ -29,6 +30,7 @@ from modules.tournaments.match_schemas import match_reads
 from modules.tournaments.models import BracketMatch, Match, Tournament, TournamentBracket
 
 router = APIRouter(prefix='/api/v1/tournaments/{tournament_id}/bracket', tags=['Brackets'])
+logger = logging.getLogger('esports_tournament')
 
 
 def bracket_read(db: Session, bracket: TournamentBracket) -> BracketRead:
@@ -159,6 +161,10 @@ def derive_standings(bracket: TournamentBracket, rows) -> tuple[str, dict[int, d
         if row.status != 'COMPLETED' or row.winner_id is None:
             continue
         loser = row.team2_id if row.winner_id == row.team1_id else row.team1_id
+        if row.winner_id not in (row.team1_id, row.team2_id) or row.winner_id not in stats or loser not in stats:
+            # The DB CHECK forbids this; never guess a loser from broken data.
+            logger.warning('Bỏ qua trận bracket %s có winner/đội không hợp lệ', bracket.bracket_id)
+            continue
         for tid in (row.winner_id, loser):
             stats[tid]['matches_played'] += 1
         stats[row.winner_id]['wins'] += 1
@@ -169,6 +175,14 @@ def derive_standings(bracket: TournamentBracket, rows) -> tuple[str, dict[int, d
             final_done = True
     cancelled = rows[0].tournament_status == 'CANCELLED' if rows else False
     return ('CANCELLED' if cancelled else 'FINAL' if final_done else 'PROVISIONAL'), stats
+
+
+def standing_order(bracket: TournamentBracket, stats: dict[int, dict]) -> list[int]:
+    """Teams still alive (rank null) first, by wins desc; then eliminated teams by rank asc.
+    Ties keep the confirmed team_order."""
+    order = {tid: index for index, tid in enumerate(bracket.team_order)}
+    return sorted(stats, key=lambda tid: (stats[tid]['rank'] is not None, stats[tid]['rank'] or 0,
+                                          -stats[tid]['wins'], order[tid]))
 
 
 @router.get('/standings', response_model=BracketStandingsRead)
@@ -184,8 +198,7 @@ def read_bracket_standings(tournament_id: ResourceId, response: Response, db: Se
                           .join(Tournament, Tournament.tournament_id == BracketMatch.tournament_id)
                           .where(BracketMatch.bracket_id == bracket.bracket_id)).all()
         status, stats = derive_standings(bracket, rows)
-        order = {tid: index for index, tid in enumerate(bracket.team_order)}
-        ranked = sorted(stats, key=lambda tid: (stats[tid]['rank'] is None, stats[tid]['rank'] or 0, order[tid]))
+        ranked = standing_order(bracket, stats)
         page = ranked[offset:offset+limit]
         names = dict(db.execute(select(Team.team_id, Team.name).where(Team.team_id.in_(page))).all()) if page else {}
         response.headers['X-Total-Count'] = str(len(ranked))

@@ -1,8 +1,11 @@
 """W46-04 API: public bracket tree and standings derived from COMPLETED managed matches."""
+from types import SimpleNamespace
+
 import pytest
 from sqlalchemy import select
 
 from modules.tournaments.models import Match, Tournament
+from routes.brackets import derive_standings, standing_order
 from test_bracket_create import add_teams, create, preview, url
 from test_bracket_foundation import bracket_case
 from test_catalog_api import session_factory
@@ -90,10 +93,12 @@ def test_standings_follow_results_and_final_ranks(access, session_factory, eight
     assert mid['status'] == 'PROVISIONAL'
     ranks = {i['team']['team_id']: i['rank'] for i in mid['items']}
     assert [ranks[t] for t in order] == [None, 5, 5, None, None, 5, 5, None]
-    # Ranked teams first, NULL rank last; ties keep the confirmed team order.
-    assert [i['team']['team_id'] for i in mid['items']] == [order[1], order[2], order[5], order[6]] + qf_winners
+    # Teams still alive come first (wins desc), eliminated teams after by rank; ties keep team order.
+    assert [i['team']['team_id'] for i in mid['items']] == qf_winners + [order[1], order[2], order[5], order[6]]
     for node in semis:
         play(client, headers, ids, node['match']['match_id'], True)
+    finalists = [i['team']['team_id'] for i in standings(client, ids).json()['items']]
+    assert finalists == [order[0], order[4], order[3], order[7], order[1], order[2], order[5], order[6]]
     [final] = nodes_of(client, ids, 3)
     play(client, headers, ids, final['match']['match_id'], False)
     done = standings(client, ids).json()
@@ -114,6 +119,12 @@ def test_standings_follow_results_and_final_ranks(access, session_factory, eight
     # Reload of the tree keeps winners and slots.
     tree = client.get(url(ids)).json()
     assert tree['matches'][-1]['match']['result']['winner_id'] == order[4]
+    # Closing the tournament keeps the FINAL table unchanged (the fixture's manual match must end first).
+    with session_factory.begin() as db:
+        db.get(Match, ids['match']).status = 'CANCELLED'
+    assert client.post(f"/api/v1/tournaments/{ids['tid']}/status", headers=headers('organizer'),
+                       json={'status': 'COMPLETED'}).status_code == 200
+    assert standings(client, ids).json() == done
 
 
 def test_manual_matches_and_cancelled_tournament(access, session_factory, eight):
@@ -134,7 +145,9 @@ def test_manual_matches_and_cancelled_tournament(access, session_factory, eight)
                        json={'status': 'CANCELLED'}).status_code == 200
     cancelled = standings(client, ids).json()
     assert cancelled['status'] == 'CANCELLED'
-    assert {i['team']['team_id']: i['rank'] for i in cancelled['items']}[ids['order'][1]] == 5
+    # Cancelled mid-way: the eliminated team keeps its rank as history, unfinished teams stay unranked.
+    order = ids['order']
+    assert [(i['team']['team_id'], i['rank']) for i in cancelled['items']] ==         [(order[0], None), *[(t, None) for t in order[2:]], (order[1], 5)]
     assert len(client.get(url(ids)).json()['matches']) == 7  # history stays visible
 
 
@@ -154,3 +167,13 @@ def test_sixty_four_teams_are_all_visible(access, session_factory, bracket_case)
     data = standings(client, ids, limit=100).json()
     assert data['total'] == 64 and len(data['items']) == 64
     assert len(standings(client, ids).json()['items']) == 50
+
+
+def test_broken_rows_are_skipped_not_guessed():
+    bracket = SimpleNamespace(bracket_id=1, round_count=2, team_order=[1, 2, 3, 4])
+    row = lambda r, a, b, w: SimpleNamespace(tournament_status='ONGOING', round_index=r, status='COMPLETED',
+                                             team1_id=a, team2_id=b, winner_id=w)
+    status, stats = derive_standings(bracket, [row(1, 1, 2, 1), row(1, 3, 4, 9), row(1, 3, 99, 3)])
+    assert status == 'PROVISIONAL'
+    assert {t: (s['rank'], s['matches_played']) for t, s in stats.items()} ==         {1: (None, 1), 2: (3, 1), 3: (None, 0), 4: (None, 0)}
+    assert standing_order(bracket, stats) == [1, 3, 4, 2]
