@@ -1,4 +1,4 @@
-"""W46-03: preview and create the managed single-elimination bracket.
+"""W46-03: preview and create the managed single-elimination bracket. W46-04: public tree and standings.
 
 Preview validates live input without locks or writes and signs a short-lived token. Create
 locks the tournament, rechecks the actor, resolves an idempotent replay, then validates the
@@ -6,8 +6,9 @@ live input again (the token never replaces that) and writes header + N-1 matches
 + one audit row in a single transaction. Any failure rolls everything back.
 """
 from datetime import datetime, timezone
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -18,12 +19,12 @@ from core.brackets import (PREVIEW_TTL_SECONDS, bracket_plan, ensure_bracket_inp
                            issue_preview_token, lock_bracket_context, verify_preview_token)
 from core.matches import as_utc
 from core.tournaments import get_tournament_or_404
-from core.validation import ResourceId
+from core.validation import INT_MAX, ResourceId
 from middleware.auth import can_manage_tournament, get_current_user
 from modules.identity.models import User
 from modules.teams.models import Team
 from modules.tournaments.bracket_schemas import (BracketCreate, BracketInput, BracketNodeRead, BracketPreviewRead,
-                                                 BracketRead, BracketTeam)
+                                                 BracketRead, BracketStandingRead, BracketStandingsRead, BracketTeam)
 from modules.tournaments.match_schemas import match_reads
 from modules.tournaments.models import BracketMatch, Match, Tournament, TournamentBracket
 
@@ -128,3 +129,67 @@ def create_bracket(tournament_id: ResourceId, data: BracketCreate, response: Res
     except Exception:
         db.rollback()
         raise
+
+
+def bracket_or_404(db: Session, tournament_id: int) -> TournamentBracket:
+    get_tournament_or_404(db, tournament_id)
+    bracket = get_bracket(db, tournament_id)
+    if bracket is None:
+        raise HTTPException(404, 'Giải chưa có bracket')
+    return bracket
+
+
+@router.get('', response_model=BracketRead)
+def read_bracket(tournament_id: ResourceId, db: Session = Depends(get_db)):
+    """Public. Header/metadata are immutable after creation; every match state comes from one SELECT."""
+    try:
+        return bracket_read(db, bracket_or_404(db, tournament_id))
+    finally:
+        db.rollback()
+
+
+def derive_standings(bracket: TournamentBracket, rows) -> tuple[str, dict[int, dict]]:
+    """Only COMPLETED managed matches count, each once. A loser in round r (2^(R-r+1) teams left)
+    gets rank 2^(R-r)+1; the final's winner gets 1; nobody else is ranked yet. No 0-0 inference."""
+    stats = {tid: {'rank': None, 'matches_played': 0, 'wins': 0, 'losses': 0} for tid in bracket.team_order}
+    final_done = False
+    for row in rows:
+        if row.status != 'COMPLETED' or row.winner_id is None:
+            continue
+        loser = row.team2_id if row.winner_id == row.team1_id else row.team1_id
+        for tid in (row.winner_id, loser):
+            stats[tid]['matches_played'] += 1
+        stats[row.winner_id]['wins'] += 1
+        stats[loser]['losses'] += 1
+        stats[loser]['rank'] = (1 << (bracket.round_count-row.round_index))+1
+        if row.round_index == bracket.round_count:
+            stats[row.winner_id]['rank'] = 1
+            final_done = True
+    cancelled = rows[0].tournament_status == 'CANCELLED' if rows else False
+    return ('CANCELLED' if cancelled else 'FINAL' if final_done else 'PROVISIONAL'), stats
+
+
+@router.get('/standings', response_model=BracketStandingsRead)
+def read_bracket_standings(tournament_id: ResourceId, response: Response, db: Session = Depends(get_db),
+                           offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
+                           limit: Annotated[int, Query(ge=1, le=100)] = 50):
+    """Public. Tournament status and every match result are read in a single SELECT (one snapshot)."""
+    try:
+        bracket = bracket_or_404(db, tournament_id)
+        rows = db.execute(select(Tournament.status.label('tournament_status'), BracketMatch.round_index,
+                                 Match.status, Match.team1_id, Match.team2_id, Match.winner_id)
+                          .join(Match, Match.match_id == BracketMatch.match_id)
+                          .join(Tournament, Tournament.tournament_id == BracketMatch.tournament_id)
+                          .where(BracketMatch.bracket_id == bracket.bracket_id)).all()
+        status, stats = derive_standings(bracket, rows)
+        order = {tid: index for index, tid in enumerate(bracket.team_order)}
+        ranked = sorted(stats, key=lambda tid: (stats[tid]['rank'] is None, stats[tid]['rank'] or 0, order[tid]))
+        page = ranked[offset:offset+limit]
+        names = dict(db.execute(select(Team.team_id, Team.name).where(Team.team_id.in_(page))).all()) if page else {}
+        response.headers['X-Total-Count'] = str(len(ranked))
+        return BracketStandingsRead(
+            bracket_id=bracket.bracket_id, status=status, total=len(ranked), offset=offset, limit=limit,
+            items=[BracketStandingRead(team=BracketTeam(team_id=tid, name=names[tid]), **stats[tid]) for tid in page],
+        )
+    finally:
+        db.rollback()

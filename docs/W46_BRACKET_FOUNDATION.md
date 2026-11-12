@@ -1,6 +1,6 @@
 # W46-01 — Nền tảng bracket và contract bàn giao
 
-Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability. **Cập nhật W46-02:** result API đã chuyển winner theo metadata và bảo vệ lifecycle, xem mục 7. **Cập nhật W46-03:** preview/tạo bracket đã có, xem mục 8. GET bracket và standings vẫn thuộc W46-04.
+Code nền: W45; phạm vi nghiệp vụ theo [kế hoạch W46](./weeks/2026-W46.md). W46-01 cung cấp schema/helper/input/capability. **Cập nhật W46-02:** result API đã chuyển winner theo metadata và bảo vệ lifecycle, xem mục 7. **Cập nhật W46-03/-04:** preview/tạo bracket xem mục 8; GET bracket và bảng kết quả xem mục 9.
 
 ## 1. Khảo sát và lựa chọn dữ liệu
 
@@ -90,3 +90,11 @@ Các route dưới đây **chưa triển khai trong W46-01**; W46-03/-04 phải 
 - `PermissionCacheMiddleware` gắn `Cache-Control: private, no-store` cho **POST** `/bracket` và `/bracket/preview`, kể cả response lỗi; GET `/bracket` (W46-04) không bị gắn.
 - Tạo đồng thời: hai request tuần tự hóa qua khóa giải; request sau thấy header nên cùng input → 200 cùng bracket, khác input → 409. Unique `uq_bracket_tournament/stage` là lớp bảo vệ cuối.
 - Test mới: [`test_bracket_create.py`](../backend/tests/test_bracket_create.py) (23 ca: preview chỉ đọc, cây 2/4/8/64 đội đủ cạnh/slot, replay, token sai/hết hạn/khác giải/access token, roster đổi sau preview, validate lại khi tạo, ma trận lỗi 404/409/422, quyền viewer/TEAM_MANAGER/REFEREE TOURNAMENT/GLOBAL, ADMIN, fault injection audit, guard W46-02 trên bracket vừa tạo) và [`test_bracket_create_concurrency.py`](../backend/tests/test_bracket_create_concurrency.py) (2 ca PostgreSQL connection độc lập: cùng input → 201+200, khác input → 201+409; đúng một header/7 trận/7 node/1 audit).
+
+## 9. Triển khai W46-04 — đọc bracket và bảng kết quả
+
+- `GET /bracket` công khai (không cần đăng nhập, không gắn no-store): 404 khi giải không tồn tại hoặc chưa có bracket. Trả `BracketRead` (mục 8) đủ mọi node, tối đa 63, không phân trang, không có `preview_token`/`created_by`. Header và metadata bất biến sau khi tạo; trạng thái/đội/kết quả của mọi trận lấy từ **một SELECT** join metadata–match; tên đội/stage chỉ để hiển thị.
+- `GET /bracket/standings?offset=0&limit=50` công khai: `{bracket_id,status,items,total,offset,limit}` và header `X-Total-Count`. Trạng thái giải và kết quả mọi trận được đọc trong **một SELECT**, nên `status` và hạng luôn cùng snapshot. `offset ≥ 0`, `limit` 1–100, sai → 422.
+- Quy tắc: chỉ trận managed COMPLETED có winner, mỗi trận tính một lần cho played/wins/losses; trận manual, PENDING/ONGOING/CANCELLED không tính. Thua ở vòng r → hạng `2^(round_count−r)+1` (thua chung kết 2, bán kết 3, tứ kết 5…); thắng chung kết → 1; còn lại `rank=null`. Sắp rank tăng dần, NULL cuối, đồng hạng theo `team_order`. `status`: giải CANCELLED → `CANCELLED` (giữ hạng đã phát sinh làm lịch sử); chung kết COMPLETED → `FINAL`; còn lại `PROVISIONAL`. Không đọc/ghi `tournament_standings`, không points/tiền thưởng.
+- GET không khóa, không ghi, không audit; luôn rollback phiên đọc.
+- Test mới: [`test_bracket_read.py`](../backend/tests/test_bracket_read.py) (9 ca: công khai và trùng response tạo, 404, bảng 8 đội qua tứ kết/bán kết/chung kết với hạng 1/2/3/3/5×4, replay không đổi bảng, phân trang + `X-Total-Count`, trận manual không tính, giải hủy, lỗi phân trang, 64 đội đủ 63 trận và 64 dòng).
