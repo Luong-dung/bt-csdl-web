@@ -68,8 +68,8 @@ def preview_bracket(tournament_id: ResourceId, data: BracketInput,
         return BracketPreviewRead(
             tournament_id=tournament_id, stage_id=data.stage_id, team_ids=data.team_ids,
             teams=[BracketTeam(team_id=tid, name=names[tid]) for tid in data.team_ids],
-            team_count=len(data.team_ids), round_count=plan[-1].round_index, matches=plan,
-            preview_token=issue_preview_token(tournament_id, fingerprint), expires_in=PREVIEW_TTL_SECONDS,
+            team_count=len(data.team_ids), round_count=len(data.team_ids).bit_length()-1, matches=plan,
+            preview_token=issue_preview_token(tournament_id, fingerprint, user.user_id), expires_in=PREVIEW_TTL_SECONDS,
         )
     finally:
         db.rollback()  # read-only: never leave a transaction open or write anything
@@ -78,7 +78,7 @@ def preview_bracket(tournament_id: ResourceId, data: BracketInput,
 def write_bracket(db: Session, tournament: Tournament, user: User, data: BracketInput) -> TournamentBracket:
     """Caller holds the tournament lock and has validated the live input."""
     plan = bracket_plan(data)
-    tid, rounds = tournament.tournament_id, plan[-1].round_index
+    tid, rounds = tournament.tournament_id, len(data.team_ids).bit_length()-1
     bracket = TournamentBracket(tournament_id=tid, stage_id=data.stage_id, team_count=len(data.team_ids),
                                 round_count=rounds, team_order=list(data.team_ids), created_by=user.user_id,
                                 created_at=datetime.now(timezone.utc))
@@ -88,12 +88,13 @@ def write_bracket(db: Session, tournament: Tournament, user: User, data: Bracket
                for item in plan]
     db.add_all(matches)
     db.flush()
-    # Destination rows must exist before their sources: insert later rounds first.
-    for item, match in sorted(zip(plan, matches), key=lambda pair: -pair[0].round_index):
-        db.add(BracketMatch(match_id=match.match_id, bracket_id=bracket.bracket_id, tournament_id=tid,
-                            stage_id=data.stage_id, round_count=rounds, round_index=item.round_index,
-                            position=item.position, next_round=item.next_round,
-                            next_position=item.next_position, next_slot=item.next_slot))
+    # Destination rows must exist before their sources: flush one round at a time, final first.
+    for round_index in range(rounds, 0, -1):
+        db.add_all([BracketMatch(match_id=match.match_id, bracket_id=bracket.bracket_id, tournament_id=tid,
+                                 stage_id=data.stage_id, round_count=rounds, round_index=item.round_index,
+                                 position=item.position, next_round=item.next_round,
+                                 next_position=item.next_position, next_slot=item.next_slot)
+                    for item, match in zip(plan, matches) if item.round_index == round_index])
         db.flush()
     record_audit(db, user.user_id, 'BRACKET_CREATED', 'bracket', {
         'tournament_id': tid, 'bracket_id': bracket.bracket_id, 'stage_id': data.stage_id,
@@ -118,7 +119,8 @@ def create_bracket(tournament_id: ResourceId, data: BracketCreate, response: Res
             response.status_code = 200
             return result
         input_data = BracketInput(stage_id=data.stage_id, team_ids=data.team_ids)
-        verify_preview_token(data.preview_token, tournament_id, ensure_bracket_input(db, tournament, input_data))
+        verify_preview_token(data.preview_token, tournament_id, ensure_bracket_input(db, tournament, input_data),
+                             user.user_id)
         bracket = write_bracket(db, tournament, user, input_data)
         result = bracket_read(db, bracket)
         db.commit()
