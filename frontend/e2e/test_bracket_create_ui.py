@@ -17,8 +17,10 @@ def _setup_bracket_tournament(
     stage_names: tuple[str, ...] = ("Sơ loại", "Playoffs"),
     lock_roster: bool = True,
 ) -> dict:
-    login(page, "demo_organizer", demo_password)
     organizer_token = page.evaluate("localStorage.getItem('esports_access_token')")
+    if not organizer_token:
+        login(page, "demo_organizer", demo_password)
+        organizer_token = page.evaluate("localStorage.getItem('esports_access_token')")
     assert organizer_token
 
     games = _api_request(page, "GET", f"{api_base_url}/catalog/games")
