@@ -189,26 +189,24 @@ def bracket_plan(data: BracketInput) -> list[BracketPlanMatch]:
     return plan
 
 
-def issue_preview_token(tournament_id: int, fingerprint: str, user_id: int | None = None) -> str:
-    """W46-03 routes always pass user_id so a preview is bound to the manager who saw it."""
-    claims = {'purpose': 'bracket-preview-v1', 'aud': PREVIEW_AUDIENCE,
+def issue_preview_token(tournament_id: int, fingerprint: str, user_id: int) -> str:
+    """A preview is bound to the manager who saw it (`sub`); user_id is mandatory so no caller can skip it."""
+    claims = {'purpose': 'bracket-preview-v1', 'aud': PREVIEW_AUDIENCE, 'sub': str(user_id),
               'tid': tournament_id, 'fingerprint': fingerprint,
               'exp': datetime.now(timezone.utc)+timedelta(seconds=PREVIEW_TTL_SECONDS)}
-    if user_id is not None:
-        claims['sub'] = str(user_id)
     return jwt.encode(claims, get_settings().JWT_SECRET, algorithm='HS256')
 
 
-def verify_preview_token(token: str, tournament_id: int, fingerprint: str, user_id: int | None = None) -> None:
-    """With user_id, the token must carry the same `sub`: another manager has to preview again."""
+def verify_preview_token(token: str, tournament_id: int, fingerprint: str, user_id: int) -> None:
+    """The token must carry the caller's `sub`: another manager has to preview again."""
     try:
         payload = jwt.decode(token, get_settings().JWT_SECRET, algorithms=['HS256'],
                              audience=PREVIEW_AUDIENCE,
-                             options={'require': ['purpose', 'aud', 'tid', 'fingerprint', 'exp']})
+                             options={'require': ['purpose', 'aud', 'sub', 'tid', 'fingerprint', 'exp']})
     except jwt.InvalidTokenError:
         raise HTTPException(409, 'Preview hết hạn hoặc không hợp lệ, hãy xem lại bracket') from None
     if (payload['purpose'] != 'bracket-preview-v1' or payload['tid'] != tournament_id
             or payload['fingerprint'] != fingerprint):
         raise HTTPException(409, 'Dữ liệu preview đã thay đổi, hãy xem lại bracket')
-    if user_id is not None and payload.get('sub') != str(user_id):
+    if payload['sub'] != str(user_id):
         raise HTTPException(409, 'Preview thuộc phiên người dùng khác, hãy xem lại bracket')

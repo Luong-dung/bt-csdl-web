@@ -1,6 +1,6 @@
 """W46 shared input/plan/read contract (W46-01), preview/create DTOs (W46-03)."""
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -77,3 +77,21 @@ class BracketRead(BaseModel):
     team_ids: list[int]
     created_at: datetime
     matches: list[BracketNodeRead]
+
+
+class BracketStandingRead(BaseModel):
+    team: BracketTeam
+    rank: int | None  # null while the team is still in the bracket
+    matches_played: int
+    wins: int
+    losses: int
+
+
+class BracketStandingsRead(BaseModel):
+    """Derived on read from COMPLETED managed matches; tournament_standings is not used in W46."""
+    bracket_id: int
+    status: Literal['PROVISIONAL', 'FINAL', 'CANCELLED']
+    items: list[BracketStandingRead]
+    total: int
+    offset: int
+    limit: int

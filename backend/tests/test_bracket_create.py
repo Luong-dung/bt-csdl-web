@@ -146,7 +146,7 @@ def test_token_must_match_live_input(access, session_factory, four):
                           'fingerprint': 'x', 'exp': datetime.now(timezone.utc)-timedelta(seconds=1)},
                          get_settings().JWT_SECRET, algorithm='HS256')
     assert create(client, headers, four, expired).status_code == 409
-    assert create(client, headers, four, issue_preview_token(four['other'], 'x')).status_code == 409
+    assert create(client, headers, four, issue_preview_token(four['other'], 'x', 1)).status_code == 409
     access_token = headers('organizer')['Authorization'].split()[1]
     assert create(client, headers, four, access_token).status_code == 409
     # Roster snapshot changes after preview: the old token no longer matches.
@@ -314,5 +314,5 @@ def test_replay_after_tournament_started_returns_current_state(access, session_f
     assert nodes[0]['match']['status'] == 'COMPLETED' and nodes[0]['match']['result']['winner_id'] == four['order'][0]
     assert nodes[2]['match']['team1']['team_id'] == four['order'][0]
     assert counts(session_factory, four['tid']) == before
-    # Lifecycle still blocks a different input with 409, never a second bracket.
+    # A different input hits the replay-mismatch branch (409), never a second bracket.
     assert create(client, headers, four, token, order=four['order'][::-1]).status_code == 409
