@@ -169,7 +169,8 @@ def test_bracket_reorder_preview_invalidate_and_create_ui(
     expect(section.locator('[data-testid="bracket-notice-banner"]')).to_contain_text("Đã tạo bracket thành công (3 trận đấu)")
     expect(section.locator('[data-testid="bracket-unavailable-reason"]')).to_be_visible()
 
-    # Matches section now displays the 3 created matches
+    # Bracket section and Matches section now display the 3 created matches
+    expect(page.locator('[data-testid="bracket-tree"]')).to_be_visible()
     matches_section = page.locator('[data-testid="tournament-matches-section"]')
     expect(matches_section.locator(".match-card")).to_have_count(3)
 
