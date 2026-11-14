@@ -108,6 +108,22 @@ type BracketRead = {
   created_at: string;
   matches: BracketNodeRead[];
 };
+type BracketStandingItem = {
+  team: BracketTeam;
+  rank: number | null;
+  matches_played: number;
+  wins: number;
+  losses: number;
+};
+type BracketStandingsStatus = "PROVISIONAL" | "FINAL" | "CANCELLED";
+type BracketStandingsRead = {
+  bracket_id: number;
+  status: BracketStandingsStatus;
+  items: BracketStandingItem[];
+  total: number;
+  offset: number;
+  limit: number;
+};
 type RosterRole = "PLAYER" | "SUBSTITUTE";
 type RosterMember = {
   user_id: number;
@@ -761,6 +777,14 @@ export default function App() {
   const [bracketError, setBracketError] = useState("");
   const [bracketNotice, setBracketNotice] = useState("");
   const [createdBracket, setCreatedBracket] = useState<BracketRead | null>(null);
+  const [bracketData, setBracketData] = useState<BracketRead | null>(null);
+  const [bracketViewLoading, setBracketViewLoading] = useState(false);
+  const [bracketViewError, setBracketViewError] = useState("");
+  const [bracketStandings, setBracketStandings] = useState<BracketStandingsRead | null>(null);
+  const [bracketStandingsLoading, setBracketStandingsLoading] = useState(false);
+  const [bracketStandingsError, setBracketStandingsError] = useState("");
+  const [editingSource, setEditingSource] = useState<"bracket" | "list" | null>(null);
+  const [scoringSource, setScoringSource] = useState<"bracket" | "list" | null>(null);
 
   const [matches, setMatches] = useState<MatchItem[]>([]);
   const [matchesTotal, setMatchesTotal] = useState(0);
@@ -804,6 +828,11 @@ export default function App() {
   const matchesRef = useRef<MatchItem[]>([]);
   matchesRef.current = matches;
   const bracketRequestVersion = useRef(0);
+  const bracketViewVersion = useRef(0);
+  const bracketStandingsVersion = useRef(0);
+  const bracketDataRef = useRef<BracketRead | null>(null);
+  bracketDataRef.current = bracketData;
+  const userSelectedBracketStageRef = useRef(false);
 
   const resetBracketAuthState = () => {
     bracketRequestVersion.current += 1;
@@ -817,12 +846,21 @@ export default function App() {
 
   const resetBracketState = () => {
     resetBracketAuthState();
+    bracketViewVersion.current += 1;
+    bracketStandingsVersion.current += 1;
+    userSelectedBracketStageRef.current = false;
     setSelectedBracketStageId("");
     setBracketTeamOrder([]);
     setStageMatchCounts({});
     setAllApprovedTeamsLoading(false);
     setAllApprovedTeamsError("");
     setCreatedBracket(null);
+    setBracketData(null);
+    setBracketViewLoading(false);
+    setBracketViewError("");
+    setBracketStandings(null);
+    setBracketStandingsLoading(false);
+    setBracketStandingsError("");
   };
 
   const resetMatchesAuthState = () => {
@@ -837,6 +875,7 @@ export default function App() {
     setNewMatchScheduledAt("");
     setMatchFormError("");
     setEditingMatchId(null);
+    setEditingSource(null);
     setEditingMatchEditableFields([]);
     setEditMatchStageId("");
     setEditMatchRoundNo("");
@@ -845,6 +884,7 @@ export default function App() {
     setEditMatchScheduledAt("");
     setEditMatchFormError("");
     setScoringMatchId(null);
+    setScoringSource(null);
     setScoreTeam1Input("");
     setScoreTeam2Input("");
     setResultFormError("");
@@ -2146,16 +2186,19 @@ export default function App() {
     authToken = token,
     expectedVersion?: number,
     expectedSessionVersion?: number,
-    expectedListVersion?: number
+    expectedListVersion?: number,
+    expectedBracketVersion?: number
   ) => {
     const sessionV = expectedSessionVersion ?? sessionVersion.current;
-    if (!authToken || matchList.length === 0) {
+    if (!authToken) {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (sessionVersion.current !== sessionV) return;
       if (expectedListVersion !== undefined && matchesListVersion.current !== expectedListVersion) return;
+      if (expectedBracketVersion !== undefined && bracketViewVersion.current !== expectedBracketVersion) return;
       setMatchCapabilitiesMap({});
       return;
     }
+    if (matchList.length === 0) return;
     try {
       let unauthorized = false;
       const results = await Promise.all(
@@ -2177,6 +2220,7 @@ export default function App() {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return;
       if (sessionVersion.current !== sessionV) return;
       if (expectedListVersion !== undefined && matchesListVersion.current !== expectedListVersion) return;
+      if (expectedBracketVersion !== undefined && bracketViewVersion.current !== expectedBracketVersion) return;
       if (unauthorized) {
         handleAuthExpired();
         return;
@@ -2187,10 +2231,140 @@ export default function App() {
           nextMap[cap.match_id] = cap;
         }
       }
-      setMatchCapabilitiesMap(nextMap);
+      setMatchCapabilitiesMap((prev) => ({ ...prev, ...nextMap }));
     } catch {
       // ignore individual capability fetch errors
     }
+  };
+
+  const loadTournamentBracket = async (
+    tournamentId: number,
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<BracketRead | null> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    const brkV = ++bracketViewVersion.current;
+    setBracketViewLoading(true);
+    setBracketViewError("");
+    try {
+      const res = await fetch(`${API}/tournaments/${tournamentId}/bracket`);
+      if (res.status === 404) {
+        if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+        if (sessionVersion.current !== sessionV) return null;
+        if (bracketViewVersion.current !== brkV) return null;
+        setBracketData(null);
+        setCreatedBracket(null);
+        return null;
+      }
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { detail?: string | ValidationError[] } | null;
+        const detail = body?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+              : "Không thể tải nhánh đấu bracket.";
+        throw new RequestError(msg, res.status);
+      }
+      const data = (await res.json()) as BracketRead;
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return data;
+      if (sessionVersion.current !== sessionV) return data;
+      if (bracketViewVersion.current !== brkV) return data;
+      setBracketData(data);
+      setCreatedBracket(data);
+      if (authToken && data.matches.length > 0) {
+        await loadMatchCapabilitiesForList(
+          tournamentId,
+          data.matches.map((n) => n.match),
+          authToken,
+          expectedVersion,
+          sessionV,
+          undefined,
+          brkV
+        );
+      }
+      return data;
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      if (bracketViewVersion.current !== brkV) return null;
+      setBracketViewError((reason as Error).message || "Không thể tải nhánh đấu bracket.");
+      return null;
+    } finally {
+      if (
+        (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) &&
+        sessionVersion.current === sessionV &&
+        bracketViewVersion.current === brkV
+      ) {
+        setBracketViewLoading(false);
+      }
+    }
+  };
+
+  const loadTournamentBracketStandings = async (
+    tournamentId: number,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<BracketStandingsRead | null> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    const stdV = ++bracketStandingsVersion.current;
+    setBracketStandingsLoading(true);
+    setBracketStandingsError("");
+    try {
+      const res = await fetch(`${API}/tournaments/${tournamentId}/bracket/standings?offset=0&limit=100`);
+      if (res.status === 404) {
+        if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+        if (sessionVersion.current !== sessionV) return null;
+        if (bracketStandingsVersion.current !== stdV) return null;
+        setBracketStandings(null);
+        return null;
+      }
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { detail?: string | ValidationError[] } | null;
+        const detail = body?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+              : "Không thể tải bảng kết quả bracket.";
+        throw new RequestError(msg, res.status);
+      }
+      const data = (await res.json()) as BracketStandingsRead;
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return data;
+      if (sessionVersion.current !== sessionV) return data;
+      if (bracketStandingsVersion.current !== stdV) return data;
+      setBracketStandings(data);
+      return data;
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      if (bracketStandingsVersion.current !== stdV) return null;
+      setBracketStandingsError((reason as Error).message || "Không thể tải bảng kết quả bracket.");
+      return null;
+    } finally {
+      if (
+        (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) &&
+        sessionVersion.current === sessionV &&
+        bracketStandingsVersion.current === stdV
+      ) {
+        setBracketStandingsLoading(false);
+      }
+    }
+  };
+
+  const loadTournamentBracketAndStandings = async (
+    tournamentId: number,
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ) => {
+    await Promise.all([
+      loadTournamentBracket(tournamentId, authToken, expectedVersion, expectedSessionVersion),
+      loadTournamentBracketStandings(tournamentId, expectedVersion, expectedSessionVersion),
+    ]);
   };
 
   const loadTournamentMatches = async (
@@ -2238,16 +2412,21 @@ export default function App() {
       setMatches(list);
       setMatchesTotal(total);
       if (authToken && list.length > 0) {
-        const listIds = new Set(list.map((m) => m.match_id));
+        const keepIds = new Set<number>(list.map((m) => m.match_id));
+        if (bracketDataRef.current) {
+          for (const node of bracketDataRef.current.matches) {
+            keepIds.add(node.match.match_id);
+          }
+        }
         setMatchCapabilitiesMap((prev) => {
           const filtered: Record<number, MatchCapabilities> = {};
-          for (const id of listIds) {
+          for (const id of keepIds) {
             if (prev[id]) filtered[id] = prev[id];
           }
           return filtered;
         });
         await loadMatchCapabilitiesForList(tournamentId, list, authToken, expectedVersion, sessionV, listV);
-      } else {
+      } else if (!authToken) {
         setMatchCapabilitiesMap({});
       }
       return { list, total };
@@ -2257,7 +2436,9 @@ export default function App() {
       if (matchesListVersion.current !== listV) return { list: [], total: 0 };
       setMatches([]);
       setMatchesTotal(0);
-      setMatchCapabilitiesMap({});
+      if (!authToken) {
+        setMatchCapabilitiesMap({});
+      }
       setMatchesError((reason as Error).message || "Không thể tải danh sách trận đấu.");
       return { list: [], total: 0 };
     } finally {
@@ -2280,7 +2461,6 @@ export default function App() {
     setMatchTeamFilter(nextTeamFilter);
     setMatchStatusFilter(nextStatusFilter);
     setMatchesPage(0);
-    setMatchCapabilitiesMap({});
     if (!selectedTournament) return;
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
@@ -2299,7 +2479,6 @@ export default function App() {
   const handleMatchesPageChange = async (newPage: number) => {
     if (!selectedTournament) return;
     setMatchesPage(newPage);
-    setMatchCapabilitiesMap({});
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
     await loadTournamentMatches(
@@ -2557,19 +2736,28 @@ export default function App() {
         return;
       }
       setEditingMatchId(null);
+      setEditingSource(null);
       setEditingMatchEditableFields([]);
       setEditMatchFormError("");
       setMatchesNotice("Đã cập nhật trận đấu thành công.");
-      await loadTournamentMatches(
-        currentTournamentId,
-        matchStageFilter,
-        matchTeamFilter,
-        matchStatusFilter,
-        matchesPage,
-        startingToken,
-        currentTournamentVersion,
-        startingSession
-      );
+      await Promise.all([
+        loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+        loadTournamentBracketAndStandings(
+          currentTournamentId,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+      ]);
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -2595,6 +2783,12 @@ export default function App() {
             matchTeamFilter,
             matchStatusFilter,
             matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+          loadTournamentBracketAndStandings(
+            currentTournamentId,
             startingToken,
             currentTournamentVersion,
             startingSession
@@ -2643,11 +2837,13 @@ export default function App() {
       }
       if (editingMatchId === match.match_id) {
         setEditingMatchId(null);
+        setEditingSource(null);
         setEditingMatchEditableFields([]);
         setEditMatchFormError("");
       }
       if (scoringMatchId === match.match_id) {
         setScoringMatchId(null);
+        setScoringSource(null);
         setScoreTeam1Input("");
         setScoreTeam2Input("");
         setResultFormError("");
@@ -2655,16 +2851,24 @@ export default function App() {
       const nextPage = matches.length === 1 && matchesPage > 0 ? matchesPage - 1 : matchesPage;
       setMatchesPage(nextPage);
       setMatchesNotice("Đã xóa trận đấu.");
-      await loadTournamentMatches(
-        currentTournamentId,
-        matchStageFilter,
-        matchTeamFilter,
-        matchStatusFilter,
-        nextPage,
-        startingToken,
-        currentTournamentVersion,
-        startingSession
-      );
+      await Promise.all([
+        loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          nextPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+        loadTournamentBracketAndStandings(
+          currentTournamentId,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+      ]);
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -2687,6 +2891,12 @@ export default function App() {
             matchTeamFilter,
             matchStatusFilter,
             matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+          loadTournamentBracketAndStandings(
+            currentTournamentId,
             startingToken,
             currentTournamentVersion,
             startingSession
@@ -2731,20 +2941,29 @@ export default function App() {
       }
       if (editingMatchId === match.match_id) {
         setEditingMatchId(null);
+        setEditingSource(null);
         setEditingMatchEditableFields([]);
         setEditMatchFormError("");
       }
       setMatchesNotice("Đã bắt đầu trận đấu.");
-      await loadTournamentMatches(
-        currentTournamentId,
-        matchStageFilter,
-        matchTeamFilter,
-        matchStatusFilter,
-        matchesPage,
-        startingToken,
-        currentTournamentVersion,
-        startingSession
-      );
+      await Promise.all([
+        loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+        loadTournamentBracketAndStandings(
+          currentTournamentId,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+      ]);
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -2769,6 +2988,12 @@ export default function App() {
             matchTeamFilter,
             matchStatusFilter,
             matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+          loadTournamentBracketAndStandings(
+            currentTournamentId,
             startingToken,
             currentTournamentVersion,
             startingSession
@@ -2822,26 +3047,36 @@ export default function App() {
       }
       if (editingMatchId === match.match_id) {
         setEditingMatchId(null);
+        setEditingSource(null);
         setEditingMatchEditableFields([]);
         setEditMatchFormError("");
       }
       if (scoringMatchId === match.match_id) {
         setScoringMatchId(null);
+        setScoringSource(null);
         setScoreTeam1Input("");
         setScoreTeam2Input("");
         setResultFormError("");
       }
       setMatchesNotice("Đã hủy trận đấu.");
-      await loadTournamentMatches(
-        currentTournamentId,
-        matchStageFilter,
-        matchTeamFilter,
-        matchStatusFilter,
-        matchesPage,
-        startingToken,
-        currentTournamentVersion,
-        startingSession
-      );
+      await Promise.all([
+        loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+        loadTournamentBracketAndStandings(
+          currentTournamentId,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+      ]);
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -2864,6 +3099,12 @@ export default function App() {
             matchTeamFilter,
             matchStatusFilter,
             matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+          loadTournamentBracketAndStandings(
+            currentTournamentId,
             startingToken,
             currentTournamentVersion,
             startingSession
@@ -2928,20 +3169,30 @@ export default function App() {
         return;
       }
       setScoringMatchId(null);
+      setScoringSource(null);
       setScoreTeam1Input("");
       setScoreTeam2Input("");
       setResultFormError("");
       setMatchesNotice("Đã ghi nhận kết quả trận đấu thành công.");
-      await loadTournamentMatches(
-        currentTournamentId,
-        matchStageFilter,
-        matchTeamFilter,
-        matchStatusFilter,
-        matchesPage,
-        startingToken,
-        currentTournamentVersion,
-        startingSession
-      );
+      await Promise.all([
+        loadTournamentCapabilities(currentTournamentId, startingToken, currentTournamentVersion, startingSession),
+        loadTournamentMatches(
+          currentTournamentId,
+          matchStageFilter,
+          matchTeamFilter,
+          matchStatusFilter,
+          matchesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+        loadTournamentBracketAndStandings(
+          currentTournamentId,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        ),
+      ]);
     } catch (reason) {
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
@@ -2965,6 +3216,12 @@ export default function App() {
             matchTeamFilter,
             matchStatusFilter,
             matchesPage,
+            startingToken,
+            currentTournamentVersion,
+            startingSession
+          ),
+          loadTournamentBracketAndStandings(
+            currentTournamentId,
             startingToken,
             currentTournamentVersion,
             startingSession
@@ -3398,6 +3655,7 @@ export default function App() {
       loadRosterLock(tournament.tournament_id, version),
       loadTournamentStages(tournament.tournament_id, version, currentSession),
       loadTournamentMatches(tournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, currentToken, version, currentSession),
+      loadTournamentBracketAndStandings(tournament.tournament_id, currentToken, version, currentSession),
     ]);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
     const effectiveCaps = caps ?? tournamentCapabilities;
@@ -3444,6 +3702,12 @@ export default function App() {
           version,
           sessionV
         ),
+        loadTournamentBracketAndStandings(
+          selectedTournament.tournament_id,
+          "",
+          version,
+          sessionV
+        ),
       ]);
       return;
     }
@@ -3457,6 +3721,7 @@ export default function App() {
         loadRosterLock(selectedTournament.tournament_id, version),
         loadTournamentStages(selectedTournament.tournament_id, version, sessionV),
         loadTournamentMatches(selectedTournament.tournament_id, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, token, version, sessionV),
+        loadTournamentBracketAndStandings(selectedTournament.tournament_id, token, version, sessionV),
       ]);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       if (token && approvedData?.list && (caps?.can_manage || caps?.can_lock_roster)) {
@@ -3757,8 +4022,19 @@ export default function App() {
       bracketRequestVersion.current += 1;
       setBracketPreview(null);
       setBracketPreviewExpiresAt(null);
+      return;
     }
-  }, [stages, selectedBracketStageId, stageMatchCounts, matches]);
+    if (
+      !userSelectedBracketStageRef.current &&
+      bracketPreview === null &&
+      isStageNonEmpty(Number(selectedBracketStageId))
+    ) {
+      const emptyStage = stages.find((s) => !isStageNonEmpty(s.stage_id));
+      if (emptyStage && String(emptyStage.stage_id) !== selectedBracketStageId) {
+        setSelectedBracketStageId(String(emptyStage.stage_id));
+      }
+    }
+  }, [stages, selectedBracketStageId, stageMatchCounts, matches, bracketPreview]);
 
   const invalidateBracketPreview = (reasonNotice?: string) => {
     bracketRequestVersion.current += 1;
@@ -3770,6 +4046,7 @@ export default function App() {
   };
 
   const handleBracketStageChange = (nextStageId: string) => {
+    userSelectedBracketStageRef.current = true;
     setSelectedBracketStageId(nextStageId);
     setBracketError("");
     invalidateBracketPreview("Stage đã thay đổi. Vui lòng xem lại preview trước khi tạo bracket.");
@@ -3856,6 +4133,7 @@ export default function App() {
         await Promise.all([
           loadTournamentCapabilities(tid, startingToken, version, sessionV),
           loadTournamentMatches(tid, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, startingToken, version, sessionV),
+          loadTournamentBracketAndStandings(tid, startingToken, version, sessionV),
         ]);
       }
     } finally {
@@ -3906,6 +4184,7 @@ export default function App() {
         return;
       }
       setCreatedBracket(created);
+      setBracketData(created);
       setBracketPreview(null);
       setBracketPreviewExpiresAt(null);
       setBracketNotice(`Đã tạo bracket thành công (${created.matches.length} trận đấu).`);
@@ -3913,6 +4192,7 @@ export default function App() {
         loadTournamentCapabilities(tid, startingToken, version, sessionV),
         loadTournamentMatches(tid, matchStageFilter, matchTeamFilter, matchStatusFilter, 0, startingToken, version, sessionV),
         loadTournamentStages(tid, version, sessionV),
+        loadTournamentBracketAndStandings(tid, startingToken, version, sessionV),
       ]);
     } catch (reason) {
       if (
@@ -3935,6 +4215,7 @@ export default function App() {
           loadTournamentCapabilities(tid, startingToken, version, sessionV),
           loadTournamentMatches(tid, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, startingToken, version, sessionV),
           loadTournamentStages(tid, version, sessionV),
+          loadTournamentBracketAndStandings(tid, startingToken, version, sessionV),
         ]);
       } else if (reason instanceof RequestError && reason.status === 403) {
         await loadTournamentCapabilities(tid, startingToken, version, sessionV);
@@ -3985,6 +4266,7 @@ export default function App() {
       const lockPromise = loadRosterLock(tournamentId, version);
       const stagesPromise = loadTournamentStages(tournamentId, version, sessionV);
       const matchesPromise = loadTournamentMatches(tournamentId, "", "", "", 0, token, version, sessionV);
+      const bracketPromise = loadTournamentBracketAndStandings(tournamentId, token, version, sessionV);
 
       const [managedTeams, caps, approvedData] = await Promise.all([
         managedTeamsPromise,
@@ -3993,6 +4275,7 @@ export default function App() {
         lockPromise,
         stagesPromise,
         matchesPromise,
+        bracketPromise,
       ]);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
 
@@ -4056,8 +4339,10 @@ export default function App() {
       if (status === "COMPLETED" || status === "CANCELLED") {
         setIsCreatingMatch(false);
         setEditingMatchId(null);
+        setEditingSource(null);
         setEditingMatchEditableFields([]);
         setScoringMatchId(null);
+        setScoringSource(null);
         setScoreTeam1Input("");
         setScoreTeam2Input("");
         setResultFormError("");
@@ -4082,6 +4367,12 @@ export default function App() {
           currentListVersion
         );
       }
+      await loadTournamentBracketAndStandings(
+        updated.tournament_id,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
       await loadRosterLock(updated.tournament_id, currentTournamentVersion);
       await loadTournaments();
       if (
@@ -5385,7 +5676,7 @@ export default function App() {
                   </p>
                 ) : null}
 
-                {allApprovedTeamsLoading || (allApprovedTeams.length > 0 && bracketTeamOrder.length === 0) ? (
+                {(allApprovedTeamsLoading && bracketTeamOrder.length === 0) || (allApprovedTeams.length > 0 && bracketTeamOrder.length === 0) ? (
                   <div className="loading-state" data-testid="bracket-teams-loading">
                     <span className="spinner" /> Đang tải toàn bộ danh sách đội đã duyệt ({approvedTeamsTotal} đội)...
                   </div>
@@ -5523,6 +5814,574 @@ export default function App() {
                   );
                 })()}
               </div>
+            )}
+          </div>
+        )}
+
+        {(selectedTournament.format === "SINGLE_ELIM" || bracketData !== null || bracketViewLoading || Boolean(bracketViewError)) && (
+          <div className="bracket-view-section" data-testid="tournament-bracket-section">
+            <div className="section-header">
+              <div>
+                <h4>Nhánh đấu Loại trực tiếp (Bracket)</h4>
+                <p className="muted small-text">
+                  {bracketData
+                    ? `Vòng đấu: ${bracketData.matches[0]?.match.stage_name ?? stages.find((st) => st.stage_id === bracketData.stage_id)?.name ?? `#${bracketData.stage_id}`} · ${bracketData.team_count} đội · ${bracketData.round_count} vòng · ${bracketData.matches.length} trận`
+                    : "Sơ đồ nhánh đấu và bảng xếp hạng loại trực tiếp cập nhật theo thời gian thực."}
+                </p>
+              </div>
+              <div className="match-header-actions">
+                {(bracketViewLoading || bracketStandingsLoading) && bracketData !== null && (
+                  <span className="matches-refreshing-indicator" data-testid="bracket-refreshing-indicator">
+                    <span className="spinner" /> Đang cập nhật...
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="button secondary small"
+                  data-testid="bracket-reload-btn"
+                  disabled={bracketViewLoading || bracketStandingsLoading}
+                  onClick={() =>
+                    void loadTournamentBracketAndStandings(
+                      selectedTournament.tournament_id,
+                      token,
+                      tournamentViewVersion.current,
+                      sessionVersion.current
+                    )
+                  }
+                >
+                  Tải lại
+                </button>
+              </div>
+            </div>
+
+            {bracketViewError ? (
+              <div className="error-banner" data-testid="bracket-view-error">
+                <span>{bracketViewError}</span>
+                <button
+                  type="button"
+                  className="button secondary small"
+                  data-testid="bracket-view-retry-btn"
+                  onClick={() =>
+                    void loadTournamentBracketAndStandings(
+                      selectedTournament.tournament_id,
+                      token,
+                      tournamentViewVersion.current,
+                      sessionVersion.current
+                    )
+                  }
+                >
+                  Thử lại
+                </button>
+              </div>
+            ) : null}
+
+            {bracketViewLoading && !bracketData ? (
+              <div className="loading-state" data-testid="bracket-view-loading">
+                <span className="spinner" /> Đang tải sơ đồ nhánh đấu...
+              </div>
+            ) : !bracketData ? (
+              !bracketViewError ? (
+                <p className="muted" data-testid="bracket-view-empty">
+                  Giải đấu chưa khởi tạo nhánh đấu (bracket).
+                </p>
+              ) : null
+            ) : (
+              <>
+                <div className="bracket-tree-scroll" data-testid="bracket-tree-scroll">
+                  <div className="bracket-tree" data-testid="bracket-tree">
+                    {Array.from({ length: bracketData.round_count }, (_, idx) => idx + 1).map((roundIdx) => {
+                      const roundNodes = bracketData.matches
+                        .filter((node) => node.round_index === roundIdx)
+                        .sort((a, b) => a.position - b.position);
+                      const roundLabel =
+                        roundIdx === bracketData.round_count
+                          ? `Vòng ${roundIdx} (Chung kết)`
+                          : roundIdx === bracketData.round_count - 1 && bracketData.round_count >= 3
+                            ? `Vòng ${roundIdx} (Bán kết)`
+                            : roundIdx === bracketData.round_count - 2 && bracketData.round_count >= 4
+                              ? `Vòng ${roundIdx} (Tứ kết)`
+                              : `Vòng ${roundIdx}`;
+                      return (
+                        <div
+                          className="bracket-round-column"
+                          key={roundIdx}
+                          data-testid={`bracket-round-${roundIdx}`}
+                          data-round-index={roundIdx}
+                        >
+                          <div className="bracket-round-header" data-testid={`bracket-round-header-${roundIdx}`}>
+                            <strong>{roundLabel}</strong>
+                            <span className="muted small-text">{roundNodes.length} trận</span>
+                          </div>
+                          <div className="bracket-round-nodes">
+                            {roundNodes.map((node) => {
+                              const m = node.match;
+                              const matchCaps = matchCapabilitiesMap[m.match_id];
+                              const isEditing = editingMatchId === m.match_id && editingSource === "bracket";
+                              const isScoring = scoringMatchId === m.match_id && scoringSource === "bracket";
+                              const canStartMatch = Boolean(token && matchCaps?.can_start && m.team1 && m.team2);
+                              const canSubmitMatchResult = Boolean(token && matchCaps?.can_submit_result);
+                              const canUpdateMatch = Boolean(
+                                token && matchCaps?.can_update && matchCaps.editable_fields.includes("scheduled_at")
+                              );
+                              const showCompletedResult = m.status === "COMPLETED" && m.result !== null;
+                              const isTeam1Winner =
+                                showCompletedResult && m.team1 !== null && m.result!.winner_id === m.team1.team_id;
+                              const isTeam2Winner =
+                                showCompletedResult && m.team2 !== null && m.result!.winner_id === m.team2.team_id;
+
+                              const rawPreviewS1 = scoreTeam1Input.trim();
+                              const rawPreviewS2 = scoreTeam2Input.trim();
+                              const isPreviewValidInts =
+                                isScoring &&
+                                /^\d+$/.test(rawPreviewS1) &&
+                                /^\d+$/.test(rawPreviewS2) &&
+                                Number.isSafeInteger(Number(rawPreviewS1)) &&
+                                Number.isSafeInteger(Number(rawPreviewS2));
+                              const previewS1 = isPreviewValidInts ? Number(rawPreviewS1) : null;
+                              const previewS2 = isPreviewValidInts ? Number(rawPreviewS2) : null;
+
+                              return (
+                                <div
+                                  className={`bracket-node-card status-${m.status.toLowerCase()} ${isEditing || isScoring ? "editing" : ""}`}
+                                  key={m.match_id}
+                                  data-testid={`bracket-node-${m.match_id}`}
+                                  data-match-id={m.match_id}
+                                  data-round-index={node.round_index}
+                                  data-position={node.position}
+                                  data-match-status={m.status}
+                                >
+                                  <div className="bracket-node-top">
+                                    <span className="bracket-node-pos">
+                                      V{node.round_index} · Trận #{node.position}
+                                    </span>
+                                    <span
+                                      className={`match-status-badge status-${m.status.toLowerCase()}`}
+                                      data-testid={`bracket-node-status-${m.match_id}`}
+                                    >
+                                      {m.status}
+                                    </span>
+                                  </div>
+
+                                  <div className="bracket-node-schedule" data-testid={`bracket-node-schedule-${m.match_id}`}>
+                                    🕒 {formatMatchLocalSchedule(m.scheduled_at)}
+                                  </div>
+
+                                  <div className="bracket-node-slots">
+                                    <div
+                                      className={`bracket-slot-row ${isTeam1Winner ? "is-winner" : ""} ${m.team1 === null ? "is-tbd" : ""}`}
+                                      data-testid={`bracket-node-slot1-${m.match_id}`}
+                                    >
+                                      <span className="bracket-slot-label">Slot 1</span>
+                                      <span className="bracket-slot-team">
+                                        {m.team1 ? (
+                                          <strong>{m.team1.name}</strong>
+                                        ) : (
+                                          <span className="bracket-tbd-badge" data-testid={`bracket-node-tbd-1-${m.match_id}`}>
+                                            TBD (Chưa xác định)
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="bracket-slot-score" data-testid={`bracket-node-score1-${m.match_id}`}>
+                                        {showCompletedResult ? m.result!.score_team1 : "-"}
+                                      </span>
+                                      {isTeam1Winner && (
+                                        <span className="match-winner-badge" data-testid={`bracket-node-winner-${m.match_id}`}>
+                                          🏆 Thắng
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div
+                                      className={`bracket-slot-row ${isTeam2Winner ? "is-winner" : ""} ${m.team2 === null ? "is-tbd" : ""}`}
+                                      data-testid={`bracket-node-slot2-${m.match_id}`}
+                                    >
+                                      <span className="bracket-slot-label">Slot 2</span>
+                                      <span className="bracket-slot-team">
+                                        {m.team2 ? (
+                                          <strong>{m.team2.name}</strong>
+                                        ) : (
+                                          <span className="bracket-tbd-badge" data-testid={`bracket-node-tbd-2-${m.match_id}`}>
+                                            TBD (Chưa xác định)
+                                          </span>
+                                        )}
+                                      </span>
+                                      <span className="bracket-slot-score" data-testid={`bracket-node-score2-${m.match_id}`}>
+                                        {showCompletedResult ? m.result!.score_team2 : "-"}
+                                      </span>
+                                      {isTeam2Winner && (
+                                        <span className="match-winner-badge" data-testid={`bracket-node-winner-${m.match_id}`}>
+                                          🏆 Thắng
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  <div className="bracket-node-dest" data-testid={`bracket-node-next-${m.match_id}`}>
+                                    {node.next_round !== null && node.next_position !== null && node.next_slot !== null ? (
+                                      <span>
+                                        ➔ Thắng vào Vòng {node.next_round} · Trận #{node.next_position} (Slot {node.next_slot}
+                                        {node.next_match_id !== null ? `, Trận ID #${node.next_match_id}` : ""})
+                                      </span>
+                                    ) : (
+                                      <span>🏆 Trận chung kết tranh vô địch</span>
+                                    )}
+                                  </div>
+
+                                  {(canStartMatch || canSubmitMatchResult || canUpdateMatch) && (
+                                    <div className="bracket-node-actions" data-testid={`bracket-node-actions-${m.match_id}`}>
+                                      {canStartMatch && (
+                                        <button
+                                          type="button"
+                                          className="button small"
+                                          data-testid={`bracket-start-btn-${m.match_id}`}
+                                          disabled={matchActionLoading}
+                                          onClick={() => void handleStartMatch(m)}
+                                        >
+                                          Bắt đầu
+                                        </button>
+                                      )}
+                                      {canSubmitMatchResult && !isScoring && (
+                                        <button
+                                          type="button"
+                                          className="button small"
+                                          data-testid={`bracket-result-btn-${m.match_id}`}
+                                          disabled={matchActionLoading}
+                                          onClick={() => {
+                                            setIsCreatingMatch(false);
+                                            setMatchFormError("");
+                                            setEditingMatchId(null);
+                                            setEditingSource(null);
+                                            setEditingMatchEditableFields([]);
+                                            setEditMatchFormError("");
+                                            setScoringSource("bracket");
+                                            setScoringMatchId(m.match_id);
+                                            setScoreTeam1Input("");
+                                            setScoreTeam2Input("");
+                                            setResultFormError("");
+                                          }}
+                                        >
+                                          Nhập kết quả
+                                        </button>
+                                      )}
+                                      {canUpdateMatch && !isEditing && (
+                                        <button
+                                          type="button"
+                                          className="button secondary small"
+                                          data-testid={`bracket-schedule-btn-${m.match_id}`}
+                                          disabled={matchActionLoading}
+                                          onClick={() => {
+                                            setIsCreatingMatch(false);
+                                            setMatchFormError("");
+                                            setScoringMatchId(null);
+                                            setScoringSource(null);
+                                            setScoreTeam1Input("");
+                                            setScoreTeam2Input("");
+                                            setResultFormError("");
+                                            setEditingSource("bracket");
+                                            setEditingMatchId(m.match_id);
+                                            setEditingMatchEditableFields(matchCaps ? [...matchCaps.editable_fields] : ["scheduled_at"]);
+                                            setEditMatchStageId(String(m.stage_id));
+                                            setEditMatchRoundNo(String(m.round_no));
+                                            setEditMatchTeam1Id(m.team1 ? String(m.team1.team_id) : "");
+                                            setEditMatchTeam2Id(m.team2 ? String(m.team2.team_id) : "");
+                                            setEditMatchScheduledAt(toDatetimeLocalInputValue(m.scheduled_at));
+                                            setEditMatchFormError("");
+                                          }}
+                                        >
+                                          Đổi lịch
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {isEditing && (
+                                    <form
+                                      className="bracket-inline-form"
+                                      noValidate
+                                      onSubmit={(e) => void handleUpdateMatch(m, e)}
+                                      data-testid={`bracket-schedule-form-${m.match_id}`}
+                                    >
+                                      <h6>Đổi lịch thi đấu trận #{m.match_id}</h6>
+                                      {editMatchFormError && (
+                                        <div className="error-banner" data-testid={`bracket-schedule-error-${m.match_id}`}>
+                                          {editMatchFormError}
+                                        </div>
+                                      )}
+                                      <label className="wide-field">
+                                        Giờ thi đấu ({getLocalTimezoneLabelForInput(editMatchScheduledAt, m.scheduled_at)})
+                                        <div className="match-schedule-input-row">
+                                          <input
+                                            type="datetime-local"
+                                            name="scheduled_at"
+                                            value={editMatchScheduledAt}
+                                            onChange={(e) => setEditMatchScheduledAt(e.target.value)}
+                                            disabled={matchActionLoading}
+                                          />
+                                          {editMatchScheduledAt && (
+                                            <button
+                                              type="button"
+                                              className="button secondary small"
+                                              disabled={matchActionLoading}
+                                              onClick={() => setEditMatchScheduledAt("")}
+                                            >
+                                              Xóa lịch
+                                            </button>
+                                          )}
+                                        </div>
+                                      </label>
+                                      <div className="form-actions">
+                                        <button type="submit" className="button small" disabled={matchActionLoading}>
+                                          {matchActionLoading ? "Đang lưu..." : "Lưu lịch"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="button secondary small"
+                                          disabled={matchActionLoading}
+                                          onClick={() => {
+                                            setEditingMatchId(null);
+                                            setEditingSource(null);
+                                            setEditingMatchEditableFields([]);
+                                            setEditMatchFormError("");
+                                          }}
+                                        >
+                                          Hủy
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+
+                                  {isScoring && (
+                                    <form
+                                      className="bracket-inline-form"
+                                      noValidate
+                                      onSubmit={(e) => void handleSubmitMatchResult(m, e)}
+                                      data-testid={`bracket-result-form-${m.match_id}`}
+                                    >
+                                      <h6>Nhập kết quả trận #{m.match_id}</h6>
+                                      {resultFormError && (
+                                        <div className="error-banner" data-testid={`bracket-result-error-${m.match_id}`}>
+                                          {resultFormError}
+                                        </div>
+                                      )}
+                                      <div className="match-result-grid">
+                                        <label>
+                                          Tỉ số {m.team1?.name ?? "Đội 1"} <span className="required">*</span>
+                                          <input
+                                            type="number"
+                                            name="score_team1"
+                                            min="0"
+                                            step="1"
+                                            placeholder="0"
+                                            value={scoreTeam1Input}
+                                            onChange={(e) => setScoreTeam1Input(e.target.value)}
+                                            disabled={matchActionLoading}
+                                          />
+                                        </label>
+                                        <label>
+                                          Tỉ số {m.team2?.name ?? "Đội 2"} <span className="required">*</span>
+                                          <input
+                                            type="number"
+                                            name="score_team2"
+                                            min="0"
+                                            step="1"
+                                            placeholder="0"
+                                            value={scoreTeam2Input}
+                                            onChange={(e) => setScoreTeam2Input(e.target.value)}
+                                            disabled={matchActionLoading}
+                                          />
+                                        </label>
+                                      </div>
+                                      {previewS1 !== null && previewS2 !== null && (
+                                        <div
+                                          className={`match-winner-preview ${
+                                            previewS1 === previewS2 ? "is-draw-warning" : "is-winner-confirmed"
+                                          }`}
+                                          data-testid={`bracket-result-winner-preview-${m.match_id}`}
+                                        >
+                                          {previewS1 === previewS2 ? (
+                                            <span>⚠️ Không hỗ trợ kết quả hòa: tỉ số hai đội phải khác nhau.</span>
+                                          ) : (
+                                            <span>
+                                              Xác nhận đội thắng:{" "}
+                                              <strong>
+                                                🏆{" "}
+                                                {previewS1 > previewS2
+                                                  ? m.team1?.name ?? "Đội 1"
+                                                  : m.team2?.name ?? "Đội 2"}
+                                              </strong>{" "}
+                                              ({previewS1} - {previewS2})
+                                            </span>
+                                          )}
+                                        </div>
+                                      )}
+                                      <div className="form-actions">
+                                        <button type="submit" className="button small" disabled={matchActionLoading}>
+                                          {matchActionLoading ? "Đang lưu..." : "Xác nhận & Lưu kết quả"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="button secondary small"
+                                          disabled={matchActionLoading}
+                                          onClick={() => {
+                                            setScoringMatchId(null);
+                                            setScoringSource(null);
+                                            setScoreTeam1Input("");
+                                            setScoreTeam2Input("");
+                                            setResultFormError("");
+                                          }}
+                                        >
+                                          Hủy
+                                        </button>
+                                      </div>
+                                    </form>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bracket-standings-panel" data-testid="bracket-standings-panel">
+                  <div className="bracket-standings-header">
+                    <div>
+                      <h5>Bảng xếp hạng Nhánh đấu</h5>
+                      {bracketStandings && (
+                        <p className="muted small-text" data-testid="bracket-standings-description">
+                          {bracketStandings.status === "FINAL"
+                            ? "Bảng xếp hạng chính thức: Trận chung kết đã hoàn tất, đã xác định nhà vô địch và thứ hạng toàn giải."
+                            : bracketStandings.status === "CANCELLED"
+                              ? "Giải đấu đã hủy: Dữ liệu kết quả lịch sử trước khi hủy giải vẫn được giữ nguyên."
+                              : "Bảng xếp hạng tạm thời: Giải đang thi đấu, các đội chưa bị loại đang chờ kết quả các vòng tiếp theo."}
+                        </p>
+                      )}
+                    </div>
+                    {bracketStandings && (
+                      <span
+                        className={`standings-status-badge status-${bracketStandings.status.toLowerCase()}`}
+                        data-testid="bracket-standings-status-badge"
+                        data-standings-status={bracketStandings.status}
+                      >
+                        {bracketStandings.status === "FINAL"
+                          ? "Chính thức (Đã chốt chung kết)"
+                          : bracketStandings.status === "CANCELLED"
+                            ? "Đã hủy (Lịch sử)"
+                            : "Tạm thời (Đang thi đấu)"}
+                      </span>
+                    )}
+                  </div>
+
+                  {bracketStandingsError ? (
+                    <div className="error-banner" data-testid="bracket-standings-error">
+                      <span>{bracketStandingsError}</span>
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        data-testid="bracket-standings-retry-btn"
+                        onClick={() =>
+                          void loadTournamentBracketStandings(
+                            selectedTournament.tournament_id,
+                            tournamentViewVersion.current,
+                            sessionVersion.current
+                          )
+                        }
+                      >
+                        Thử lại
+                      </button>
+                    </div>
+                  ) : bracketStandingsLoading && !bracketStandings ? (
+                    <div className="loading-state" data-testid="bracket-standings-loading">
+                      <span className="spinner" /> Đang tải bảng xếp hạng...
+                    </div>
+                  ) : bracketStandings && bracketStandings.items.length > 0 ? (
+                    (() => {
+                      const rankCounts = new Map<number, number>();
+                      for (const item of bracketStandings.items) {
+                        if (item.rank !== null) {
+                          rankCounts.set(item.rank, (rankCounts.get(item.rank) ?? 0) + 1);
+                        }
+                      }
+                      return (
+                        <div className="bracket-standings-table-wrap">
+                          <table className="bracket-standings-table" data-testid="bracket-standings-table">
+                            <thead>
+                              <tr>
+                                <th>Hạng</th>
+                                <th>Đội tuyển</th>
+                                <th>Trạng thái</th>
+                                <th>Số trận</th>
+                                <th>Thắng</th>
+                                <th>Thua</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {bracketStandings.items.map((item) => {
+                                const isTied = item.rank !== null && (rankCounts.get(item.rank) ?? 0) > 1;
+                                const rankLabel =
+                                  item.rank === null
+                                    ? bracketStandings.status === "CANCELLED"
+                                      ? "Chưa xếp hạng"
+                                      : "Đang thi đấu"
+                                    : item.rank === 1
+                                      ? "🏆 #1 (Vô địch)"
+                                      : item.rank === 2
+                                        ? "🥈 #2 (Á quân)"
+                                        : isTied
+                                          ? `Đồng hạng #${item.rank}`
+                                          : `#${item.rank}`;
+                                const teamStateLabel =
+                                  item.rank === 1
+                                    ? "Vô địch"
+                                    : item.rank === 2
+                                      ? "Á quân"
+                                      : item.rank !== null
+                                        ? `Dừng bước (Hạng #${item.rank})`
+                                        : bracketStandings.status === "CANCELLED"
+                                          ? "Giải đã hủy"
+                                          : "Còn trong nhánh đấu";
+                                return (
+                                  <tr
+                                    key={item.team.team_id}
+                                    data-testid={`bracket-standing-row-${item.team.team_id}`}
+                                    data-team-id={item.team.team_id}
+                                    data-rank={item.rank ?? "active"}
+                                  >
+                                    <td data-testid={`bracket-standing-rank-${item.team.team_id}`}>
+                                      <strong>{rankLabel}</strong>
+                                    </td>
+                                    <td data-testid={`bracket-standing-team-${item.team.team_id}`}>
+                                      <strong>{item.team.name}</strong>
+                                    </td>
+                                    <td data-testid={`bracket-standing-state-${item.team.team_id}`}>
+                                      <span className="muted small-text">{teamStateLabel}</span>
+                                    </td>
+                                    <td data-testid={`bracket-standing-played-${item.team.team_id}`}>
+                                      {item.matches_played}
+                                    </td>
+                                    <td data-testid={`bracket-standing-wins-${item.team.team_id}`}>
+                                      {item.wins}
+                                    </td>
+                                    <td data-testid={`bracket-standing-losses-${item.team.team_id}`}>
+                                      {item.losses}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()
+                  ) : (
+                    <p className="muted" data-testid="bracket-standings-empty">
+                      Chưa có dữ liệu bảng xếp hạng nhánh đấu.
+                    </p>
+                  )}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -5789,8 +6648,8 @@ export default function App() {
             <>
               <div className="match-list" data-testid="match-list">
                 {matches.map((match) => {
-                  const isEditing = editingMatchId === match.match_id;
-                  const isScoring = scoringMatchId === match.match_id;
+                  const isEditing = editingMatchId === match.match_id && editingSource !== "bracket";
+                  const isScoring = scoringMatchId === match.match_id && scoringSource !== "bracket";
                   const matchCaps = matchCapabilitiesMap[match.match_id];
                   const editableMatchFields =
                     matchCaps && matchCaps.editable_fields.length > 0
@@ -5959,6 +6818,7 @@ export default function App() {
                               disabled={matchActionLoading}
                               onClick={() => {
                                 setEditingMatchId(null);
+                                setEditingSource(null);
                                 setEditingMatchEditableFields([]);
                                 setEditMatchFormError("");
                               }}
@@ -6041,8 +6901,10 @@ export default function App() {
                                         setIsCreatingMatch(false);
                                         setMatchFormError("");
                                         setEditingMatchId(null);
+                                        setEditingSource(null);
                                         setEditingMatchEditableFields([]);
                                         setEditMatchFormError("");
+                                        setScoringSource("list");
                                         setScoringMatchId(match.match_id);
                                         setScoreTeam1Input("");
                                         setScoreTeam2Input("");
@@ -6062,9 +6924,11 @@ export default function App() {
                                         setIsCreatingMatch(false);
                                         setMatchFormError("");
                                         setScoringMatchId(null);
+                                        setScoringSource(null);
                                         setScoreTeam1Input("");
                                         setScoreTeam2Input("");
                                         setResultFormError("");
+                                        setEditingSource("list");
                                         setEditingMatchId(match.match_id);
                                         setEditingMatchEditableFields(matchCaps ? [...matchCaps.editable_fields] : []);
                                         setEditMatchStageId(String(match.stage_id));
@@ -6179,6 +7043,7 @@ export default function App() {
                                   disabled={matchActionLoading}
                                   onClick={() => {
                                     setScoringMatchId(null);
+                                    setScoringSource(null);
                                     setScoreTeam1Input("");
                                     setScoreTeam2Input("");
                                     setResultFormError("");
