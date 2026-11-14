@@ -143,6 +143,7 @@ def test_bracket_reorder_preview_invalidate_and_create_ui(
     preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
     expect(preview_panel).to_be_visible()
     expect(preview_panel).to_contain_text("4 đội · 2 vòng · 3 trận đấu")
+    expect(preview_panel.locator('[data-testid="bracket-preview-expiry"]')).to_contain_text("Preview có hiệu lực đến")
     expect(preview_panel.locator('[data-testid="bracket-preview-pair-1"]')).to_contain_text(teams[1]["name"])
     expect(preview_panel.locator('[data-testid="bracket-preview-pair-1"]')).to_contain_text(teams[0]["name"])
     expect(preview_panel.locator('[data-testid="bracket-preview-pair-2"]')).to_contain_text(teams[2]["name"])
@@ -219,6 +220,35 @@ def test_bracket_invalid_team_count_and_409_preserves_input(
     expect(section_2.locator('[data-testid="bracket-stage-select"]')).to_have_value(str(stages[0]["stage_id"]))
     first_row = section_2.locator('[data-testid="bracket-team-order-list"] li').first
     expect(first_row).to_contain_text(teams[1]["name"])
+
+    # Case 3: Another manager creates the bracket via API while UI builder is open -> clicking preview shows 409 banner and reloads capability so builder transitions to "đã có bracket"
+    preview_res = _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid}/bracket/preview",
+        token=ctx_2["organizer_token"],
+        data={
+            "stage_id": stages[1]["stage_id"],
+            "team_ids": [teams[0]["team_id"], teams[1]["team_id"]],
+        },
+    )
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid}/bracket",
+        token=ctx_2["organizer_token"],
+        data={
+            "stage_id": stages[1]["stage_id"],
+            "team_ids": [teams[0]["team_id"], teams[1]["team_id"]],
+            "preview_token": preview_res["preview_token"],
+        },
+    )
+
+    section_2.locator('[data-testid="bracket-stage-select"]').select_option(str(stages[1]["stage_id"]))
+    section_2.locator('[data-testid="bracket-preview-btn"]').click()
+    expect(section_2.locator('[data-testid="bracket-error-banner"]')).to_contain_text("Giải đã có bracket")
+    expect(section_2.locator('[data-testid="bracket-builder"]')).to_have_count(0)
+    expect(section_2.locator('[data-testid="bracket-unavailable-reason"]')).to_contain_text("đã có bracket")
 
 
 def test_bracket_preview_stale_response_ignored_on_tournament_change_and_viewer_hidden(

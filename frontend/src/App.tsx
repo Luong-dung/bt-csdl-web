@@ -753,6 +753,7 @@ export default function App() {
 
   const [selectedBracketStageId, setSelectedBracketStageId] = useState("");
   const [bracketTeamOrder, setBracketTeamOrder] = useState<ApprovedTeam[]>([]);
+  const [stageMatchCounts, setStageMatchCounts] = useState<Record<number, number>>({});
   const [bracketPreview, setBracketPreview] = useState<BracketPreviewRead | null>(null);
   const [bracketPreviewExpiresAt, setBracketPreviewExpiresAt] = useState<number | null>(null);
   const [bracketPreviewLoading, setBracketPreviewLoading] = useState(false);
@@ -818,6 +819,7 @@ export default function App() {
     resetBracketAuthState();
     setSelectedBracketStageId("");
     setBracketTeamOrder([]);
+    setStageMatchCounts({});
     setAllApprovedTeamsLoading(false);
     setAllApprovedTeamsError("");
     setCreatedBracket(null);
@@ -1530,6 +1532,10 @@ export default function App() {
     refreshAll = true
   ): Promise<{ list: ApprovedTeam[]; total: number }> => {
     const sessionV = sessionVersion.current;
+    if (refreshAll) {
+      setAllApprovedTeamsLoading(true);
+      setAllApprovedTeamsError("");
+    }
     try {
       const offset = page * APPROVED_TEAMS_PER_PAGE;
       const res = await fetch(`${API}/tournaments/${tournamentId}/teams?offset=${offset}&limit=${APPROVED_TEAMS_PER_PAGE}`);
@@ -1539,7 +1545,7 @@ export default function App() {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list, total };
       setApprovedTeams(list);
       setApprovedTeamsTotal(total);
-      if (refreshAll) {
+      if (refreshAll && sessionVersion.current === sessionV) {
         if (page === 0 && list.length >= total) {
           setAllApprovedTeams(list);
           setAllApprovedTeamsLoading(false);
@@ -1568,7 +1574,7 @@ export default function App() {
       if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
       setApprovedTeams([]);
       setApprovedTeamsTotal(0);
-      if (refreshAll) {
+      if (refreshAll && sessionVersion.current === sessionV) {
         setAllApprovedTeams([]);
         setAllApprovedTeamsLoading(false);
         setAllApprovedTeamsError((reason as Error).message || "Không thể tải đầy đủ danh sách đội đã duyệt.");
@@ -1585,10 +1591,15 @@ export default function App() {
     const sessionV = sessionVersion.current;
     setAllApprovedTeamsLoading(true);
     setAllApprovedTeamsError("");
+    setRegistrationError("");
     try {
       const fullList = await fetchAllApprovedTeams(tid);
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       setAllApprovedTeams(fullList);
+      setApprovedTeamsTotal(fullList.length);
+      if (approvedTeams.length === 0 && approvedTeamsPage === 0) {
+        setApprovedTeams(fullList.slice(0, APPROVED_TEAMS_PER_PAGE));
+      }
     } catch (err) {
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       setAllApprovedTeamsError((err as Error).message || "Không thể tải đầy đủ danh sách đội đã duyệt.");
@@ -3661,28 +3672,72 @@ export default function App() {
   const isSupportedBracketTeamCount = (count: number): boolean =>
     count >= 2 && count <= 64 && (count & (count - 1)) === 0;
 
+  const isStageNonEmpty = (stageId: number): boolean =>
+    (stageMatchCounts[stageId] ?? 0) > 0 || matches.some((m) => m.stage_id === stageId);
+
   useEffect(() => {
-    setBracketTeamOrder((prev) => {
-      if (allApprovedTeams.length === 0) {
-        if (prev.length > 0) {
-          bracketRequestVersion.current += 1;
-          setBracketPreview(null);
-          setBracketPreviewExpiresAt(null);
-        }
-        return [];
+    if (!selectedTournament || !tournamentCapabilities?.can_manage || stages.length === 0) {
+      setStageMatchCounts({});
+      return;
+    }
+    const tid = selectedTournament.tournament_id;
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    let cancelled = false;
+    void (async () => {
+      const counts: Record<number, number> = {};
+      await Promise.all(
+        stages.map(async (st) => {
+          try {
+            const res = await fetch(`${API}/tournaments/${tid}/matches?stage_id=${st.stage_id}&limit=1`);
+            if (res.ok) {
+              const totalHeader = res.headers.get("X-Total-Count");
+              if (totalHeader !== null) {
+                counts[st.stage_id] = Number(totalHeader);
+              } else {
+                const list = (await res.json()) as MatchItem[];
+                counts[st.stage_id] = list.length;
+              }
+            }
+          } catch {
+            // fallback to matches state if fetch fails
+          }
+        })
+      );
+      if (cancelled || tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
+      setStageMatchCounts(counts);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTournament?.tournament_id, tournamentCapabilities?.can_manage, stages, matchesTotal]);
+
+  useEffect(() => {
+    if (allApprovedTeams.length === 0) {
+      if (bracketTeamOrder.length > 0) {
+        bracketRequestVersion.current += 1;
+        setBracketPreview(null);
+        setBracketPreviewExpiresAt(null);
+        setBracketTeamOrder([]);
       }
-      const nextById = new Map(allApprovedTeams.map((t) => [t.team_id, t]));
-      const sameSet =
-        prev.length === allApprovedTeams.length &&
-        prev.every((t) => nextById.has(t.team_id));
-      if (sameSet) {
-        return prev.map((t) => nextById.get(t.team_id) ?? t);
+      return;
+    }
+    const nextById = new Map(allApprovedTeams.map((t) => [t.team_id, t]));
+    const sameSet =
+      bracketTeamOrder.length === allApprovedTeams.length &&
+      bracketTeamOrder.every((t) => nextById.has(t.team_id));
+    if (sameSet) {
+      const updated = bracketTeamOrder.map((t) => nextById.get(t.team_id) ?? t);
+      const changed = updated.some((t, idx) => t !== bracketTeamOrder[idx]);
+      if (changed) {
+        setBracketTeamOrder(updated);
       }
-      bracketRequestVersion.current += 1;
-      setBracketPreview(null);
-      setBracketPreviewExpiresAt(null);
-      return [...allApprovedTeams];
-    });
+      return;
+    }
+    bracketRequestVersion.current += 1;
+    setBracketPreview(null);
+    setBracketPreviewExpiresAt(null);
+    setBracketTeamOrder([...allApprovedTeams]);
   }, [allApprovedTeams]);
 
   useEffect(() => {
@@ -3697,30 +3752,27 @@ export default function App() {
     }
     const exists = stages.some((s) => String(s.stage_id) === selectedBracketStageId);
     if (!exists) {
-      setSelectedBracketStageId(String(stages[0].stage_id));
+      const preferredStage = stages.find((s) => !isStageNonEmpty(s.stage_id)) ?? stages[0];
+      setSelectedBracketStageId(String(preferredStage.stage_id));
       bracketRequestVersion.current += 1;
       setBracketPreview(null);
       setBracketPreviewExpiresAt(null);
     }
-  }, [stages, selectedBracketStageId]);
+  }, [stages, selectedBracketStageId, stageMatchCounts, matches]);
 
   const invalidateBracketPreview = (reasonNotice?: string) => {
     bracketRequestVersion.current += 1;
-    setBracketPreview((current) => {
-      if (current !== null && reasonNotice) {
-        setBracketNotice(reasonNotice);
-      }
-      return null;
-    });
+    if (bracketPreview !== null && reasonNotice) {
+      setBracketNotice(reasonNotice);
+    }
+    setBracketPreview(null);
     setBracketPreviewExpiresAt(null);
   };
 
   const handleBracketStageChange = (nextStageId: string) => {
     setSelectedBracketStageId(nextStageId);
     setBracketError("");
-    invalidateBracketPreview(
-      bracketPreview ? "Stage đã thay đổi. Vui lòng xem lại preview trước khi tạo bracket." : undefined
-    );
+    invalidateBracketPreview("Stage đã thay đổi. Vui lòng xem lại preview trước khi tạo bracket.");
   };
 
   const handleMoveBracketTeam = (index: number, direction: "up" | "down") => {
@@ -3734,17 +3786,13 @@ export default function App() {
       return next;
     });
     setBracketError("");
-    invalidateBracketPreview(
-      bracketPreview ? "Thứ tự đội đã thay đổi. Vui lòng xem lại preview trước khi tạo bracket." : undefined
-    );
+    invalidateBracketPreview("Thứ tự đội đã thay đổi. Vui lòng xem lại preview trước khi tạo bracket.");
   };
 
   const handleResetBracketOrder = () => {
     setBracketTeamOrder([...allApprovedTeams]);
     setBracketError("");
-    invalidateBracketPreview(
-      bracketPreview ? "Đã đặt lại thứ tự mặc định. Vui lòng xem lại preview trước khi tạo bracket." : undefined
-    );
+    invalidateBracketPreview("Đã đặt lại thứ tự mặc định. Vui lòng xem lại preview trước khi tạo bracket.");
   };
 
   const handlePreviewBracket = async () => {
@@ -3804,6 +3852,12 @@ export default function App() {
       setBracketPreview(null);
       setBracketPreviewExpiresAt(null);
       setBracketError((reason as Error).message || "Không thể xem trước bracket.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        await Promise.all([
+          loadTournamentCapabilities(tid, startingToken, version, sessionV),
+          loadTournamentMatches(tid, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, startingToken, version, sessionV),
+        ]);
+      }
     } finally {
       if (
         tournamentViewVersion.current === version &&
@@ -3876,6 +3930,15 @@ export default function App() {
         setBracketPreviewExpiresAt(null);
       }
       setBracketError((reason as Error).message || "Không thể tạo bracket.");
+      if (reason instanceof RequestError && reason.status === 409) {
+        await Promise.all([
+          loadTournamentCapabilities(tid, startingToken, version, sessionV),
+          loadTournamentMatches(tid, matchStageFilter, matchTeamFilter, matchStatusFilter, matchesPage, startingToken, version, sessionV),
+          loadTournamentStages(tid, version, sessionV),
+        ]);
+      } else if (reason instanceof RequestError && reason.status === 403) {
+        await loadTournamentCapabilities(tid, startingToken, version, sessionV);
+      }
     } finally {
       if (
         tournamentViewVersion.current === version &&
@@ -3897,6 +3960,7 @@ export default function App() {
     resetStagesState();
     resetMatchesState();
     resetBracketState();
+    setAllApprovedTeamsLoading(true);
     setTournamentCapabilities(null);
     setCapabilityError("");
     setRosterLock(null);
@@ -5249,7 +5313,7 @@ export default function App() {
           )}
         </div>
 
-        {tournamentCapabilities?.can_manage && (
+        {(tournamentCapabilities?.can_manage || Boolean(bracketError) || Boolean(bracketNotice)) && (
           <div className="bracket-create-section" data-testid="tournament-bracket-create-section">
             <div className="section-header">
               <div>
@@ -5271,7 +5335,11 @@ export default function App() {
               </div>
             )}
 
-            {!tournamentCapabilities.can_create_bracket ? (
+            {!tournamentCapabilities?.can_manage ? (
+              <p className="muted small-text" data-testid="bracket-unavailable-reason">
+                Bạn không còn quyền quản lý giải đấu để khởi tạo bracket.
+              </p>
+            ) : !tournamentCapabilities.can_create_bracket ? (
               <p className="muted small-text" data-testid="bracket-unavailable-reason">
                 {createdBracket
                   ? `Giải đấu đã có bracket (#${createdBracket.bracket_id}: ${createdBracket.team_count} đội, ${createdBracket.round_count} vòng, ${createdBracket.matches.length} trận).`
@@ -5299,7 +5367,7 @@ export default function App() {
                       ) : (
                         stages.map((st) => (
                           <option key={st.stage_id} value={String(st.stage_id)}>
-                            #{st.sequence_order} - {st.name}
+                            #{st.sequence_order} - {st.name}{isStageNonEmpty(st.stage_id) ? " (đã có trận)" : ""}
                           </option>
                         ))
                       )}
@@ -5307,13 +5375,17 @@ export default function App() {
                   </label>
                 </div>
 
-                {stages.length === 0 && (
+                {stages.length === 0 ? (
                   <p className="warning-banner" data-testid="bracket-no-stage-reason">
                     Giải đấu chưa có vòng đấu (stage) nào. Hãy tạo ít nhất một stage trống ở mục trên để tạo bracket.
                   </p>
-                )}
+                ) : stages.every((st) => isStageNonEmpty(st.stage_id)) ? (
+                  <p className="warning-banner" data-testid="bracket-no-empty-stage-reason">
+                    Tất cả vòng đấu hiện có đều đã có trận đấu. Hãy tạo một stage trống mới ở mục Quản lý vòng đấu trước khi khởi tạo bracket.
+                  </p>
+                ) : null}
 
-                {allApprovedTeamsLoading ? (
+                {allApprovedTeamsLoading || (allApprovedTeams.length > 0 && bracketTeamOrder.length === 0) ? (
                   <div className="loading-state" data-testid="bracket-teams-loading">
                     <span className="spinner" /> Đang tải toàn bộ danh sách đội đã duyệt ({approvedTeamsTotal} đội)...
                   </div>
@@ -5412,39 +5484,44 @@ export default function App() {
                   </>
                 )}
 
-                {bracketPreview && (
-                  <div className="bracket-preview-panel" data-testid="bracket-preview-panel">
-                    <h5>Xem trước cấu trúc Bracket</h5>
-                    <p className="muted small-text">
-                      {bracketPreview.team_count} đội · {bracketPreview.round_count} vòng · {bracketPreview.matches.length} trận đấu sẽ được tạo.
-                    </p>
-                    <ul className="bracket-preview-pairs" data-testid="bracket-preview-pairs">
-                      {bracketPreview.matches
-                        .filter((m) => m.round_index === 1)
-                        .map((m) => {
-                          const teamNameMap = new Map(bracketPreview.teams.map((t) => [t.team_id, t.name]));
-                          const t1Name = m.team1_id ? (teamNameMap.get(m.team1_id) ?? `Team #${m.team1_id}`) : "TBD";
-                          const t2Name = m.team2_id ? (teamNameMap.get(m.team2_id) ?? `Team #${m.team2_id}`) : "TBD";
-                          return (
-                            <li key={`${m.round_index}-${m.position}`} data-testid={`bracket-preview-pair-${m.position}`}>
-                              <strong>Trận {m.position} (Vòng 1):</strong> {t1Name} <span className="muted">vs</span> {t2Name}
-                            </li>
-                          );
-                        })}
-                    </ul>
-                    <div className="form-actions">
-                      <button
-                        type="button"
-                        className="button"
-                        data-testid="bracket-create-confirm-btn"
-                        disabled={bracketCreateLoading || bracketPreviewLoading}
-                        onClick={() => void handleCreateBracket()}
-                      >
-                        {bracketCreateLoading ? <><span className="spinner" /> Đang tạo bracket...</> : "Xác nhận tạo bracket"}
-                      </button>
+                {bracketPreview && (() => {
+                  const previewTeamNameMap = new Map(bracketPreview.teams.map((t) => [t.team_id, t.name]));
+                  return (
+                    <div className="bracket-preview-panel" data-testid="bracket-preview-panel">
+                      <h5>Xem trước cấu trúc Bracket</h5>
+                      <p className="muted small-text">
+                        {bracketPreview.team_count} đội · {bracketPreview.round_count} vòng · {bracketPreview.matches.length} trận đấu sẽ được tạo.
+                        {bracketPreviewExpiresAt !== null && (
+                          <> · <span data-testid="bracket-preview-expiry">Preview có hiệu lực đến {new Date(bracketPreviewExpiresAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span></>
+                        )}
+                      </p>
+                      <ul className="bracket-preview-pairs" data-testid="bracket-preview-pairs">
+                        {bracketPreview.matches
+                          .filter((m) => m.round_index === 1)
+                          .map((m) => {
+                            const t1Name = m.team1_id ? (previewTeamNameMap.get(m.team1_id) ?? `Team #${m.team1_id}`) : "TBD";
+                            const t2Name = m.team2_id ? (previewTeamNameMap.get(m.team2_id) ?? `Team #${m.team2_id}`) : "TBD";
+                            return (
+                              <li key={`${m.round_index}-${m.position}`} data-testid={`bracket-preview-pair-${m.position}`}>
+                                <strong>Trận {m.position} (Vòng 1):</strong> {t1Name} <span className="muted">vs</span> {t2Name}
+                              </li>
+                            );
+                          })}
+                      </ul>
+                      <div className="form-actions">
+                        <button
+                          type="button"
+                          className="button"
+                          data-testid="bracket-create-confirm-btn"
+                          disabled={bracketCreateLoading || bracketPreviewLoading}
+                          onClick={() => void handleCreateBracket()}
+                        >
+                          {bracketCreateLoading ? <><span className="spinner" /> Đang tạo bracket...</> : "Xác nhận tạo bracket"}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </div>
             )}
           </div>
