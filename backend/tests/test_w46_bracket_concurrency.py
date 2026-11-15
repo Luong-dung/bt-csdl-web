@@ -9,19 +9,15 @@ Validates:
 - Referee permission revocation while waiting for tournament lock (rechecks permission -> 403)
 """
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from threading import Event
 
 import pytest
-from sqlalchemy import delete, event, func, select
+from sqlalchemy import delete, event, select
 
 from core.tournaments import lock_tournament
 from modules.identity.models import AuditLog, RoleAssignment
-from modules.teams.models import Team
-from modules.tournaments.models import (
-    BracketMatch, Match, Stage, Tournament, TournamentBracket, TournamentRegistration, TournamentRoster
-)
-from test_bracket_create import add_teams, body, preview
+from modules.tournaments.models import Match, Tournament, TournamentBracket
+from test_bracket_create import add_teams, preview
 from test_bracket_foundation import bracket_case
 from test_catalog_api import make_client
 from test_match_foundation import match_case
@@ -167,6 +163,22 @@ def test_two_concurrent_semifinals_fill_both_final_slots(access, session_factory
         slots = {l.details['advancement']['slot'] for l in logs}
         assert slots == {1, 2}
 
+    # Verify integration with W46-04 derived standings:
+    with make_client(session_factory, logged_in=False) as c:
+        std = c.get(f"/api/v1/tournaments/{tid}/bracket/standings").json()
+        assert std['status'] == 'PROVISIONAL'
+        items = {i['team']['team_id']: i for i in std['items']}
+        # Losers: Beta (order[1]) and Gamma (order[2]) -> tied for rank 3
+        assert items[order[1]]['rank'] == 3
+        assert items[order[1]]['matches_played'] == 1 and items[order[1]]['losses'] == 1 and items[order[1]]['wins'] == 0
+        assert items[order[2]]['rank'] == 3
+        assert items[order[2]]['matches_played'] == 1 and items[order[2]]['losses'] == 1 and items[order[2]]['wins'] == 0
+        # Winners: Alpha (order[0]) and Delta (order[3]) -> still alive, rank is None, wins=1
+        assert items[order[0]]['rank'] is None
+        assert items[order[0]]['matches_played'] == 1 and items[order[0]]['wins'] == 1 and items[order[0]]['losses'] == 0
+        assert items[order[3]]['rank'] is None
+        assert items[order[3]]['matches_played'] == 1 and items[order[3]]['wins'] == 1 and items[order[3]]['losses'] == 0
+
 
 # ==============================================================================
 # Race 3: Concurrent Result Replay vs Conflicting Result
@@ -218,6 +230,25 @@ def test_concurrent_result_replay_vs_conflicting_result(access, session_factory,
         logs = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'match', AuditLog.action == 'MATCH_RESULT_SUBMITTED')))
         assert len(logs) == 1
 
+    # Verify standings: concurrent replay (same_score=True) never doubles stats
+    with make_client(session_factory, logged_in=False) as c:
+        std = c.get(f"/api/v1/tournaments/{tid}/bracket/standings").json()
+        items = {i['team']['team_id']: i for i in std['items']}
+        if same_score:
+            assert items[order[0]]['matches_played'] == 1
+            assert items[order[0]]['wins'] == 1
+            assert items[order[0]]['losses'] == 0
+            assert items[order[0]]['rank'] is None
+            assert items[order[1]]['matches_played'] == 1
+            assert items[order[1]]['wins'] == 0
+            assert items[order[1]]['losses'] == 1
+            assert items[order[1]]['rank'] == 3
+        else:
+            winner_id = order[0] if m.winner_id == order[0] else order[1]
+            loser_id = order[1] if m.winner_id == order[0] else order[0]
+            assert items[winner_id]['matches_played'] == 1 and items[winner_id]['wins'] == 1
+            assert items[loser_id]['matches_played'] == 1 and items[loser_id]['losses'] == 1 and items[loser_id]['rank'] == 3
+
 
 # ==============================================================================
 # Race 4: Final Result vs Tournament Completion (COMPLETED)
@@ -268,6 +299,13 @@ def test_concurrent_final_result_vs_tournament_completion(access, session_factor
         tourn = db.get(Tournament, tid)
         assert tourn.status == ('COMPLETED' if close_code == 200 else 'ONGOING')
 
+        result_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'match', AuditLog.action == 'MATCH_RESULT_SUBMITTED')))
+        assert len(result_audits) == 3
+
+        status_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'tournament', AuditLog.action == 'TOURNAMENT_STATUS_CHANGED')))
+        completed_audits = [a for a in status_audits if a.details.get('status') == 'COMPLETED']
+        assert len(completed_audits) == (1 if close_code == 200 else 0)
+
 
 # ==============================================================================
 # Race 5: Semifinal Result vs Tournament Cancellation (CANCELLED)
@@ -291,6 +329,7 @@ def test_concurrent_semifinal_result_vs_tournament_cancellation(access, session_
 
     assert change_status(session_factory, headers, tid, 'ONGOING') == 200
     semi1_id = created['matches'][0]['match']['match_id']
+    final_id = created['matches'][2]['match']['match_id']
 
     with make_client(session_factory, logged_in=False) as c:
         c.post(f"/api/v1/tournaments/{tid}/matches/{semi1_id}/status", headers=headers('organizer'), json={'status': 'ONGOING'})
@@ -306,6 +345,28 @@ def test_concurrent_semifinal_result_vs_tournament_cancellation(access, session_
 
     with session_factory() as db:
         assert db.get(Tournament, tid).status == 'CANCELLED'
+        semi1_m = db.get(Match, semi1_id)
+        assert semi1_m.status == ('COMPLETED' if score_code == 200 else 'ONGOING')
+        assert db.get(Match, final_id).team1_id == (order[0] if score_code == 200 else None)
+
+        result_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'match', AuditLog.action == 'MATCH_RESULT_SUBMITTED')))
+        assert len(result_audits) == (1 if score_code == 200 else 0)
+
+        cancel_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'tournament', AuditLog.action == 'TOURNAMENT_STATUS_CHANGED')))
+        assert any(a.details.get('status') == 'CANCELLED' for a in cancel_audits)
+
+    with make_client(session_factory, logged_in=False) as c:
+        std = c.get(f"/api/v1/tournaments/{tid}/bracket/standings").json()
+        assert std['status'] == 'CANCELLED'
+        items = {i['team']['team_id']: i for i in std['items']}
+        if score_code == 200:
+            assert items[order[1]]['rank'] == 3  # Loser of semi 1 (Beta) keeps historical rank 3
+            assert items[order[0]]['rank'] is None
+            assert items[order[2]]['rank'] is None
+            assert items[order[3]]['rank'] is None
+        else:
+            for tid_i in order:
+                assert items[tid_i]['rank'] is None
 
 
 # ==============================================================================

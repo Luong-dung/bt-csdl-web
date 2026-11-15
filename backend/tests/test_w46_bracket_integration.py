@@ -6,23 +6,18 @@
 - Comprehensive permission matrix: ADMIN, ORGANIZER, REFEREE (scoped/foreign/global/conflict of interest), VIEWER
 - Legacy manual stage independence and migration schema verification
 """
-from datetime import datetime, timedelta, timezone
-
 import pytest
 from sqlalchemy import func, select
 
-from core.brackets import issue_preview_token, PREVIEW_AUDIENCE
+from core.security import create_access_token
 from modules.identity.models import AuditLog, RoleAssignment, User
-from modules.teams.models import Team, TeamMembership
-from modules.tournaments.bracket_schemas import BracketInput
-from modules.tournaments.models import (
-    BracketMatch, Match, Stage, Tournament, TournamentBracket, TournamentRegistration, TournamentRoster
-)
+from modules.teams.models import TeamMembership
+from modules.tournaments.models import BracketMatch, Match, TournamentBracket
 from test_bracket_create import add_teams
 from test_bracket_foundation import bracket_case
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
-from test_permissions import access, organizer_tournament
+from test_permissions import access
 
 pytestmark = pytest.mark.postgres
 
@@ -358,7 +353,7 @@ def test_audit_failure_fault_injection_rollback_on_bracket_operations(access, se
             json={'score_team1': 2, 'score_team2': 0},
         )
 
-    # Verify atomic rollback: source match remains ONGOING (not COMPLETED), destination slot 1 remains None
+    # Verify atomic rollback: source match remains ONGOING (not COMPLETED), destination slot 1 remains None, and zero result audits written
     with session_factory() as db:
         source_m = db.get(Match, semi1_id)
         dest_m = db.get(Match, final_id)
@@ -366,6 +361,11 @@ def test_audit_failure_fault_injection_rollback_on_bracket_operations(access, se
         assert source_m.winner_id is None
         assert dest_m.team1_id is None
         assert dest_m.team2_id is None
+        result_audits = list(db.scalars(select(AuditLog).where(
+            AuditLog.resource == 'match',
+            AuditLog.action == 'MATCH_RESULT_SUBMITTED',
+        )))
+        assert len(result_audits) == 0
 
 
 # ==============================================================================
@@ -374,12 +374,14 @@ def test_audit_failure_fault_injection_rollback_on_bracket_operations(access, se
 
 def test_comprehensive_bracket_permission_matrix(access, session_factory, four_team_case):
     """Verifies access control across all roles and scopes on bracket operations:
-    - ADMIN & ORGANIZER creator: full management
+    - ADMIN & ORGANIZER creator & ORGANIZER scoped: full management
+    - ORGANIZER scoped to another tournament: 403
+    - REFEREE role-only (no RoleAssignment): 403 on write operations
     - REFEREE scoped to this tournament: can start & submit result, CANNOT preview, create, edit, delete, or cancel bracket matches
     - REFEREE scoped to another tournament: 403
     - GLOBAL REFEREE: 403
     - REFEREE with conflict of interest (player in participating team): 403 on start & result
-    - VIEWER / Anonymous: 401/403
+    - VIEWER (403) and Anonymous without token (401) on write endpoints
     """
     client, headers, users, teams, roles = access
     tid = four_team_case['tid']
@@ -388,22 +390,78 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
     team_order = four_team_case['order']
     t_alpha, t_beta, t_gamma, t_delta = team_order
 
-    # 1. Preview & Create by ORGANIZER
-    p_res = client.post(bracket_url(tid, '/preview'), headers=headers('organizer'),
+    # 1. Anonymous (no token) -> 401 on write endpoints
+    assert client.post(bracket_url(tid, '/preview'), json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 401
+    assert client.post(bracket_url(tid), json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': 'dummy'}).status_code == 401
+    assert client.patch(match_url(tid, 1), json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 401
+    assert client.put(f"{match_url(tid, 1)}/result", json={'score_team1': 2, 'score_team2': 0}).status_code == 401
+
+    # 2. VIEWER -> 403 on write endpoints
+    viewer_auth = headers('viewer')
+    assert client.post(bracket_url(tid, '/preview'), headers=viewer_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 403
+    assert client.post(bracket_url(tid), headers=viewer_auth, json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': 'dummy'}).status_code == 403
+    assert client.patch(match_url(tid, 1), headers=viewer_auth, json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 403
+    assert client.put(f"{match_url(tid, 1)}/result", headers=viewer_auth, json={'score_team1': 2, 'score_team2': 0}).status_code == 403
+
+    # 3. REFEREE with role-only (no RoleAssignment) -> 403 on write endpoints
+    ref_auth = headers('referee')
+    assert client.post(bracket_url(tid, '/preview'), headers=ref_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 403
+    assert client.post(bracket_url(tid), headers=ref_auth, json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': 'dummy'}).status_code == 403
+    assert client.patch(match_url(tid, 1), headers=ref_auth, json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 403
+    assert client.post(f"{match_url(tid, 1)}/status", headers=ref_auth, json={'status': 'ONGOING'}).status_code == 403
+    assert client.put(f"{match_url(tid, 1)}/result", headers=ref_auth, json={'score_team1': 2, 'score_team2': 0}).status_code == 403
+
+    # 4. Scoped ORGANIZER vs Foreign ORGANIZER vs ADMIN
+    with session_factory.begin() as db:
+        foreign_org = User(username='foreign_org', email='foreign_org@example.com', password_hash='unused', role_id=roles['ORGANIZER'])
+        scoped_org = User(username='scoped_org', email='scoped_org@example.com', password_hash='unused', role_id=roles['ORGANIZER'])
+        db.add_all([foreign_org, scoped_org])
+        db.flush()
+        db.add_all([
+            RoleAssignment(user_id=foreign_org.user_id, role_id=roles['ORGANIZER'], scope_type='TOURNAMENT', scope_id=other_tid),
+            RoleAssignment(user_id=scoped_org.user_id, role_id=roles['ORGANIZER'], scope_type='TOURNAMENT', scope_id=tid),
+        ])
+        foreign_org_token = create_access_token({"sub": str(foreign_org.user_id)})
+        scoped_org_token = create_access_token({"sub": str(scoped_org.user_id)})
+    foreign_org_auth = {"Authorization": "Bearer " + foreign_org_token}
+    scoped_org_auth = {"Authorization": "Bearer " + scoped_org_token}
+    admin_auth = headers('admin')
+    creator_auth = headers('organizer')
+
+    # Foreign organizer cannot preview or create bracket on tid
+    assert client.post(bracket_url(tid, '/preview'), headers=foreign_org_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 403
+    assert client.post(bracket_url(tid), headers=foreign_org_auth, json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': 'dummy'}).status_code == 403
+
+    # ADMIN and Scoped ORGANIZER CAN preview bracket
+    assert client.post(bracket_url(tid, '/preview'), headers=admin_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 200
+    assert client.post(bracket_url(tid, '/preview'), headers=scoped_org_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 200
+
+    # 5. Preview & Create by Creator ORGANIZER
+    p_res = client.post(bracket_url(tid, '/preview'), headers=creator_auth,
                         json={'stage_id': stage_id, 'team_ids': team_order})
     assert p_res.status_code == 200
     token = p_res.json()['preview_token']
 
-    c_res = client.post(bracket_url(tid), headers=headers('organizer'),
+    c_res = client.post(bracket_url(tid), headers=creator_auth,
                         json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': token})
     assert c_res.status_code == 201
     bracket_data = c_res.json()
     semi1_id = bracket_data['matches'][0]['match']['match_id']
+    semi2_id = bracket_data['matches'][1]['match']['match_id']
 
-    # Transition tournament to ONGOING
-    client.post(f"/api/v1/tournaments/{tid}/status", headers=headers('organizer'), json={'status': 'ONGOING'})
+    # 6. Schedule PATCH permissions on PENDING bracket match:
+    # Foreign organizer cannot patch schedule
+    assert client.patch(match_url(tid, semi1_id), headers=foreign_org_auth, json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 403
+    # Creator organizer, scoped organizer, and admin can patch scheduled_at
+    assert client.patch(match_url(tid, semi1_id), headers=creator_auth, json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 200
+    assert client.patch(match_url(tid, semi1_id), headers=scoped_org_auth, json={'scheduled_at': '2026-11-21T14:00:00Z'}).status_code == 200
+    assert client.patch(match_url(tid, semi1_id), headers=admin_auth, json={'scheduled_at': '2026-11-22T16:00:00Z'}).status_code == 200
+    # Patching non-schedule fields on bracket match is rejected with 409
+    bad_struct = client.patch(match_url(tid, semi1_id), headers=creator_auth, json={'round_no': 2})
+    assert bad_struct.status_code == 409
+    assert 'Trận thuộc bracket chỉ được sửa lịch thi đấu' in bad_struct.json()['detail']
 
-    # 2. Grant REFEREE scoped to THIS tournament
+    # 7. Grant REFEREE scoped to THIS tournament
     with session_factory.begin() as db:
         db.add(RoleAssignment(
             user_id=users['referee'],
@@ -412,22 +470,23 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
             scope_id=tid,
         ))
 
-    ref_auth = headers('referee')
-
     # Scoped referee CANNOT preview or create bracket
     assert client.post(bracket_url(tid, '/preview'), headers=ref_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 403
     assert client.post(bracket_url(tid), headers=ref_auth, json={'stage_id': stage_id, 'team_ids': team_order, 'preview_token': token}).status_code == 403
 
     # Scoped referee CANNOT patch schedule, delete, or cancel bracket match
-    assert client.patch(match_url(tid, semi1_id), headers=ref_auth, json={'round_no': 2}).status_code == 403
+    assert client.patch(match_url(tid, semi1_id), headers=ref_auth, json={'scheduled_at': '2026-11-20T12:00:00Z'}).status_code == 403
     assert client.delete(match_url(tid, semi1_id), headers=ref_auth).status_code == 403
     assert client.post(f"{match_url(tid, semi1_id)}/status", headers=ref_auth, json={'status': 'CANCELLED'}).status_code == 403
+
+    # Transition tournament to ONGOING
+    client.post(f"/api/v1/tournaments/{tid}/status", headers=creator_auth, json={'status': 'ONGOING'})
 
     # Scoped referee CAN start match and submit result
     assert client.post(f"{match_url(tid, semi1_id)}/status", headers=ref_auth, json={'status': 'ONGOING'}).status_code == 200
     assert client.put(f"{match_url(tid, semi1_id)}/result", headers=ref_auth, json={'score_team1': 2, 'score_team2': 0}).status_code == 200
 
-    # 3. Foreign referee (scoped to other_tid) has NO write permissions here
+    # 8. Foreign referee (scoped to other_tid) has NO write permissions here
     with session_factory.begin() as db:
         db.add(RoleAssignment(
             user_id=users['viewer'],
@@ -436,11 +495,10 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
             scope_id=other_tid,
         ))
     foreign_ref_auth = headers('viewer')
-    semi2_id = bracket_data['matches'][1]['match']['match_id']
     assert client.post(f"{match_url(tid, semi2_id)}/status", headers=foreign_ref_auth, json={'status': 'ONGOING'}).status_code == 403
     assert client.put(f"{match_url(tid, semi2_id)}/result", headers=foreign_ref_auth, json={'score_team1': 2, 'score_team2': 1}).status_code == 403
 
-    # 4. Global referee has NO write permissions (policy requires TOURNAMENT assignment)
+    # 9. Global referee has NO write permissions (policy requires TOURNAMENT assignment)
     with session_factory.begin() as db:
         db.add(RoleAssignment(
             user_id=users['manager'],
@@ -452,7 +510,7 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
     assert client.post(f"{match_url(tid, semi2_id)}/status", headers=global_ref_auth, json={'status': 'ONGOING'}).status_code == 403
     assert client.put(f"{match_url(tid, semi2_id)}/result", headers=global_ref_auth, json={'score_team1': 2, 'score_team2': 1}).status_code == 403
 
-    # 5. Conflict of interest: referee who belongs to participating team Gamma
+    # 10. Conflict of interest: referee who belongs to participating team Gamma
     with session_factory.begin() as db:
         db.add(TeamMembership(team_id=t_gamma, user_id=users['referee'], role_in_team='PLAYER'))
 
@@ -470,7 +528,8 @@ def test_legacy_stage_independence_and_migration_integrity(access, session_facto
     1. Stages with bracket reject manual matches (POST /matches -> 409).
     2. Manual matches cannot be patched into bracket stage (PATCH stage_id -> 409).
     3. Manual matches in other stages operate independently and do NOT contribute to bracket standings.
-    4. Database schema for brackets complies with migrations.
+    4. Legacy next_match_id link on manual match does NOT auto-advance winner into destination slot.
+    5. Database schema for brackets complies with migrations.
     """
     client, headers, _, teams, _ = access
     tid = four_team_case['tid']
@@ -523,14 +582,37 @@ def test_legacy_stage_independence_and_migration_integrity(access, session_facto
     assert bad_patch.status_code == 409
     assert "stage của bracket" in bad_patch.json()['detail']
 
-    # 5. Transition tournament to ONGOING and complete the manual match
+    # 5. Create a destination manual match in manual_stage_id with no teams and link via legacy next_match_id
+    with session_factory.begin() as db:
+        dest_match = Match(
+            tournament_id=tid,
+            stage_id=manual_stage_id,
+            round_no=2,
+            team1_id=None,
+            team2_id=None,
+            status='PENDING',
+            score_team1=0,
+            score_team2=0,
+        )
+        db.add(dest_match)
+        db.flush()
+        manual_dest_id = dest_match.match_id
+        db.get(Match, manual_mid).next_match_id = manual_dest_id
+
+    # 6. Transition tournament to ONGOING and complete the manual match
     client.post(f"/api/v1/tournaments/{tid}/status", headers=organizer_auth, json={'status': 'ONGOING'})
     client.post(f"{match_url(tid, manual_mid)}/status", headers=organizer_auth, json={'status': 'ONGOING'})
     score_manual = client.put(f"{match_url(tid, manual_mid)}/result", headers=organizer_auth,
                               json={'score_team1': 5, 'score_team2': 3})
     assert score_manual.status_code == 200
 
-    # 6. Verify that bracket standings DO NOT count the manual match!
+    # 7. Verify legacy next_match_id destination was NOT altered (no auto-advancement for unmanaged match)
+    with session_factory() as db:
+        dest_m = db.get(Match, manual_dest_id)
+        assert dest_m.team1_id is None
+        assert dest_m.team2_id is None
+
+    # 8. Verify that bracket standings DO NOT count the manual match!
     # All bracket matches are still PENDING, so matches_played for Alpha and Beta must be 0!
     standings = client.get(bracket_url(tid, '/standings')).json()
     stats = {item['team']['team_id']: item for item in standings['items']}
@@ -538,9 +620,8 @@ def test_legacy_stage_independence_and_migration_integrity(access, session_facto
     assert stats[teams['Beta']]['matches_played'] == 0
     assert stats[teams['Alpha']]['wins'] == 0
 
-    # 7. Verify DB metadata and constraints
+    # 9. Verify DB metadata and constraints
     with session_factory() as db:
-        # BracketMatch only exists for bracket stage
         bracket_match_count = db.scalar(select(func.count()).select_from(BracketMatch).where(BracketMatch.stage_id == stage_bracket_id))
         manual_match_node = db.get(BracketMatch, manual_mid)
         assert bracket_match_count == 3
