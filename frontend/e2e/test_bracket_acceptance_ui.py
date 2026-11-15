@@ -244,22 +244,29 @@ def test_bracket_preview_expiry_and_double_submit_protection(
     finally:
         page.unroute(bracket_url, mock_expired_preview)
 
+    # Re-click preview to obtain a fresh preview token and display confirm button
+    section.locator('[data-testid="bracket-preview-btn"]').click()
+    preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
+    expect(preview_panel).to_be_visible()
+
     # Double submit protection check: button disables while creation is pending
     held = []
 
     def hold_create(route):
-        held.append(route)
+        resp = route.fetch()
+        held.append((route, resp))
 
     page.route(bracket_url, hold_create)
     try:
         confirm_btn = section.locator('[data-testid="bracket-create-confirm-btn"]')
         confirm_btn.click()
-        page.wait_for_timeout(100)
+        page.wait_for_timeout(200)
+        assert len(held) == 1, "Creation request did not reach held route"
         # Confirm button must be disabled during submission
         expect(confirm_btn).to_be_disabled()
     finally:
-        for r in held:
-            r.abort()
+        for r, resp in held:
+            r.fulfill(response=resp)
         page.unroute(bracket_url, hold_create)
 
 
@@ -389,7 +396,7 @@ def test_bracket_64_teams_tree_standings_and_mobile_responsive(
 
     # Tree renders all 6 rounds and 63 matches
     expect(bracket_sec.locator('[data-testid="bracket-tree"]')).to_be_visible()
-    expect(bracket_sec.locator('[data-testid^="bracket-round-"]')).to_have_count(6)
+    expect(bracket_sec.locator('.bracket-round-column')).to_have_count(6)
     expect(bracket_sec.locator('.bracket-node-card')).to_have_count(63)
 
     # Standings table reflects 64 teams
@@ -410,3 +417,4 @@ def test_bracket_64_teams_tree_standings_and_mobile_responsive(
         scroll_container.element_handle(),
     )
     assert is_scrollable, "Bracket tree scroll container is not horizontally scrollable for 64 teams"
+    page.set_viewport_size({"width": 1280, "height": 800})
