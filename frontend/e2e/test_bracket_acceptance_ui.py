@@ -111,12 +111,34 @@ def test_bracket_full_lifecycle_referee_matrix_and_reload(
         bracket_sec = scoped_page.locator('[data-testid="tournament-bracket-section"]')
         expect(bracket_sec).to_be_visible()
 
-        # Semifinal 1: Start and Submit Result (Team 0 beats Team 1: 2 - 0)
+        # Scoped referee cannot create bracket or reschedule matches on pending nodes
+        expect(scoped_page.locator('[data-testid="tournament-bracket-create-section"]')).to_have_count(0)
+        expect(bracket_sec.locator('[data-testid^="bracket-schedule-btn-"]')).to_have_count(0)
+
+        # Semifinal 1: Start (transitions from PENDING to ONGOING)
         node1 = bracket_sec.locator(f'[data-testid="bracket-node-{m1_id}"]')
         expect(node1.locator(f'[data-testid="bracket-start-btn-{m1_id}"]')).to_be_visible()
         node1.locator(f'[data-testid="bracket-start-btn-{m1_id}"]').click()
         expect(node1.locator(f'[data-testid="bracket-node-status-{m1_id}"]')).to_have_text("ONGOING")
 
+        # 5. Login as Foreign Referee while m1 is ONGOING and m2 is PENDING
+        # Verify Foreign Referee has no start, result, schedule, or creation capabilities
+        foreign_page = browser.new_page(viewport={"width": 1280, "height": 800})
+        try:
+            foreign_page.goto(app_base_url)
+            login(foreign_page, ref_foreign_name, demo_password)
+            open_tournament(foreign_page, str(tid), tname)
+
+            f_bracket_sec = foreign_page.locator('[data-testid="tournament-bracket-section"]')
+            expect(f_bracket_sec).to_be_visible()
+            expect(foreign_page.locator('[data-testid="tournament-bracket-create-section"]')).to_have_count(0)
+            expect(f_bracket_sec.locator('[data-testid^="bracket-start-btn-"]')).to_have_count(0)
+            expect(f_bracket_sec.locator('[data-testid^="bracket-result-btn-"]')).to_have_count(0)
+            expect(f_bracket_sec.locator('[data-testid^="bracket-schedule-btn-"]')).to_have_count(0)
+        finally:
+            foreign_page.close()
+
+        # Semifinal 1: Submit Result (Team 0 beats Team 1: 2 - 0)
         node1.locator(f'[data-testid="bracket-result-btn-{m1_id}"]').click()
         res_form1 = node1.locator(f'[data-testid="bracket-result-form-{m1_id}"]')
         res_form1.locator('input[name="score_team1"]').fill("2")
@@ -169,20 +191,6 @@ def test_bracket_full_lifecycle_referee_matrix_and_reload(
     finally:
         scoped_page.close()
 
-    # 5. Login as Foreign Referee and verify inability to coordinate
-    foreign_page = browser.new_page(viewport={"width": 1280, "height": 800})
-    try:
-        foreign_page.goto(app_base_url)
-        login(foreign_page, ref_foreign_name, demo_password)
-        open_tournament(foreign_page, str(tid), tname)
-
-        bracket_sec = foreign_page.locator('[data-testid="tournament-bracket-section"]')
-        expect(bracket_sec).to_be_visible()
-        expect(bracket_sec.locator('[data-testid^="bracket-start-btn-"]')).to_have_count(0)
-        expect(bracket_sec.locator('[data-testid^="bracket-result-btn-"]')).to_have_count(0)
-    finally:
-        foreign_page.close()
-
     # 6. Public viewer (unauthenticated) persistence across page reload
     page.reload()
     page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
@@ -215,72 +223,85 @@ def test_bracket_preview_expiry_and_double_submit_protection(
     section.locator(f'[data-testid="bracket-team-down-{teams[0]["team_id"]}"]').click()
     section.locator('[data-testid="bracket-stage-select"]').select_option(str(stages[1]["stage_id"]))
 
-    # Preview bracket
-    section.locator('[data-testid="bracket-preview-btn"]').click()
-    preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
-    expect(preview_panel).to_be_visible()
-    expect(preview_panel.locator('[data-testid="bracket-preview-expiry"]')).to_be_visible()
+    # 1. Preview with tampered token to test REAL backend 409 error response
+    preview_url = f"**/api/v1/tournaments/{tid}/bracket/preview"
 
-    # Mock expired preview error (409) on creation POST
-    bracket_url = f"**/api/v1/tournaments/{tid}/bracket"
+    def tamper_preview_token(route):
+        response = route.fetch()
+        data = response.json()
+        # Tamper last character of preview_token so backend verify_preview_token raises real 409
+        old_tok = data["preview_token"]
+        data["preview_token"] = old_tok[:-1] + ("x" if old_tok[-1] != "x" else "y")
+        route.fulfill(response=response, json=data)
 
-    def mock_expired_preview(route):
-        route.fulfill(
-            status=409,
-            content_type="application/json",
-            body='{"detail": "Preview hết hạn hoặc không hợp lệ, vui lòng bấm xem trước lại"}',
-        )
-
-    page.route(bracket_url, mock_expired_preview)
+    page.route(preview_url, tamper_preview_token)
     try:
-        section.locator('[data-testid="bracket-create-confirm-btn"]').click()
-        expect(section.locator('[data-testid="bracket-error-banner"]')).to_contain_text(
-            "Preview hết hạn hoặc không hợp lệ"
-        )
-        # Input preserved: stage and team order remain as selected
-        expect(section.locator('[data-testid="bracket-stage-select"]')).to_have_value(str(stages[1]["stage_id"]))
-        first_row = section.locator('[data-testid="bracket-team-order-list"] li').first
-        expect(first_row).to_contain_text(teams[1]["name"])
+        section.locator('[data-testid="bracket-preview-btn"]').click()
+        preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
+        expect(preview_panel).to_be_visible()
+        expect(preview_panel.locator('[data-testid="bracket-preview-expiry"]')).to_be_visible()
     finally:
-        page.unroute(bracket_url, mock_expired_preview)
+        page.unroute(preview_url, tamper_preview_token)
 
-    # Re-click preview to obtain a fresh preview token and display confirm button
+    # Click confirm: real backend receives tampered token and responds with REAL 409
+    section.locator('[data-testid="bracket-create-confirm-btn"]').click()
+    expect(section.locator('[data-testid="bracket-error-banner"]')).to_contain_text(
+        "Preview hết hạn hoặc không hợp lệ"
+    )
+    # Input preserved: stage and team order remain as selected
+    expect(section.locator('[data-testid="bracket-stage-select"]')).to_have_value(str(stages[1]["stage_id"]))
+    first_row = section.locator('[data-testid="bracket-team-order-list"] li').first
+    expect(first_row).to_contain_text(teams[1]["name"])
+
+    # 2. Re-click preview to obtain a fresh, valid preview token from backend
     section.locator('[data-testid="bracket-preview-btn"]').click()
     preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
     expect(preview_panel).to_be_visible()
 
     # Double submit protection check: button disables while creation is pending
-    held = []
+    creation_requests = []
 
     def hold_create(route):
-        resp = route.fetch()
-        held.append((route, resp))
+        creation_requests.append(route)
 
+    bracket_url = f"**/api/v1/tournaments/{tid}/bracket"
     page.route(bracket_url, hold_create)
     try:
         confirm_btn = section.locator('[data-testid="bracket-create-confirm-btn"]')
         confirm_btn.click()
         page.wait_for_timeout(200)
-        assert len(held) == 1, "Creation request did not reach held route"
+        assert len(creation_requests) == 1, "Creation request did not reach held route"
         # Confirm button must be disabled during submission
         expect(confirm_btn).to_be_disabled()
+
+        # Release the in-flight request to real backend
+        route = creation_requests[0]
+        route.continue_()
     finally:
-        for r, resp in held:
-            r.fulfill(response=resp)
         page.unroute(bracket_url, hold_create)
+
+    # Assert creation succeeded on real backend and UI renders tree and notice
+    expect(section.locator('[data-testid="bracket-notice-banner"]')).to_contain_text(
+        "Đã tạo bracket thành công"
+    )
+    expect(page.locator('[data-testid="bracket-tree"]')).to_be_visible()
+    assert len(creation_requests) == 1, "Expected exactly 1 creation request sent"
 
 
 def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
     page: Page, api_base_url: str, demo_password: str
 ):
     ctx_a = _setup_bracket_tournament(
-        page, api_base_url, demo_password, team_count=2, stage_names=("Stage A",)
+        page, api_base_url, demo_password, team_count=4, stage_names=("Stage A",), lock_roster=True
     )
     ctx_b = _setup_bracket_tournament(
-        page, api_base_url, demo_password, team_count=2, stage_names=("Stage B",)
+        page, api_base_url, demo_password, team_count=2, stage_names=("Stage B",), lock_roster=True
     )
     tid_a = ctx_a["tournament_id"]
     token = ctx_a["organizer_token"]
+    teams_a = ctx_a["teams"]
+    t0_id = teams_a[0]["team_id"]
+    t1_id = teams_a[1]["team_id"]
 
     _create_bracket_via_api(
         page,
@@ -288,26 +309,51 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
         token,
         tid_a,
         ctx_a["stages"][0]["stage_id"],
-        [t["team_id"] for t in ctx_a["teams"]],
+        [t["team_id"] for t in teams_a],
+    )
+
+    # Set Tournament A to ONGOING and complete Semifinal 1 (Team 0 beats Team 1: 2 - 0)
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid_a}/status",
+        token=token,
+        data={"status": "ONGOING"},
+    )
+    bracket_a = _api_request(page, "GET", f"{api_base_url}/tournaments/{tid_a}/bracket")
+    semi1_id = bracket_a["matches"][0]["match"]["match_id"]
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid_a}/matches/{semi1_id}/status",
+        token=token,
+        data={"status": "ONGOING"},
+    )
+    _api_request(
+        page,
+        "PUT",
+        f"{api_base_url}/tournaments/{tid_a}/matches/{semi1_id}/result",
+        token=token,
+        data={"score_team1": 2, "score_team2": 0},
     )
 
     open_tournament(page, str(tid_a), ctx_a["tournament_name"])
     sec_a = page.locator('[data-testid="tournament-bracket-section"]')
     expect(sec_a).to_be_visible()
 
-    # Hold in-flight bracket reload while user navigates to Tournament B
-    held = []
+    # --- Part 1: Tournament switch in-flight guard ---
+    held_tourn = []
     bracket_url = f"**/api/v1/tournaments/{tid_a}/bracket"
 
     def hold_bracket(route):
         resp = route.fetch()
-        held.append((route, resp))
+        held_tourn.append((route, resp))
 
     page.route(bracket_url, hold_bracket)
     try:
         sec_a.locator('[data-testid="bracket-reload-btn"]').click()
         page.wait_for_timeout(200)
-        assert len(held) == 1
+        assert len(held_tourn) == 1
 
         # Switch to Tournament B
         page.locator(".tournament-detail .detail-header button").filter(
@@ -315,7 +361,7 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
         ).click()
         open_tournament(page, str(ctx_b["tournament_id"]), ctx_b["tournament_name"])
 
-        route, response = held.pop()
+        route, response = held_tourn.pop()
         route.fulfill(response=response)
         page.unroute(bracket_url, hold_bracket)
 
@@ -324,11 +370,50 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
         expect(page.locator('[data-testid="bracket-view-empty"]')).to_be_visible()
         expect(page.locator('[data-testid="bracket-tree"]')).to_have_count(0)
     finally:
-        for r, resp in held:
+        for r, resp in held_tourn:
             r.fulfill(response=resp)
         page.unroute(bracket_url, hold_bracket)
 
-    # Cancel Tournament A and verify historical standings badge
+    # --- Part 2: Session switch (logout) in-flight guard ---
+    # Close Tournament B and reopen Tournament A as Organizer
+    page.locator(".tournament-detail .detail-header button").filter(
+        has_text=re.compile("Đóng|Close")
+    ).click()
+    open_tournament(page, str(tid_a), ctx_a["tournament_name"])
+    expect(sec_a).to_be_visible()
+
+    held_session = []
+
+    def hold_session_request(route):
+        resp = route.fetch()
+        held_session.append((route, resp))
+
+    page.route(bracket_url, hold_session_request)
+    try:
+        sec_a.locator('[data-testid="bracket-reload-btn"]').click()
+        page.wait_for_timeout(200)
+        assert len(held_session) == 1
+
+        # Logout while request is in-flight
+        page.locator(".profile").get_by_role("button", name="Đăng xuất").click()
+        expect(page.locator(".auth-modal-close")).to_be_visible()
+        page.locator(".auth-modal-close").click()
+
+        # Fulfill the held response from the old organizer session
+        route, response = held_session.pop()
+        route.fulfill(response=response)
+        page.unroute(bracket_url, hold_session_request)
+
+        # Public viewer interface must not be contaminated with old session capabilities
+        expect(page.locator('[data-testid="tournament-bracket-create-section"]')).to_have_count(0)
+        expect(page.locator('[data-testid^="bracket-schedule-btn-"]')).to_have_count(0)
+        expect(page.locator(".profile")).to_have_count(0)
+    finally:
+        for r, resp in held_session:
+            r.fulfill(response=resp)
+        page.unroute(bracket_url, hold_session_request)
+
+    # --- Part 3: CANCELLED tournament with historical eliminated rank ---
     _api_request(
         page,
         "POST",
@@ -336,13 +421,19 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
         token=token,
         data={"status": "CANCELLED"},
     )
-    page.locator(".tournament-detail .detail-header button").filter(
-        has_text=re.compile("Đóng|Close")
-    ).click()
+    # Reload/reopen Tournament A as public viewer
+    page.reload()
     open_tournament(page, str(tid_a), ctx_a["tournament_name"])
     expect(page.locator('[data-testid="bracket-standings-status-badge"]')).to_contain_text(
         "Đã hủy (Lịch sử)"
     )
+    # Eliminated team 1 preserves historical rank #3 / Dừng bước (Hạng #3)
+    expect(page.locator(f'[data-testid="bracket-standing-rank-{t1_id}"]')).to_contain_text("#3")
+    expect(page.locator(f'[data-testid="bracket-standing-state-{t1_id}"]')).to_contain_text("Hạng #3")
+
+    # Non-eliminated team 0 displays "Chưa xếp hạng" and "Giải đã hủy"
+    expect(page.locator(f'[data-testid="bracket-standing-rank-{t0_id}"]')).to_contain_text("Chưa xếp hạng")
+    expect(page.locator(f'[data-testid="bracket-standing-state-{t0_id}"]')).to_contain_text("Giải đã hủy")
 
 
 def test_bracket_64_teams_tree_standings_and_mobile_responsive(
