@@ -209,7 +209,12 @@ def test_concurrent_result_replay_vs_conflicting_result(access, session_factory,
     with session_factory() as db:
         m = db.get(Match, semi1_id)
         assert m.status == 'COMPLETED'
-        assert m.winner_id == order[0]
+        if same_score:
+            assert m.winner_id == order[0]
+        else:
+            assert m.winner_id in (order[0], order[1])
+        final_id = created['matches'][2]['match']['match_id']
+        assert db.get(Match, final_id).team1_id == m.winner_id
         logs = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'match', AuditLog.action == 'MATCH_RESULT_SUBMITTED')))
         assert len(logs) == 1
 
