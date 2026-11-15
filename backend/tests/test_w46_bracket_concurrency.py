@@ -36,6 +36,8 @@ def four_concurrency_case(access, session_factory, bracket_case):
     """Tournament with 4 teams, empty stage, ready for bracket operations."""
     _, _, _, teams, roles = access
     order = [teams['Alpha'], teams['Beta'], *add_teams(session_factory, bracket_case, roles, 4)]
+    with session_factory.begin() as db:
+        db.get(Match, bracket_case['match']).status = 'CANCELLED'
     return bracket_case | {'order': order}
 
 

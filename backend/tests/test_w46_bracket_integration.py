@@ -41,6 +41,9 @@ def four_team_case(access, session_factory, bracket_case):
     """UPCOMING tournament with locked roster and 4 APPROVED teams ready for bracket preview/create."""
     _, _, _, teams, roles = access
     order = [teams['Alpha'], teams['Beta'], *add_teams(session_factory, bracket_case, roles, 4)]
+    with session_factory.begin() as db:
+        # Cancel the legacy manual match from match_case so it doesn't block tournament completion
+        db.get(Match, bracket_case['match']).status = 'CANCELLED'
     return bracket_case | {'order': order}
 
 
