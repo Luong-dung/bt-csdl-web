@@ -194,3 +194,82 @@ def seed_large_tournament_pagination(
                 "available_team_id": team_ids_by_name[available_team_name],
                 "available_team_name": available_team_name,
             }
+
+
+def seed_bracket_fast_teams(
+    tournament_id: int,
+    *,
+    team_count: int = 64,
+) -> list[int]:
+    """Seed approved teams with players and locked roster for large bracket E2E."""
+    database_url = os.environ.get("E2E_DATABASE_URL")
+    expected_database = os.environ.get("E2E_DB_NAME")
+    if not database_url or not expected_database or not expected_database.endswith("_test"):
+        raise RuntimeError("Fast bracket seeding requires E2E_DATABASE_URL and an E2E_DB_NAME ending in _test")
+
+    with psycopg2.connect(database_url) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            if cursor.fetchone()[0] != expected_database:
+                raise RuntimeError("Refusing bracket setup outside the configured E2E database")
+
+            cursor.execute("SELECT game_id FROM tournaments WHERE tournament_id = %s", (tournament_id,))
+            tourn_row = cursor.fetchone()
+            if tourn_row is None:
+                raise RuntimeError(f"Tournament {tournament_id} not found")
+            game_id = tourn_row[0]
+
+            cursor.execute("SELECT user_id FROM users WHERE username = 'demo_organizer'")
+            reviewer_row = cursor.fetchone()
+            reviewer_id = reviewer_row[0] if reviewer_row else 1
+
+            cursor.execute("SELECT role_id FROM roles WHERE role_name = 'PLAYER'")
+            player_role_row = cursor.fetchone()
+            if not player_role_row:
+                cursor.execute("SELECT role_id FROM roles WHERE role_name = 'VIEWER'")
+                player_role_row = cursor.fetchone()
+            player_role_id = player_role_row[0]
+
+            team_ids = []
+            base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            ts = int(datetime.now().timestamp()) % 1000000
+            for idx in range(1, team_count + 1):
+                u_name = f"b64p{idx}_{ts}"
+                cursor.execute(
+                    "INSERT INTO users (username, email, password_hash, role_id, created_at) VALUES (%s, %s, 'unused', %s, CURRENT_TIMESTAMP) RETURNING user_id",
+                    (u_name, f"{u_name}@example.com", player_role_id),
+                )
+                user_id = cursor.fetchone()[0]
+
+                name = f"B64 Team {idx:02d} {ts}"
+                tag = f"B{idx:02d}"[:10]
+                cursor.execute(
+                    "INSERT INTO teams (game_id, name, tag, created_at) VALUES (%s, %s, %s, CURRENT_TIMESTAMP) RETURNING team_id",
+                    (game_id, name, tag),
+                )
+                team_id = cursor.fetchone()[0]
+                team_ids.append(team_id)
+
+                cursor.execute(
+                    """
+                    INSERT INTO tournament_registrations
+                        (tournament_id, team_id, status, submitted_by, submitted_at, reviewed_by, reviewed_at)
+                    VALUES (%s, %s, 'APPROVED', %s, %s, %s, %s)
+                    """,
+                    (tournament_id, team_id, user_id, base_time, reviewer_id, base_time + timedelta(seconds=1)),
+                )
+
+                cursor.execute(
+                    """
+                    INSERT INTO tournament_rosters (tournament_id, team_id, user_id, role_in_team, display_name)
+                    VALUES (%s, %s, %s, 'PLAYER', %s)
+                    """,
+                    (tournament_id, team_id, user_id, f"Player {idx}"),
+                )
+
+            # Mark tournament roster locked
+            cursor.execute(
+                "UPDATE tournaments SET roster_locked_at = CURRENT_TIMESTAMP WHERE tournament_id = %s",
+                (tournament_id,),
+            )
+            return team_ids
