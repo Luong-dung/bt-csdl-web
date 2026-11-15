@@ -303,7 +303,7 @@ def test_concurrent_final_result_vs_tournament_completion(access, session_factor
         assert len(result_audits) == 3
 
         status_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'tournament', AuditLog.action == 'TOURNAMENT_STATUS_CHANGED')))
-        completed_audits = [a for a in status_audits if a.details.get('status') == 'COMPLETED']
+        completed_audits = [a for a in status_audits if (a.details.get('after') or {}).get('status') == 'COMPLETED' or a.details.get('status') == 'COMPLETED']
         assert len(completed_audits) == (1 if close_code == 200 else 0)
 
 
@@ -353,7 +353,7 @@ def test_concurrent_semifinal_result_vs_tournament_cancellation(access, session_
         assert len(result_audits) == (1 if score_code == 200 else 0)
 
         cancel_audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'tournament', AuditLog.action == 'TOURNAMENT_STATUS_CHANGED')))
-        assert any(a.details.get('status') == 'CANCELLED' for a in cancel_audits)
+        assert any((a.details.get('after') or {}).get('status') == 'CANCELLED' or a.details.get('status') == 'CANCELLED' for a in cancel_audits)
 
     with make_client(session_factory, logged_in=False) as c:
         std = c.get(f"/api/v1/tournaments/{tid}/bracket/standings").json()
