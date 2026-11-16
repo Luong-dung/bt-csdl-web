@@ -13,6 +13,7 @@
 - [Contract API stage và thứ tự vòng — W44-2-02](./W44_2_STAGES.md)
 - [Nhật ký sử dụng AI](./AI_WORK_LOG.md)
 - [ADR-001: Modular monolith](./ADR/001-modular-monolith.md)
+- [ADR-002: Chatbot tra cứu (đề xuất, tùy chọn)](./ADR/002-chatbot-tra-cuu.md)
 
 ## Nguyên tắc cập nhật
 
