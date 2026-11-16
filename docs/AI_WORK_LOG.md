@@ -24,6 +24,12 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W47-DUNG-001 — API cấp/thu hồi quyền theo scope
+
+- **Ngày:** `2026-11-16`; **task:** W47-01; **yêu cầu:** triển khai W47-01 theo kế hoạch W47.
+- **Đã làm:** migration `d47a01b00001` thêm `granted_*`/`revoked_*` và unique index một assignment hiệu lực; `User.assignments` chỉ lấy assignment chưa thu hồi; `core/role_assignments.py`; API trọng tài theo giải và API ADMIN; capability `can_manage_referees`; contract [W47_ROLE_ASSIGNMENTS.md](./W47_ROLE_ASSIGNMENTS.md).
+- **Kiểm tra:** SQLite toàn bộ 832 passed/90 skipped (807 kế thừa + 25 mới); PostgreSQL: file mới + migration 28 passed, migration W47 3 passed, hồi quy quyền/capability/race W45-W46/migration 130 passed. Race cấp trùng và thu hồi khi nhập kết quả để W47-07.
+
 ### AI-2026-W46-DUNG-003 — Sửa review PR #89 trước merge
 
 - **Ngày:** `2026-11-10`; **yêu cầu:** sửa nốt #89 rồi merge vào main.
