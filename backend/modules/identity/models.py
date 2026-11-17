@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, Index, func as sa_func, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from config.database import Base
@@ -24,7 +24,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     role = relationship("Role", back_populates="users")
-    assignments = relationship("RoleAssignment", back_populates="user")
+    # Only active (not revoked) assignments grant anything; every checker reads this collection.
+    assignments = relationship("RoleAssignment", viewonly=True,
+                               primaryjoin="and_(User.user_id == RoleAssignment.user_id, RoleAssignment.revoked_at.is_(None))")
     audit_logs = relationship("AuditLog", back_populates="user")
 
 class Permission(Base):
@@ -42,9 +44,21 @@ class RoleAssignment(Base):
     role_id = Column(Integer, ForeignKey("roles.role_id", ondelete="CASCADE"), nullable=False)
     scope_type = Column(String(30), nullable=False, default="GLOBAL")
     scope_id = Column(Integer, nullable=True)
-    
-    user = relationship("User", back_populates="assignments")
+    # W47-01: grant/revoke history. Legacy rows keep NULL granted_* (unknown), never backfilled.
+    granted_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL", name="fk_role_assignments_granted_by"), nullable=True)
+    granted_at = Column(DateTime(timezone=True), nullable=True)
+    revoked_by = Column(Integer, ForeignKey("users.user_id", ondelete="SET NULL", name="fk_role_assignments_revoked_by"), nullable=True)
+    revoked_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
     role = relationship("Role")
+
+    __table_args__ = (
+        # At most one ACTIVE assignment per user/role/scope; revoked rows stay as history.
+        Index("uq_role_assignments_active", "user_id", "role_id", "scope_type",
+              sa_func.coalesce(scope_id, 0), unique=True,
+              postgresql_where=text("revoked_at IS NULL"), sqlite_where=text("revoked_at IS NULL")),
+    )
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

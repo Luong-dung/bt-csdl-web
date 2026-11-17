@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config.settings import get_settings
 from middleware.capabilities import PermissionCacheMiddleware
+from routes.admin_roles import router as admin_role_router
+from routes.referees import router as referee_router
 from routes.capabilities import router as capability_router
 from routes.auth import router as auth_router
 from routes.team import router as team_router
@@ -45,6 +47,8 @@ def create_app() -> FastAPI:
     app.include_router(bracket_router)
     app.include_router(match_result_router)
     app.include_router(match_router)
+    app.include_router(referee_router)
+    app.include_router(admin_role_router)
 
     @app.get("/")
     def check_server():
