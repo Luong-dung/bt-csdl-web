@@ -246,3 +246,63 @@ def test_admin_api_is_admin_only_and_cannot_target_self(access, session_factory,
         assert client.post(ADMIN, headers=headers(who), json=body).status_code == 403
         assert client.get(ADMIN, headers=headers(who)).status_code == 403
     assert client.post(ADMIN, headers=headers('admin'), json=body | {'user_id': users['admin']}).status_code == 422
+
+
+# ---------- review PR #101 ----------
+
+def admin_referee(client, headers, users, tid, target='referee'):
+    return client.post(ADMIN, headers=headers('admin'),
+                       json={'user_id': users[target], 'role': 'REFEREE', 'scope_type': 'TOURNAMENT', 'scope_id': tid})
+
+
+@pytest.mark.parametrize('player', ['viewer', 'manager'])
+def test_admin_api_applies_referee_conflict_of_interest(access, session_factory, match_case, player):
+    client, headers, users, *_ = access
+    assert admin_referee(client, headers, users, match_case['tid'], player).status_code == 409
+    assert audits(session_factory) == []
+
+
+@pytest.mark.parametrize('status', ['COMPLETED', 'CANCELLED'])
+def test_admin_api_cannot_grant_referee_in_closed_tournament(access, session_factory, match_case, status):
+    client, headers, users, *_ = access
+    with session_factory.begin() as db:
+        db.get(Tournament, match_case['tid']).status = status
+    assert admin_referee(client, headers, users, match_case['tid']).status_code == 409
+    assert audits(session_factory) == []
+
+
+@pytest.mark.parametrize('role,scope', [
+    ('ADMIN', 'TEAM'), ('ADMIN', 'TOURNAMENT'), ('REFEREE', 'GLOBAL'), ('REFEREE', 'TEAM'),
+    ('TEAM_MANAGER', 'TOURNAMENT'), ('TEAM_MANAGER', 'GLOBAL'), ('ORGANIZER', 'TEAM'), ('VIEWER', 'TOURNAMENT'),
+])
+def test_admin_rejects_role_scope_pairs_no_checker_honours(access, session_factory, match_case, role, scope):
+    client, headers, users, teams, _ = access
+    scope_id = {'GLOBAL': None, 'TEAM': teams['Alpha'], 'TOURNAMENT': match_case['tid']}[scope]
+    body = {'user_id': users['referee'], 'role': role, 'scope_type': scope, 'scope_id': scope_id}
+    assert client.post(ADMIN, headers=headers('admin'), json=body).status_code == 422
+    assert audits(session_factory) == []
+
+
+@pytest.mark.parametrize('scope', ['TEAM', 'ORGANIZATION'])
+def test_scoped_team_manager_of_registered_team_cannot_referee(access, session_factory, match_case, scope):
+    client, headers, users, teams, roles = access
+    with session_factory.begin() as db:
+        from modules.teams.models import Team
+        alpha = db.get(Team, teams['Alpha'])
+        scope_id = alpha.team_id if scope == 'TEAM' else alpha.organization_id
+        db.add(RoleAssignment(user_id=users['referee'], role_id=roles['TEAM_MANAGER'],
+                              scope_type=scope, scope_id=scope_id))
+    assert grant(client, headers, match_case['tid'], users).status_code == 409
+    assert admin_referee(client, headers, users, match_case['tid']).status_code == 409
+    assert grant(client, headers, match_case['other'], users).status_code == 201
+
+
+def test_permission_lists_are_not_cached(access, match_case):
+    client, headers, users, *_ = access
+    assignment = grant(client, headers, match_case['tid'], users).json()['assignment_id']
+    responses = [client.get(path(match_case['tid']), headers=headers('organizer')),
+                 client.get(path(match_case['tid'])),
+                 client.delete(path(match_case['tid'], f'/{assignment}'), headers=headers('organizer')),
+                 client.get(ADMIN, headers=headers('admin')),
+                 client.get(ADMIN, headers=headers('viewer'))]
+    assert [r.headers.get('cache-control') for r in responses] == ['private, no-store'] * 5

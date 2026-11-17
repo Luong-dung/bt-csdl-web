@@ -104,7 +104,9 @@ def create_assignment(data: AssignmentCreate, user: User = Depends(get_current_u
             raise HTTPException(status_code=422, detail='Phạm vi (scope) không tồn tại')
         tournament_id = data.scope_id if data.scope_type == 'TOURNAMENT' else None
         user = ensure_admin(db, user, tournament_id)
-        assignment = grant(db, user, data.user_id, data.role, data.scope_type, data.scope_id, tournament_id)
+        # Locked by ensure_admin; REFEREE rules (closed tournament, conflict of interest) apply here too.
+        tournament = db.get(Tournament, tournament_id) if tournament_id is not None else None
+        assignment = grant(db, user, data.user_id, data.role, data.scope_type, data.scope_id, tournament)
         result = to_read(assignment, db.get(User, data.user_id), data.role)
         db.commit()
         return result

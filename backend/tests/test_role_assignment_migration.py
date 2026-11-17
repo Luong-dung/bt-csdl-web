@@ -73,3 +73,23 @@ def test_downgrade_with_revoked_assignment_stops(request, session_factory, acces
             command.downgrade(config, PREVIOUS)
         assert NEW_COLUMNS <= columns(connection)
         assert connection.scalar(text('SELECT version_num FROM alembic_version')) == HEAD
+
+
+def test_upgrade_drops_legacy_full_unique_from_sql_schema(request, session_factory, access):
+    """database/schema_postgres.sql installs had UNIQUE(user_id, role_id, scope_type, scope_id)."""
+    if not request.config.getoption('--postgres'):
+        pytest.skip('PostgreSQL migration DDL')
+    _, _, users, _, roles = access
+    with session_factory() as db:
+        connection = db.connection()
+        config = migration_config(connection)
+        command.downgrade(config, PREVIOUS)
+        connection.execute(text('ALTER TABLE role_assignments ADD CONSTRAINT legacy_ra_unique '
+                                'UNIQUE (user_id, role_id, scope_type, scope_id)'))
+        command.upgrade(config, 'head')
+        assert 'legacy_ra_unique' not in {c['name'] for c in inspect(connection).get_unique_constraints('role_assignments')}
+        # Revoke then grant again must be possible: history row + new active row.
+        insert(connection, users, roles)
+        connection.execute(text('UPDATE role_assignments SET revoked_at = now()'))
+        insert(connection, users, roles)
+        assert connection.scalar(text('SELECT count(*) FROM role_assignments WHERE scope_id = 7')) == 2

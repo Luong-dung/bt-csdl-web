@@ -28,6 +28,11 @@ def upgrade():
         for name in ('granted_at', 'revoked_at'):
             if name not in existing:
                 batch.add_column(sa.Column(name, sa.DateTime(timezone=True), nullable=True))
+    # Installs from database/schema_postgres.sql carry UNIQUE(user_id, role_id, scope_type, scope_id);
+    # it would make revoke-then-grant-again conflict with the history row.
+    for constraint in sa.inspect(bind).get_unique_constraints('role_assignments'):
+        if set(constraint['column_names']) == {'user_id', 'role_id', 'scope_type', 'scope_id'}:
+            op.drop_constraint(constraint['name'], 'role_assignments', type_='unique')
     if INDEX in {i['name'] for i in sa.inspect(bind).get_indexes('role_assignments')}:
         return
     # Never merge or delete legacy duplicates silently: stop and let the team resolve them explicitly.

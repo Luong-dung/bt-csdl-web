@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.role_assignments import (
-    grant, lock_assignment, plays_in_tournament, referees_grantable, revoke, role_id,
+    grant, lock_assignment, revoke, role_id,
 )
 from core.tournaments import ensure_tournament_manager, get_managed_tournament, get_tournament_or_404
 from core.validation import INT_MAX, ResourceId
@@ -81,11 +81,7 @@ def grant_referee(
     try:
         # Locks the tournament and rechecks the actor's permission after waiting.
         tournament = get_managed_tournament(db, tournament_id, user)
-        if not referees_grantable(tournament):
-            raise HTTPException(status_code=409, detail='Giải đã kết thúc hoặc bị hủy, không thể cấp trọng tài')
-        if data.user_id != user.user_id and plays_in_tournament(db, tournament_id, data.user_id):
-            raise HTTPException(status_code=409, detail='Người dùng đang thi đấu trong giải, không thể làm trọng tài')
-        assignment = grant(db, user, data.user_id, 'REFEREE', 'TOURNAMENT', tournament_id, tournament_id)
+        assignment = grant(db, user, data.user_id, 'REFEREE', 'TOURNAMENT', tournament_id, tournament)
         target = db.get(User, data.user_id)
         result = to_read(assignment, target)
         db.commit()
