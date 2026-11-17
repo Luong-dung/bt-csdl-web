@@ -26,8 +26,14 @@ CREATE TABLE role_assignments (
     role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
     scope_type VARCHAR(30) NOT NULL DEFAULT 'GLOBAL',
     scope_id INT,
-    UNIQUE (user_id, role_id, scope_type, scope_id)
+    -- W47-01: grant/revoke history; revoked rows stay, only revoked_at IS NULL grants anything.
+    granted_by INT CONSTRAINT fk_role_assignments_granted_by REFERENCES users(user_id) ON DELETE SET NULL,
+    granted_at TIMESTAMPTZ,
+    revoked_by INT CONSTRAINT fk_role_assignments_revoked_by REFERENCES users(user_id) ON DELETE SET NULL,
+    revoked_at TIMESTAMPTZ
 );
+CREATE UNIQUE INDEX uq_role_assignments_active ON role_assignments
+    (user_id, role_id, scope_type, coalesce(scope_id, 0)) WHERE revoked_at IS NULL;
 CREATE TABLE audit_logs (
     log_id BIGSERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id) ON DELETE SET NULL,

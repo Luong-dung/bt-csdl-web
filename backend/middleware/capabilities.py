@@ -8,7 +8,8 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 PERMISSION_PATH = re.compile(
     r'/api/v1/(?:auth/capabilities|teams/managed|(?:teams|tournaments)/[^/]+/capabilities'
     r'|tournaments/[^/]+/teams/[^/]+/roster(?:/capabilities)?|tournaments/[^/]+/roster-lock'
-    r'|tournaments/[^/]+/matches/[^/]+/capabilities)/?'
+    r'|tournaments/[^/]+/matches/[^/]+/capabilities'
+    r'|tournaments/[^/]+/referees(?:/[^/]+)?|admin/role-assignments(?:/[^/]+)?)/?'
 )
 # Bracket preview/create carry a preview token and manager-only data; the public GET stays cacheable.
 BRACKET_WRITE_PATH = re.compile(r'/api/v1/tournaments/[^/]+/bracket(?:/preview)?/?')
