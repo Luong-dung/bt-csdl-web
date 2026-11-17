@@ -69,5 +69,14 @@ class AuditLog(Base):
     resource = Column(String(100), nullable=False)
     details = Column(JSON, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+    # W47-02: derived from details by core.audit.record_audit; no FK so history survives deletes.
+    tournament_id = Column(Integer, nullable=True)
+    resource_id = Column(Integer, nullable=True)
+
     user = relationship("User", back_populates="audit_logs")
+
+    __table_args__ = (
+        Index("ix_audit_logs_tournament_log", "tournament_id", "log_id"),
+        Index("ix_audit_logs_resource_log", "resource", "resource_id", "log_id"),
+        Index("ix_audit_logs_user_log", "user_id", "log_id"),
+    )

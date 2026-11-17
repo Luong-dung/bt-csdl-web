@@ -24,6 +24,12 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W47-DUNG-002 — Chuẩn audit và API đọc nhật ký
+
+- **Ngày:** `2026-11-17`; **task:** W47-02; **yêu cầu:** làm W47-02 theo kế hoạch W47.
+- **Đã làm:** `record_audit` tự điền `tournament_id`/`resource_id` từ `details` (không đổi action cũ); audit team đi qua `record_audit`; audit catalog tạo/sửa/xóa; migration `e47a02b00001` (cột, 3 index, backfill từ `details`); `GET /tournaments/{id}/audit-logs`, `GET /admin/audit-logs` có lọc/phân trang, lọc khóa nhạy cảm, no-store; capability `can_view_audit`; đồng bộ `schema_postgres.sql`; contract [W47_AUDIT_LOG.md](./W47_AUDIT_LOG.md).
+- **Kiểm tra:** SQLite toàn bộ 870 passed/92 skipped (23 ca mới); PostgreSQL 158 passed; nạp `schema_postgres.sql` vào schema tạm rồi rollback.
+
 ### AI-2026-W47-DUNG-001 — API cấp/thu hồi quyền theo scope
 
 - **Ngày:** `2026-11-16`; **task:** W47-01; **yêu cầu:** triển khai W47-01 theo kế hoạch W47.

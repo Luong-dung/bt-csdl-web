@@ -25,6 +25,7 @@ router = APIRouter(tags=["Capabilities"])
 class GlobalCapabilities(BaseModel):
     can_manage_catalog: bool
     can_create_tournament: bool
+    can_view_audit: bool
 
 
 class TeamCapabilities(BaseModel):
@@ -46,6 +47,7 @@ class TournamentCapabilities(BaseModel):
     can_manage_matches: bool
     can_create_bracket: bool
     can_manage_referees: bool
+    can_view_audit: bool
     editable_fields: list[str]
     allowed_status_transitions: list[str]
 
@@ -55,6 +57,7 @@ def global_capabilities(user: User = Depends(get_current_user)):
     return GlobalCapabilities(
         can_manage_catalog=has_role(user, "ADMIN"),
         can_create_tournament=has_role(user, "ADMIN", "ORGANIZER"),
+        can_view_audit=has_role(user, "ADMIN"),
     )
 
 
@@ -102,6 +105,7 @@ def tournament_capabilities(
         can_manage_matches=allowed and matches_writable(tournament),
         can_create_bracket=can_create_bracket(db, tournament, user),
         can_manage_referees=allowed and referees_grantable(tournament),
+        can_view_audit=allowed,
         editable_fields=fields,
         allowed_status_transitions=transitions,
     )

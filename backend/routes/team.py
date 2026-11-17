@@ -8,11 +8,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
+from core.audit import record_audit
 from core.validation import DbId, INT_MAX, ResourceId
 from core.rosters import lock_membership_team
 from middleware.auth import ensure_team_manager, get_current_user, managed_teams_query
 from modules.catalog.models import Game
-from modules.identity.models import AuditLog, User
+from modules.identity.models import User
 from modules.teams.models import Team, TeamMembership
 
 router = APIRouter(prefix="/api/v1/teams", tags=["Teams"])
@@ -112,13 +113,10 @@ def ensure_other_manager(db: Session, membership: TeamMembership):
 
 
 def audit(db: Session, user: User, action: str, membership: TeamMembership, **details):
-    db.add(AuditLog(
-        user_id=user.user_id,
-        action=action,
-        resource="team_membership",
-        details={"team_id": membership.team_id, "membership_id": membership.membership_id,
-                 "member_user_id": membership.user_id, **details},
-    ))
+    # Same details shape as before W47-02; written through the shared audit writer.
+    record_audit(db, user.user_id, action, "team_membership", {
+        "team_id": membership.team_id, "membership_id": membership.membership_id,
+        "member_user_id": membership.user_id, **details})
 
 
 def save_or_409(db: Session, message: str, commit: bool = True):

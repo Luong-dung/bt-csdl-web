@@ -40,8 +40,14 @@ CREATE TABLE audit_logs (
     action VARCHAR(100) NOT NULL,
     resource VARCHAR(100) NOT NULL,
     details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- W47-02: derived from details by core.audit.record_audit; no FK so history survives deletes.
+    tournament_id INT,
+    resource_id INT
 );
+CREATE INDEX ix_audit_logs_tournament_log ON audit_logs (tournament_id, log_id);
+CREATE INDEX ix_audit_logs_resource_log ON audit_logs (resource, resource_id, log_id);
+CREATE INDEX ix_audit_logs_user_log ON audit_logs (user_id, log_id);
 CREATE TABLE publishers (
     publisher_id SERIAL PRIMARY KEY,
     name VARCHAR(120) NOT NULL UNIQUE
