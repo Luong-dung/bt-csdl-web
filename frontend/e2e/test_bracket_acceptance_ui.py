@@ -230,9 +230,13 @@ def test_bracket_preview_expiry_and_double_submit_protection(
     def tamper_preview_token(route):
         response = route.fetch()
         data = response.json()
-        # Tamper last character of preview_token so backend verify_preview_token raises real 409
-        old_tok = data["preview_token"]
-        data["preview_token"] = old_tok[:-1] + ("x" if old_tok[-1] != "x" else "y")
+        # Flip a character in the MIDDLE of the JWT signature so verify_preview_token raises a real 409.
+        # Never the last character: in base64url its low 2 bits are padding, so e.g. "w" -> "x" decodes to
+        # the same HMAC and the token stays valid (~6% of tokens), which made this test flaky (201, no banner).
+        header, payload, signature = data["preview_token"].split(".")
+        middle = len(signature) // 2
+        flipped = "A" if signature[middle] != "A" else "B"
+        data["preview_token"] = ".".join([header, payload, signature[:middle] + flipped + signature[middle + 1:]])
         route.fulfill(response=response, json=data)
 
     page.route(preview_url, tamper_preview_token)

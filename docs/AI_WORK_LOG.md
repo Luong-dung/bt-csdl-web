@@ -24,6 +24,12 @@ Tài liệu này lưu lại những yêu cầu mỗi thành viên đã gửi cho
 
 ## 3. Nhật ký theo thành viên
 
+### AI-2026-W47-DUNG-003 — Sửa E2E preview hết hạn chập chờn
+
+- **Ngày:** `2026-11-18`; **yêu cầu:** E2E lại lỗi trên main sau PR #104.
+- **Nguyên nhân:** `test_bracket_preview_expiry_and_double_submit_protection` đổi ký tự **cuối** chữ ký JWT; ký tự cuối base64url có 2 bit đệm, nên khoảng 6% token (ví dụ `w`→`x`) vẫn giải mã ra đúng HMAC, backend trả 201 thay vì 409. Đây cũng là lỗi gốc của lần fail trên #102 (không có banner vì bracket đã tạo thành công).
+- **Đã sửa:** đổi một ký tự ở giữa chữ ký. **Kiểm tra:** với `verify_preview_token` thật, cách cũ chấp nhận 19/400 token, cách mới 0/2000; CI run 44227255194 (main) và 44227479298 (#103) đều fail `assert 201 == 409`.
+
 ### AI-2026-W47-DUNG-002 — Chuẩn audit và API đọc nhật ký
 
 - **Ngày:** `2026-11-17`; **task:** W47-02; **yêu cầu:** làm W47-02 theo kế hoạch W47.
