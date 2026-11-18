@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.encoders import jsonable_encoder
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config.database import get_db
-from middleware.auth import require_role
+from core.audit import record_audit
+from middleware.auth import get_current_user, require_role
+from modules.identity.models import User
 from modules.catalog.models import CompetitionArea, Game, Publisher
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
@@ -121,6 +124,24 @@ def ensure_valid_parent(db: Session, parent_id: int | None, area_id: int | None 
         current = parent.parent_id
 
 
+def snapshot(item) -> dict:
+    return jsonable_encoder({column.name: getattr(item, column.name) for column in item.__table__.columns})
+
+
+def audit_change(db: Session, user, action: str, resource: str, item, before: dict | None, deleted=False):
+    """W47-02: catalog writes are audited in the same commit as the change."""
+    # Flush for the new ID; a concurrent duplicate surfaces here, so map it to 409 like commit_or_409.
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Dữ liệu vi phạm ràng buộc, vui lòng kiểm tra lại")
+    after = None if deleted else snapshot(item)
+    resource_id = (before or after)[f'{resource}_id']
+    record_audit(db, getattr(user, 'user_id', None), action, resource,
+                 {f'{resource}_id': resource_id, 'before': before, 'after': after})
+
+
 def commit_or_409(db: Session):
     # Fallback for a concurrent insert that slips past the pre-checks.
     try:
@@ -149,23 +170,26 @@ def get_publisher(publisher_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def create_publisher(data: PublisherCreate, db: Session = Depends(get_db)):
+def create_publisher(data: PublisherCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ensure_unique(db, Publisher.name, data.name, message="Tên nhà phát hành đã tồn tại")
     publisher = Publisher(name=data.name)
     db.add(publisher)
+    audit_change(db, user, "CATALOG_PUBLISHER_CREATED", "publisher", publisher, None)
     commit_or_409(db)
     return publisher
 
 
 @router.patch("/publishers/{publisher_id}", response_model=PublisherRead, dependencies=[Depends(require_role("ADMIN"))])
-def update_publisher(publisher_id: int, data: PublisherUpdate, db: Session = Depends(get_db)):
+def update_publisher(publisher_id: int, data: PublisherUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     publisher = get_or_404(db, Publisher, publisher_id, "nhà phát hành")
+    before = snapshot(publisher)
     changes = data.model_dump(exclude_unset=True)
     if "name" in changes:
         ensure_unique(db, Publisher.name, changes["name"], publisher_id, Publisher.publisher_id,
                       "Tên nhà phát hành đã tồn tại")
     for field, value in changes.items():
         setattr(publisher, field, value)
+    audit_change(db, user, "CATALOG_PUBLISHER_UPDATED", "publisher", publisher, before)
     commit_or_409(db)
     return publisher
 
@@ -175,10 +199,12 @@ def update_publisher(publisher_id: int, data: PublisherUpdate, db: Session = Dep
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def delete_publisher(publisher_id: int, db: Session = Depends(get_db)):
+def delete_publisher(publisher_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     publisher = get_or_404(db, Publisher, publisher_id, "nhà phát hành")
     ensure_unused(db, Game.publisher_id, publisher_id, "Nhà phát hành vẫn còn game, không thể xóa")
+    before = snapshot(publisher)
     db.delete(publisher)
+    audit_change(db, user, "CATALOG_PUBLISHER_DELETED", "publisher", publisher, before, deleted=True)
     commit_or_409(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -205,19 +231,21 @@ def get_game(game_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def create_game(data: GameCreate, db: Session = Depends(get_db)):
+def create_game(data: GameCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ensure_publisher(db, data.publisher_id)
     ensure_unique(db, Game.name, data.name, message="Tên game đã tồn tại")
     ensure_unique(db, Game.slug, data.slug, message="Slug game đã tồn tại")
     game = Game(**data.model_dump())
     db.add(game)
+    audit_change(db, user, "CATALOG_GAME_CREATED", "game", game, None)
     commit_or_409(db)
     return game
 
 
 @router.patch("/games/{game_id}", response_model=GameRead, dependencies=[Depends(require_role("ADMIN"))])
-def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db)):
+def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     game = get_or_404(db, Game, game_id, "game")
+    before = snapshot(game)
     changes = data.model_dump(exclude_unset=True)
     if "publisher_id" in changes:
         ensure_publisher(db, changes["publisher_id"])
@@ -227,6 +255,7 @@ def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db)):
         ensure_unique(db, Game.slug, changes["slug"], game_id, Game.game_id, "Slug game đã tồn tại")
     for field, value in changes.items():
         setattr(game, field, value)
+    audit_change(db, user, "CATALOG_GAME_UPDATED", "game", game, before)
     commit_or_409(db)
     return game
 
@@ -236,11 +265,13 @@ def update_game(game_id: int, data: GameUpdate, db: Session = Depends(get_db)):
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def delete_game(game_id: int, db: Session = Depends(get_db)):
+def delete_game(game_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     game = get_or_404(db, Game, game_id, "game")
     ensure_unused(db, Team.game_id, game_id, "Game đang được đội tuyển sử dụng, không thể xóa")
     ensure_unused(db, Tournament.game_id, game_id, "Game đang được giải đấu sử dụng, không thể xóa")
+    before = snapshot(game)
     db.delete(game)
+    audit_change(db, user, "CATALOG_GAME_DELETED", "game", game, before, deleted=True)
     commit_or_409(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -267,18 +298,20 @@ def get_area(area_id: int, db: Session = Depends(get_db)):
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def create_area(data: AreaCreate, db: Session = Depends(get_db)):
+def create_area(data: AreaCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ensure_valid_parent(db, data.parent_id)
     ensure_unique(db, CompetitionArea.code, data.code, message="Mã khu vực đã tồn tại")
     area = CompetitionArea(**data.model_dump())
     db.add(area)
+    audit_change(db, user, "CATALOG_AREA_CREATED", "area", area, None)
     commit_or_409(db)
     return area
 
 
 @router.patch("/areas/{area_id}", response_model=AreaRead, dependencies=[Depends(require_role("ADMIN"))])
-def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db)):
+def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     area = get_or_404(db, CompetitionArea, area_id, "khu vực")
+    before = snapshot(area)
     changes = data.model_dump(exclude_unset=True)
     if "parent_id" in changes:
         ensure_valid_parent(db, changes["parent_id"], area_id)
@@ -287,6 +320,7 @@ def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db)):
                       "Mã khu vực đã tồn tại")
     for field, value in changes.items():
         setattr(area, field, value)
+    audit_change(db, user, "CATALOG_AREA_UPDATED", "area", area, before)
     commit_or_409(db)
     return area
 
@@ -296,10 +330,12 @@ def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db)):
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_role("ADMIN"))],
 )
-def delete_area(area_id: int, db: Session = Depends(get_db)):
+def delete_area(area_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     area = get_or_404(db, CompetitionArea, area_id, "khu vực")
     ensure_unused(db, CompetitionArea.parent_id, area_id, "Khu vực vẫn còn khu vực con, không thể xóa")
     ensure_unused(db, Tournament.area_id, area_id, "Khu vực đang được giải đấu sử dụng, không thể xóa")
+    before = snapshot(area)
     db.delete(area)
+    audit_change(db, user, "CATALOG_AREA_DELETED", "area", area, before, deleted=True)
     commit_or_409(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
