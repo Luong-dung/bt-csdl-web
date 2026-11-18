@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 from playwright.sync_api import Page, expect
 
-from helpers import login, unique_username
+from helpers import login, unique_username, wait_for_held_request
 from test_matches_ui import _api_request, _register_and_login_api
 from test_tournaments import open_tournament
 
@@ -272,11 +272,7 @@ def test_bracket_preview_stale_response_ignored_on_tournament_change_and_viewer_
     page.route(preview_url, hold_preview)
     try:
         section.locator('[data-testid="bracket-preview-btn"]').click()
-        for _ in range(50):
-            if len(held_responses) == 1:
-                break
-            page.wait_for_timeout(100)
-        assert len(held_responses) == 1, "Preview request did not reach the held route"
+        wait_for_held_request(page, held_responses, expected_count=1)
 
         # Switch to Tournament B while Tournament A preview is in-flight
         page.locator(".tournament-detail .detail-header button").filter(

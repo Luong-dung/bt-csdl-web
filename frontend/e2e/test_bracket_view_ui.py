@@ -2,6 +2,7 @@ import re
 
 from playwright.sync_api import Page, expect
 
+from helpers import wait_for_held_request
 from test_bracket_create_ui import _setup_bracket_tournament
 from test_matches_ui import _api_request
 from test_tournaments import open_tournament
@@ -262,11 +263,7 @@ def test_bracket_view_stale_response_guard_and_cancelled_standings(
     page.route(bracket_url, hold_bracket)
     try:
         section.locator('[data-testid="bracket-reload-btn"]').click()
-        for _ in range(50):
-            if len(held_responses) == 1:
-                break
-            page.wait_for_timeout(100)
-        assert len(held_responses) == 1, "Bracket GET request did not reach the held route"
+        wait_for_held_request(page, held_responses, expected_count=1)
 
         page.locator(".tournament-detail .detail-header button").filter(
             has_text=re.compile("Đóng|Close")

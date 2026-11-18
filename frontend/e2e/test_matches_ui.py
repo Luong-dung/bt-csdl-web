@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from playwright.sync_api import Browser, Page, expect
 
 from database_support import assign_tournament_referee, seed_match_pagination
-from helpers import login, register_user, unique_username
+from helpers import login, register_user, unique_username, wait_for_held_request
 from test_tournaments import open_tournament
 
 
@@ -724,11 +724,7 @@ def test_match_start_response_is_ignored_after_session_change(
     try:
         match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
         match_card.locator(f'[data-testid="match-start-btn-{match_id}"]').click()
-        for _ in range(50):
-            if len(held_responses) == 1:
-                break
-            page.wait_for_timeout(100)
-        assert len(held_responses) == 1, "The start request did not reach the held response"
+        wait_for_held_request(page, held_responses, expected_count=1)
 
         viewer, _viewer_token = _register_and_login_api(
             page, api_base_url, "match-viewer", demo_password
@@ -815,11 +811,7 @@ def test_match_start_response_is_ignored_after_tournament_change(
     try:
         match_card = page.locator(f'[data-testid="match-card-{match_id}"]')
         match_card.locator(f'[data-testid="match-start-btn-{match_id}"]').click()
-        for _ in range(50):
-            if len(held_responses) == 1:
-                break
-            page.wait_for_timeout(100)
-        assert len(held_responses) == 1, "The start request did not reach the held response"
+        wait_for_held_request(page, held_responses, expected_count=1)
 
         page.locator(".tournament-detail .detail-header button").filter(
             has_text=re.compile("Đóng|Close")
