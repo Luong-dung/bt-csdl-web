@@ -1,18 +1,9 @@
 import json
 import re
-from time import monotonic
 from playwright.sync_api import Browser, Page, expect
 
-from helpers import create_team, login, register_user, unique_username
+from helpers import create_team, login, register_user, unique_username, wait_for_held_request
 from test_tournaments import create_tournament, open_tournament, refresh_tournament
-
-
-def wait_for_held_request(page: Page, requests: list):
-    # Pump Playwright events until the route handler actually holds the request.
-    deadline = monotonic() + 10
-    while not requests and monotonic() < deadline:
-        page.wait_for_timeout(50)
-    assert requests, "Expected request was not intercepted within 10 seconds"
 
 
 def test_stage_crud_and_reorder_ui(page: Page, browser: Browser, app_base_url: str, demo_password: str):

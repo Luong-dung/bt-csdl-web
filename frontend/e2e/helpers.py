@@ -1,3 +1,4 @@
+from time import monotonic
 from uuid import uuid4
 
 from playwright.sync_api import Page, expect
@@ -39,3 +40,17 @@ def create_team(page: Page, team_name: str, tag: str) -> None:
     page.get_by_role("button", name="Tạo đội").click()
     expect(page.locator(".message.success")).to_contain_text("Tạo đội thành công")
     expect(page.locator(".team-list article").filter(has_text=team_name)).to_be_visible()
+
+
+def wait_for_held_request(
+    page: Page, requests: list, expected_count: int = 1, timeout_s: float = 10.0
+) -> list:
+    """Pump Playwright events until the route handler holds at least expected_count request(s)."""
+    deadline = monotonic() + timeout_s
+    while len(requests) < expected_count and monotonic() < deadline:
+        page.wait_for_timeout(50)
+    assert len(requests) >= expected_count, (
+        f"Expected at least {expected_count} request(s) to be intercepted within {timeout_s} seconds, got {len(requests)}"
+    )
+    return requests
+

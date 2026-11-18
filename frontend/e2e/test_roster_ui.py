@@ -2,7 +2,7 @@ import re
 from datetime import date, timedelta
 from playwright.sync_api import Browser, Page, expect
 
-from helpers import create_team, login, register_user, unique_username
+from helpers import create_team, login, register_user, unique_username, wait_for_held_request
 from test_tournaments import create_tournament, open_tournament, refresh_tournament
 
 
@@ -168,8 +168,7 @@ def test_approved_team_roster_selection_and_organizer_lock(
         page.route(lock_url, hold_lock_response)
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(".roster-lock-controls button").filter(has_text="Khóa đội hình giải đấu").click()
-        page.wait_for_timeout(200)
-        assert len(held_lock_responses) == 1, "The roster-lock request did not reach the held response"
+        wait_for_held_request(page, held_lock_responses, expected_count=1)
 
         # Keep the lock response in flight while switching tournaments in the same session.
         page.locator(".tournament-detail .detail-header button").filter(

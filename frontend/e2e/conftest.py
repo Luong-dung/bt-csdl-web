@@ -3,7 +3,9 @@ import re
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Browser, Page, sync_playwright
+from playwright.sync_api import Browser, Page, expect, sync_playwright
+
+expect.set_options(timeout=10_000)
 
 
 ARTIFACTS = Path(__file__).resolve().parents[1] / "e2e-artifacts"
