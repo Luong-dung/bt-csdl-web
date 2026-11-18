@@ -244,7 +244,11 @@ def test_bracket_preview_expiry_and_double_submit_protection(
         page.unroute(preview_url, tamper_preview_token)
 
     # Click confirm: real backend receives tampered token and responds with REAL 409
-    section.locator('[data-testid="bracket-create-confirm-btn"]').click()
+    with page.expect_response(
+        lambda r: f"/tournaments/{tid}/bracket" in r.url and r.request.method == "POST"
+    ) as resp_info:
+        section.locator('[data-testid="bracket-create-confirm-btn"]').click()
+    assert resp_info.value.status == 409
     expect(section.locator('[data-testid="bracket-error-banner"]')).to_contain_text(
         "Preview hết hạn hoặc không hợp lệ"
     )
@@ -254,7 +258,10 @@ def test_bracket_preview_expiry_and_double_submit_protection(
     expect(first_row).to_contain_text(teams[1]["name"])
 
     # 2. Re-click preview to obtain a fresh, valid preview token from backend
-    section.locator('[data-testid="bracket-preview-btn"]').click()
+    with page.expect_response(
+        lambda r: f"/tournaments/{tid}/bracket/preview" in r.url and r.request.method == "POST"
+    ):
+        section.locator('[data-testid="bracket-preview-btn"]').click()
     preview_panel = section.locator('[data-testid="bracket-preview-panel"]')
     expect(preview_panel).to_be_visible()
 
@@ -262,14 +269,20 @@ def test_bracket_preview_expiry_and_double_submit_protection(
     creation_requests = []
 
     def hold_create(route):
-        creation_requests.append(route)
+        if route.request.method == "POST":
+            creation_requests.append(route)
+        else:
+            route.continue_()
 
     bracket_url = f"**/api/v1/tournaments/{tid}/bracket"
     page.route(bracket_url, hold_create)
     try:
         confirm_btn = section.locator('[data-testid="bracket-create-confirm-btn"]')
         confirm_btn.click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(creation_requests) == 1:
+                break
+            page.wait_for_timeout(100)
         assert len(creation_requests) == 1, "Creation request did not reach held route"
         # Confirm button must be disabled during submission
         expect(confirm_btn).to_be_disabled()
@@ -358,7 +371,10 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
     page.route(bracket_url, hold_bracket)
     try:
         sec_a.locator('[data-testid="bracket-reload-btn"]').click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(held_tourn) >= 1:
+                break
+            page.wait_for_timeout(100)
         assert len(held_tourn) >= 1
 
         # Switch to Tournament B
@@ -415,7 +431,10 @@ def test_bracket_in_flight_switch_anti_stale_and_cancelled_standings(
     page.route(bracket_url, hold_session_request)
     try:
         sec_a.locator('[data-testid="bracket-reload-btn"]').click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(held_session) >= 1:
+                break
+            page.wait_for_timeout(100)
         assert len(held_session) >= 1
 
         # Logout while request is in-flight

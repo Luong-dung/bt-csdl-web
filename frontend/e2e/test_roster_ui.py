@@ -168,7 +168,10 @@ def test_approved_team_roster_selection_and_organizer_lock(
         page.route(lock_url, hold_lock_response)
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(".roster-lock-controls button").filter(has_text="Khóa đội hình giải đấu").click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(held_lock_responses) == 1:
+                break
+            page.wait_for_timeout(100)
         assert len(held_lock_responses) == 1, "The roster-lock request did not reach the held response"
 
         # Keep the lock response in flight while switching tournaments in the same session.

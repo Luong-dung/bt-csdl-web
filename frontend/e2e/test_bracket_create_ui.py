@@ -272,7 +272,10 @@ def test_bracket_preview_stale_response_ignored_on_tournament_change_and_viewer_
     page.route(preview_url, hold_preview)
     try:
         section.locator('[data-testid="bracket-preview-btn"]').click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(held_responses) == 1:
+                break
+            page.wait_for_timeout(100)
         assert len(held_responses) == 1, "Preview request did not reach the held route"
 
         # Switch to Tournament B while Tournament A preview is in-flight

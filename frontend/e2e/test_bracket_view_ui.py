@@ -262,7 +262,10 @@ def test_bracket_view_stale_response_guard_and_cancelled_standings(
     page.route(bracket_url, hold_bracket)
     try:
         section.locator('[data-testid="bracket-reload-btn"]').click()
-        page.wait_for_timeout(200)
+        for _ in range(50):
+            if len(held_responses) == 1:
+                break
+            page.wait_for_timeout(100)
         assert len(held_responses) == 1, "Bracket GET request did not reach the held route"
 
         page.locator(".tournament-detail .detail-header button").filter(
