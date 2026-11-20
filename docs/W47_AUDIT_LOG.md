@@ -14,7 +14,7 @@
 | `tournament_id` | `details.tournament_id` (chỉ số nguyên) |
 | `resource_id` | khóa ID theo `resource` trong `details`, hoặc trong `details.after`/`details.before` |
 
-Bảng khóa ID (`core.audit.RESOURCE_ID_KEYS`): `tournament→tournament_id`, `tournament_registration→registration_id`, `tournament_stage→stage_id`, `tournament_roster→team_id`, `match→match_id`, `bracket→bracket_id`, `team_membership→membership_id`, `role_assignment→assignment_id`, `publisher→publisher_id`, `game→game_id`, `area→area_id`. **Resource mới (W47-03/-04) phải thêm khóa vào bảng này**, và đặt `tournament_id` trong `details` nếu thuộc một giải.
+Bảng khóa ID (`core.audit.RESOURCE_ID_KEYS`): `tournament→tournament_id`, `tournament_registration→registration_id`, `tournament_stage→stage_id`, `tournament_roster→team_id`, `match→match_id`, `bracket→bracket_id`, `team_membership→membership_id`, `role_assignment→assignment_id`, `publisher→publisher_id`, `game→game_id`, `area→area_id`, `team→team_id` và `organization→organization_id` (W47-03, [contract](./W47_TEAM_UPDATE.md)). **Resource mới (W47-03/-04) phải thêm khóa vào bảng này**, và đặt `tournament_id` trong `details` nếu thuộc một giải.
 
 - Dòng cũ được migration điền 2 cột bằng cùng hàm `derive_ids`; `details` không bị sửa. Dòng không có ID trong `details` để NULL (hiện trong nhật ký ADMIN, không hiện trong nhật ký giải).
 

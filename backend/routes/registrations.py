@@ -12,6 +12,7 @@ from core.audit import record_audit
 from core.registrations import (
     ensure_registration_open, ensure_registration_resolution_open, lock_registration, registration_timestamp,
 )
+from core.rosters import lock_roster_teams
 from core.tournaments import get_managed_tournament, get_tournament_or_404, lock_tournament_as
 from core.validation import DbId
 from middleware.auth import can_manage_tournament, ensure_team_manager, get_current_user, managed_teams_query
@@ -131,9 +132,8 @@ def create_registration(
     tournament, user = lock_tournament_as(db, tournament_id, user)
     ensure_team_manager(db, data.team_id, user)
     ensure_registration_open(tournament)
-    team = db.get(Team, data.team_id, populate_existing=True)
-    if team is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy đội tuyển")
+    # W47-03: lock tournament -> team so a concurrent team update (game/organization) is serialized.
+    team = lock_roster_teams(db, [data.team_id])[0]
     if team.game_id != tournament.game_id:
         raise HTTPException(status_code=422, detail="Game của đội không khớp với giải đấu")
     if db.scalar(select(TournamentRegistration.registration_id).where(
