@@ -10,6 +10,7 @@ from core.matches import matches_writable
 from core.role_assignments import referees_grantable
 from core.brackets import can_create_bracket, get_bracket
 from core.tournament_policy import registration_resolution_open, registrations_open, stages_editable
+from core.tournaments import tournament_delete_blocker
 from core.validation import ResourceId
 from middleware.auth import (
     can_manage_tournament, get_current_user, has_role, managed_teams_query,
@@ -48,6 +49,7 @@ class TournamentCapabilities(BaseModel):
     can_create_bracket: bool
     can_manage_referees: bool
     can_view_audit: bool
+    can_delete: bool
     editable_fields: list[str]
     allowed_status_transitions: list[str]
 
@@ -106,6 +108,7 @@ def tournament_capabilities(
         can_create_bracket=can_create_bracket(db, tournament, user),
         can_manage_referees=allowed and referees_grantable(tournament),
         can_view_audit=allowed,
+        can_delete=allowed and tournament_delete_blocker(db, tournament) is None,
         editable_fields=fields,
         allowed_status_transitions=transitions,
     )

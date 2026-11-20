@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import SessionLocal
-from modules.catalog.models import CompetitionArea, Game, Publisher
+from modules.catalog.models import CompetitionArea, Country, Game, Publisher
 from modules.identity.models import Role
 
 
@@ -60,10 +60,20 @@ AREAS = (
     ("FFWS BD", "FFWS Bangladesh", "GLOBAL"),
 )
 
+# W47-04 (W03-02): minimal ISO 3166-1 alpha-2 countries and the areas that belong to one country.
+COUNTRIES = (
+    ("VN", "Việt Nam"), ("TH", "Thái Lan"), ("ID", "Indonesia"), ("KR", "Hàn Quốc"),
+    ("CN", "Trung Quốc"), ("TW", "Đài Loan"), ("BR", "Brazil"), ("US", "Hoa Kỳ"),
+)
+AREA_COUNTRIES = {
+    "VN": "VN", "VN-HCM": "VN", "AOG": "VN", "RPL": "TH", "ASL": "ID", "LCK": "KR",
+    "LPL": "CN", "GCS": "TW", "CBLOL": "BR", "FFWS BR": "BR",
+}
+
 
 def seed_reference_data(db: Session) -> dict[str, int]:
     """Insert missing records using natural keys, without fixed primary keys."""
-    added = {"roles": 0, "publishers": 0, "games": 0, "competition_areas": 0}
+    added = {"roles": 0, "publishers": 0, "games": 0, "competition_areas": 0, "countries": 0}
     for name in ROLE_NAMES:
         if db.scalar(select(Role).where(Role.role_name == name)) is None:
             db.add(Role(role_name=name))
@@ -86,6 +96,13 @@ def seed_reference_data(db: Session) -> dict[str, int]:
             db.add(Game(name=name, slug=slug, publisher_id=publishers[publisher_name].publisher_id))
             added["games"] += 1
 
+    for country_code, name in COUNTRIES:
+        if db.get(Country, country_code) is None and db.scalar(
+                select(Country.country_code).where(Country.name == name)) is None:
+            db.add(Country(country_code=country_code, name=name))
+            added["countries"] += 1
+    db.flush()
+
     areas = {}
     for code, name, parent_code in AREAS:
         area = db.scalar(select(CompetitionArea).where(CompetitionArea.code == code))
@@ -98,6 +115,10 @@ def seed_reference_data(db: Session) -> dict[str, int]:
             db.flush()
             added["competition_areas"] += 1
         areas[code] = area
+        # Fill a missing link only; an area's existing country is preserved.
+        country_code = AREA_COUNTRIES.get(code)
+        if area.country_code is None and country_code is not None and db.get(Country, country_code) is not None:
+            area.country_code = country_code
     db.flush()
     return added
 

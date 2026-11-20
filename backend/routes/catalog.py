@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Annotated
+
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, field_validator
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -9,7 +11,7 @@ from config.database import get_db
 from core.audit import record_audit
 from middleware.auth import get_current_user, require_role
 from modules.identity.models import User
-from modules.catalog.models import CompetitionArea, Game, Publisher
+from modules.catalog.models import CompetitionArea, Country, Game, Publisher
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
 
@@ -17,6 +19,8 @@ router = APIRouter(prefix="/api/v1/catalog", tags=["Catalog"])
 
 SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 AREA_CODE_PATTERN = r"^[A-Z0-9]+(?:-[A-Z0-9]+)*$"
+# ISO 3166-1 alpha-2; input is upper-cased before this check.
+COUNTRY_CODE_PATTERN = r"^[A-Z]{2}$"
 
 
 class CatalogInput(BaseModel):
@@ -27,8 +31,8 @@ class PatchInput(CatalogInput):
     @field_validator("*")
     @classmethod
     def reject_null(cls, value, info):
-        # parent_id is the only column that may be cleared with null.
-        if value is None and info.field_name != "parent_id":
+        # parent_id and country_code are the only columns that may be cleared with null.
+        if value is None and info.field_name not in ("parent_id", "country_code"):
             raise ValueError("Không được để trống trường này")
         return value
 
@@ -67,16 +71,25 @@ class GameRead(BaseModel):
     publisher_id: int
 
 
+def upper_code(value):
+    return value.strip().upper() if isinstance(value, str) else value
+
+
+CountryCode = Annotated[str, BeforeValidator(upper_code), Field(pattern=COUNTRY_CODE_PATTERN)]
+
+
 class AreaCreate(CatalogInput):
     name: str = Field(min_length=2, max_length=120)
     code: str = Field(min_length=2, max_length=30, pattern=AREA_CODE_PATTERN)
     parent_id: int | None = Field(default=None, gt=0)
+    country_code: CountryCode | None = None
 
 
 class AreaUpdate(PatchInput):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     code: str | None = Field(default=None, min_length=2, max_length=30, pattern=AREA_CODE_PATTERN)
     parent_id: int | None = Field(default=None, gt=0)
+    country_code: CountryCode | None = None
 
 
 class AreaRead(BaseModel):
@@ -85,6 +98,22 @@ class AreaRead(BaseModel):
     name: str
     code: str
     parent_id: int | None
+    country_code: str | None
+
+
+class CountryCreate(CatalogInput):
+    country_code: CountryCode
+    name: str = Field(min_length=2, max_length=120)
+
+
+class CountryUpdate(CatalogInput):
+    name: str = Field(min_length=2, max_length=120)
+
+
+class CountryRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    country_code: str
+    name: str
 
 
 def get_or_404(db: Session, model, item_id: int, label: str):
@@ -110,6 +139,11 @@ def ensure_unused(db: Session, column, value, message: str):
 def ensure_publisher(db: Session, publisher_id: int):
     if db.get(Publisher, publisher_id) is None:
         raise HTTPException(status_code=422, detail="Nhà phát hành không tồn tại")
+
+
+def ensure_country(db: Session, country_code: str | None):
+    if country_code is not None and db.get(Country, country_code) is None:
+        raise HTTPException(status_code=422, detail="Quốc gia không tồn tại")
 
 
 def ensure_valid_parent(db: Session, parent_id: int | None, area_id: int | None = None):
@@ -280,10 +314,12 @@ def delete_game(game_id: int, db: Session = Depends(get_db), user: User = Depend
 
 
 @router.get("/areas", response_model=list[AreaRead])
-def list_areas(parent_id: int | None = None, db: Session = Depends(get_db)):
+def list_areas(parent_id: int | None = None, country_code: str | None = None, db: Session = Depends(get_db)):
     query = select(CompetitionArea).order_by(CompetitionArea.name)
     if parent_id is not None:
         query = query.where(CompetitionArea.parent_id == parent_id)
+    if country_code is not None:
+        query = query.where(CompetitionArea.country_code == country_code.strip().upper())
     return db.scalars(query).all()
 
 
@@ -300,6 +336,7 @@ def get_area(area_id: int, db: Session = Depends(get_db)):
 )
 def create_area(data: AreaCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     ensure_valid_parent(db, data.parent_id)
+    ensure_country(db, data.country_code)
     ensure_unique(db, CompetitionArea.code, data.code, message="Mã khu vực đã tồn tại")
     area = CompetitionArea(**data.model_dump())
     db.add(area)
@@ -315,6 +352,8 @@ def update_area(area_id: int, data: AreaUpdate, db: Session = Depends(get_db), u
     changes = data.model_dump(exclude_unset=True)
     if "parent_id" in changes:
         ensure_valid_parent(db, changes["parent_id"], area_id)
+    if "country_code" in changes:
+        ensure_country(db, changes["country_code"])
     if "code" in changes:
         ensure_unique(db, CompetitionArea.code, changes["code"], area_id, CompetitionArea.area_id,
                       "Mã khu vực đã tồn tại")
@@ -339,3 +378,61 @@ def delete_area(area_id: int, db: Session = Depends(get_db), user: User = Depend
     audit_change(db, user, "CATALOG_AREA_DELETED", "area", area, before, deleted=True)
     commit_or_409(db)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Countries (W47-04 / W03-02): public read, ADMIN create/rename. The code is the key and never changes;
+# no delete endpoint (areas reference countries with ON DELETE RESTRICT).
+
+
+def country_state(country: Country) -> dict:
+    return {"country_code": country.country_code, "name": country.name}
+
+
+def audit_country(db: Session, user, action: str, country: Country, before: dict | None):
+    # country_code is not an integer, so audit resource_id stays NULL; filter by resource/action instead.
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Mã hoặc tên quốc gia đã tồn tại")
+    record_audit(db, getattr(user, "user_id", None), action, "country",
+                 {"country_code": country.country_code, "before": before, "after": country_state(country)})
+
+
+@router.get("/countries", response_model=list[CountryRead])
+def list_countries(db: Session = Depends(get_db)):
+    return db.scalars(select(Country).order_by(Country.name)).all()
+
+
+@router.get("/countries/{country_code}", response_model=CountryRead)
+def get_country(country_code: str, db: Session = Depends(get_db)):
+    return get_or_404(db, Country, country_code.strip().upper(), "quốc gia")
+
+
+@router.post("/countries", response_model=CountryRead, status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(require_role("ADMIN"))])
+def create_country(data: CountryCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if db.get(Country, data.country_code) is not None:
+        raise HTTPException(status_code=409, detail="Mã quốc gia đã tồn tại")
+    ensure_unique(db, Country.name, data.name, message="Tên quốc gia đã tồn tại")
+    country = Country(country_code=data.country_code, name=data.name)
+    db.add(country)
+    audit_country(db, user, "CATALOG_COUNTRY_CREATED", country, None)
+    commit_or_409(db)
+    return country
+
+
+@router.patch("/countries/{country_code}", response_model=CountryRead,
+              dependencies=[Depends(require_role("ADMIN"))])
+def update_country(country_code: str, data: CountryUpdate, db: Session = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    country = get_or_404(db, Country, country_code.strip().upper(), "quốc gia")
+    if country.name == data.name:
+        return country
+    ensure_unique(db, Country.name, data.name, country.country_code, Country.country_code,
+                  "Tên quốc gia đã tồn tại")
+    before = country_state(country)
+    country.name = data.name
+    audit_country(db, user, "CATALOG_COUNTRY_UPDATED", country, before)
+    commit_or_409(db)
+    return country
