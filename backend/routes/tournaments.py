@@ -12,7 +12,7 @@ from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
 from core.brackets import get_bracket, tournament_completion_error
 from core.rosters import approved_teams_without_player
-from core.tournaments import get_managed_tournament, get_tournament_or_404
+from core.tournaments import get_managed_tournament, get_tournament_or_404, tournament_delete_blocker
 from middleware.auth import get_current_user, require_role
 from modules.catalog.models import CompetitionArea, Game
 from modules.identity.models import User
@@ -256,3 +256,30 @@ def change_tournament_status(
     before = {"status": tournament.status}
     tournament.status = data.status
     return commit_tournament(db, tournament, user, "TOURNAMENT_STATUS_CHANGED", before, {"status": data.status})
+
+
+@router.delete("/{tournament_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tournament(
+    tournament_id: TournamentId,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """W47-04 (W05-01): hard delete only a tournament with no competition data; otherwise 409."""
+    tournament = get_managed_tournament(db, tournament_id, user)
+    reason = tournament_delete_blocker(db, tournament)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
+    before = TournamentRead.model_validate(tournament).model_dump(mode="json")
+    try:
+        db.delete(tournament)
+        db.flush()
+        record_audit(db, user.user_id, "TOURNAMENT_DELETED", "tournament",
+                     {"tournament_id": tournament_id, "before": before, "after": None})
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Giải đã phát sinh dữ liệu liên quan, không thể xóa")
+    except Exception:
+        db.rollback()
+        raise
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

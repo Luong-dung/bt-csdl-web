@@ -32,4 +32,7 @@ class CompetitionArea(Base):
     parent_id = Column(Integer, ForeignKey("competition_areas.area_id"), nullable=True)
     name = Column(String(120), nullable=False)
     code = Column(String(30), nullable=False, unique=True)
+    # W47-04 (W03-02): optional country of the area; a country in use cannot be removed.
+    country_code = Column(String(2), ForeignKey("countries.country_code", ondelete="RESTRICT",
+                                                name="fk_competition_areas_country"), nullable=True, index=True)
     parent = relationship("CompetitionArea", remote_side=[area_id])

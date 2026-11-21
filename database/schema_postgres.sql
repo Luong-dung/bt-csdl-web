@@ -59,15 +59,19 @@ CREATE TABLE games (
     slug VARCHAR(120) NOT NULL UNIQUE
 );
 CREATE TABLE countries (
-    country_code CHAR(2) PRIMARY KEY,
+    country_code VARCHAR(2) PRIMARY KEY,
     name VARCHAR(120) NOT NULL UNIQUE
 );
 CREATE TABLE competition_areas (
     area_id SERIAL PRIMARY KEY,
     parent_id INT REFERENCES competition_areas(area_id),
     name VARCHAR(120) NOT NULL,
-    code VARCHAR(30) NOT NULL UNIQUE
+    code VARCHAR(30) NOT NULL UNIQUE,
+    country_code VARCHAR(2),
+    CONSTRAINT fk_competition_areas_country FOREIGN KEY (country_code)
+        REFERENCES countries(country_code) ON DELETE RESTRICT
 );
+CREATE INDEX ix_competition_areas_country_code ON competition_areas (country_code);
 CREATE TABLE organizations (
     organization_id SERIAL PRIMARY KEY,
     name VARCHAR(150) NOT NULL UNIQUE
