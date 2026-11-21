@@ -175,8 +175,15 @@ def test_audit_logs_admin_and_tournament_filters_diff_pagination_and_390px(
         )
         assert len(page1_ids) == 10
 
-        a_audit.locator('[data-testid="admin-audit-page-next"]').click()
+        with admin_page.expect_response(
+            lambda r: urlparse(r.url).path.endswith("/admin/audit-logs")
+            and "offset=10" in r.url
+            and r.request.method == "GET"
+        ) as page2_resp:
+            a_audit.locator('[data-testid="admin-audit-page-next"]').click()
+        assert page2_resp.value.status == 200
         expect(a_audit.locator('[data-testid="admin-audit-page-info"]')).to_contain_text("Trang 2 /")
+        expect(a_audit.locator('[data-testid="admin-audit-refreshing-indicator"]')).to_have_count(0)
         page2_ids = a_audit.locator(".audit-log-card").evaluate_all(
             "cards => cards.map(card => card.dataset.logId)"
         )
