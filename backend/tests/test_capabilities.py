@@ -35,6 +35,7 @@ def test_global_role_capabilities(access, name, catalog, create):
     assert client.get('/api/v1/auth/capabilities', headers=headers(name)).json() == {
         'can_manage_catalog': catalog, 'can_create_tournament': create,
         'can_view_audit': catalog,  # W47-02: ADMIN only, same as catalog
+        'can_create_organization': catalog,  # W47-03: ADMIN only
     }
 
 
