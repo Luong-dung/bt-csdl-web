@@ -4063,3 +4063,381 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   }
 }
 
+/* W47-06: Audit Log Viewer, Team/Organization Edit & Tournament Delete UI */
+.audit-panel,
+.tournament-audit-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.48);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.audit-panel .section-header,
+.tournament-audit-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.audit-panel .section-header h2,
+.tournament-audit-section .section-header h4 {
+  margin: 0 0 4px 0;
+}
+
+.audit-filters-form {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.56);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.audit-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.audit-filters-grid label,
+.audit-filters-grid .audit-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin: 0;
+  min-width: 0;
+}
+
+.audit-filters-grid input,
+.audit-filters-grid select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.audit-log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.audit-log-card {
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.audit-log-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.audit-log-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.audit-id-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(148, 163, 184, 0.18);
+  color: #e2e8f0;
+}
+
+.audit-action-badge {
+  font-size: 11.5px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.16);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  word-break: break-word;
+}
+
+.audit-resource-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(168, 85, 247, 0.16);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.audit-kind-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.16);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.audit-log-actor {
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.audit-details-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.audit-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.audit-meta-chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.audit-diff-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.audit-diff-table {
+  width: 100%;
+  min-width: 320px;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.audit-diff-table th,
+.audit-diff-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.audit-diff-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.audit-diff-table tr.is-changed {
+  background: rgba(56, 189, 248, 0.08);
+}
+
+.audit-diff-table tr.is-changed .audit-val-before {
+  color: #fca5a5;
+}
+
+.audit-diff-table tr.is-changed .audit-val-after {
+  color: #86efac;
+  font-weight: 700;
+}
+
+.team-detail-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.team-profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-bottom: 12px;
+  font-size: 13.5px;
+  color: #cbd5e1;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.team-logo-link {
+  color: #38bdf8;
+  word-break: break-all;
+}
+
+.team-edit-form {
+  padding: 16px;
+  margin: 12px 0 16px 0;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.62);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.team-edit-form h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.team-edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.team-edit-grid .wide-field {
+  grid-column: 1 / -1;
+}
+
+.team-field-lock-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: #fde68a;
+}
+
+.organizations-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.organizations-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.organizations-section .section-header h3 {
+  margin: 0 0 4px 0;
+}
+
+.org-create-form,
+.org-edit-form {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.56);
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.org-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.org-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.org-card.is-selected {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.org-detail-panel {
+  padding: 16px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.org-teams-list {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tournament-delete-box {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(148, 163, 184, 0.22);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+@media (max-width: 640px) {
+  .audit-panel,
+  .tournament-audit-section {
+    padding: 12px;
+  }
+  .audit-filters-form,
+  .team-edit-form,
+  .org-detail-panel {
+    padding: 12px;
+  }
+  .audit-filters-grid,
+  .team-edit-grid,
+  .org-list {
+    grid-template-columns: 1fr;
+  }
+}
+
