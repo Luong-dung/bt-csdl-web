@@ -880,14 +880,16 @@ export default function App() {
   const userSelectedBracketStageRef = useRef(false);
   const refereesListVersion = useRef(0);
   const refereeSearchVersion = useRef(0);
-  const refereeMutationVersion = useRef(0);
+  const refereeGrantVersion = useRef(0);
+  const refereeRevokeVersion = useRef(0);
   const refereeGrantInFlightRef = useRef(false);
   const refereeRevokeInFlightRef = useRef<number | null>(null);
 
   const resetRefereesState = () => {
     refereesListVersion.current += 1;
     refereeSearchVersion.current += 1;
-    refereeMutationVersion.current += 1;
+    refereeGrantVersion.current += 1;
+    refereeRevokeVersion.current += 1;
     refereeGrantInFlightRef.current = false;
     refereeRevokeInFlightRef.current = null;
     setReferees([]);
@@ -3838,8 +3840,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeSearchVersion.current !== searchV ||
-        token !== startingToken
+        refereeSearchVersion.current !== searchV
       ) {
         return;
       }
@@ -3849,8 +3850,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeSearchVersion.current !== searchV ||
-        token !== startingToken
+        refereeSearchVersion.current !== searchV
       ) {
         return;
       }
@@ -3900,7 +3900,7 @@ export default function App() {
 
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
-    const mutV = ++refereeMutationVersion.current;
+    const grantV = ++refereeGrantVersion.current;
     const startingToken = token;
     const tid = selectedTournament.tournament_id;
 
@@ -3920,8 +3920,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeMutationVersion.current !== mutV ||
-        token !== startingToken
+        refereeGrantVersion.current !== grantV
       ) {
         return;
       }
@@ -3934,8 +3933,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeMutationVersion.current !== mutV ||
-        token !== startingToken
+        refereeGrantVersion.current !== grantV
       ) {
         return;
       }
@@ -3956,7 +3954,7 @@ export default function App() {
       if (
         tournamentViewVersion.current === version &&
         sessionVersion.current === sessionV &&
-        refereeMutationVersion.current === mutV
+        refereeGrantVersion.current === grantV
       ) {
         refereeGrantInFlightRef.current = false;
         setRefereeGrantLoading(false);
@@ -3977,7 +3975,7 @@ export default function App() {
 
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
-    const mutV = ++refereeMutationVersion.current;
+    const revokeV = ++refereeRevokeVersion.current;
     const startingToken = token;
     const tid = selectedTournament.tournament_id;
 
@@ -3994,8 +3992,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeMutationVersion.current !== mutV ||
-        token !== startingToken
+        refereeRevokeVersion.current !== revokeV
       ) {
         return;
       }
@@ -4008,8 +4005,7 @@ export default function App() {
       if (
         tournamentViewVersion.current !== version ||
         sessionVersion.current !== sessionV ||
-        refereeMutationVersion.current !== mutV ||
-        token !== startingToken
+        refereeRevokeVersion.current !== revokeV
       ) {
         return;
       }
@@ -4036,7 +4032,7 @@ export default function App() {
       if (
         tournamentViewVersion.current === version &&
         sessionVersion.current === sessionV &&
-        refereeMutationVersion.current === mutV
+        refereeRevokeVersion.current === revokeV
       ) {
         refereeRevokeInFlightRef.current = null;
         setRefereeRevokingId(null);
@@ -5862,7 +5858,9 @@ export default function App() {
           <div className="referees-section" data-testid="tournament-referees-section">
             <div className="section-header">
               <div>
-                <h4>Quản lý Trọng tài ({refereesTotal})</h4>
+                <h4>
+                  Quản lý Trọng tài ({refereesTotal} {refereesIncludeRevoked ? "phân quyền" : "đang hiệu lực"})
+                </h4>
                 <p className="muted small-text">
                   Phân công và thu hồi trọng tài trong phạm vi giải đấu này. Thông tin email không được hiển thị.
                 </p>
@@ -6022,6 +6020,8 @@ export default function App() {
                   <div className="referee-candidate-list" data-testid="referee-candidate-list">
                     {refereeCandidates.map((cand) => {
                       const isSelected = selectedRefereeCandidate?.user_id === cand.user_id;
+                      const isSelf = user?.id === cand.user_id;
+                      const isAlreadyActiveRef = referees.some((r) => r.active && r.user_id === cand.user_id);
                       return (
                         <div
                           key={cand.user_id}
@@ -6032,6 +6032,10 @@ export default function App() {
                             <strong>{cand.username}</strong>
                             {cand.real_name && <span className="muted small-text">· {cand.real_name}</span>}
                             <span className="referee-id-pill">ID #{cand.user_id}</span>
+                            {isSelf && <span className="referee-id-pill">Bạn</span>}
+                            {isAlreadyActiveRef && (
+                              <span className="referee-status-badge status-active">Đã là trọng tài</span>
+                            )}
                           </div>
                           <button
                             type="button"

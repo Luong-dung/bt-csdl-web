@@ -338,9 +338,13 @@ def test_search_referee_candidates_matches_username_and_real_name_without_email(
     assert by_email.json() == []
 
     # Wildcards % and _ must be escaped, not dump all users
-    wildcard = client.get(path(tid, '/candidates?q=%%'), headers=headers('organizer'))
-    assert wildcard.status_code == 200
-    assert wildcard.json() == []
+    wildcard_pct = client.get(path(tid, '/candidates'), params={'q': '%%'}, headers=headers('organizer'))
+    assert wildcard_pct.status_code == 200
+    assert wildcard_pct.json() == []
+
+    wildcard_us = client.get(path(tid, '/candidates'), params={'q': '__'}, headers=headers('organizer'))
+    assert wildcard_us.status_code == 200
+    assert wildcard_us.json() == []
 
 
 @pytest.mark.parametrize('who,code', [(None, 401), ('viewer', 403), ('manager', 403), ('referee', 403)])

@@ -564,3 +564,83 @@ def test_referees_double_submit_guard_and_in_flight_switch_anti_stale(
             page.unroute(list_url_a, hold_list_session)
         except Exception:
             pass
+
+
+def test_referees_concurrent_grant_and_revoke_do_not_deadlock(
+    page: Page, api_base_url: str, demo_password: str
+):
+    """Holding POST /referees while revoking another active row must NOT cancel grant cleanup or lock UI."""
+    ctx = _create_upcoming_tournament(page, api_base_url, demo_password, prefix="conc")
+    tid = ctx["tournament_id"]
+    tname = ctx["tournament_name"]
+    token = ctx["organizer_token"]
+
+    ref1, _ = _register_and_login_api(page, api_base_url, "concr1", demo_password)
+    ref2, _ = _register_and_login_api(page, api_base_url, "concr2", demo_password)
+
+    # Seed ref1 as an active referee so its Revoke button is visible while granting ref2
+    grant1 = _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid}/referees",
+        token=token,
+        data={"user_id": ref1["user_id"]},
+    )
+    aid1 = grant1["assignment_id"]
+
+    page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
+    open_tournament(page, str(tid), tname)
+
+    section = page.locator('[data-testid="tournament-referees-section"]')
+    expect(section.locator(f'[data-testid="referee-row-{aid1}"]')).to_be_visible()
+
+    held_posts = []
+    post_url = f"**/api/v1/tournaments/{tid}/referees"
+
+    def hold_grant_post(route):
+        if route.request.method == "POST" and urlparse(route.request.url).path.endswith(f"/tournaments/{tid}/referees"):
+            held_posts.append(route)
+        else:
+            route.continue_()
+
+    page.route(post_url, hold_grant_post)
+    try:
+        uid_input = section.locator('[data-testid="referee-user-id-input"]')
+        submit_btn = section.locator('[data-testid="referee-grant-submit-btn"]')
+        uid_input.fill(str(ref2["user_id"]))
+        submit_btn.click()
+        wait_for_held_request(page, held_posts, expected_count=1)
+        expect(submit_btn).to_be_disabled()
+
+        # While POST grant for ref2 is in-flight, revoke ref1 on another row
+        page.once("dialog", lambda dialog: dialog.accept())
+        with page.expect_response(
+            lambda r: urlparse(r.url).path.endswith(f"/tournaments/{tid}/referees/{aid1}")
+            and r.request.method == "DELETE"
+        ) as revoke_resp:
+            section.locator(f'[data-testid="referee-revoke-btn-{aid1}"]').click()
+        assert revoke_resp.value.status == 200
+
+        # Release the held POST grant for ref2
+        with page.expect_response(
+            lambda r: urlparse(r.url).path.endswith(f"/tournaments/{tid}/referees")
+            and r.request.method == "POST"
+        ) as grant_resp:
+            held_posts.pop(0).continue_()
+        assert grant_resp.value.status == 201
+    finally:
+        page.unroute(post_url, hold_grant_post)
+        while held_posts:
+            try:
+                held_posts.pop(0).continue_()
+            except Exception:
+                pass
+
+    # Grant notice must appear, grant button & input must unlock cleanly, and ref2 must appear in the list
+    expect(section.locator('[data-testid="referees-notice-banner"]')).to_contain_text(ref2["username"])
+    expect(section.locator('[data-testid="referee-grant-submit-btn"]')).to_be_enabled()
+    expect(section.locator('[data-testid="referee-user-id-input"]')).to_be_enabled()
+    expect(section.locator('[data-testid="referee-user-id-input"]')).to_have_value("")
+    expect(section.locator('[data-testid="referees-list"]')).to_contain_text(ref2["username"])
+    expect(section.locator(f'[data-testid="referee-row-{aid1}"]')).to_have_count(0)
