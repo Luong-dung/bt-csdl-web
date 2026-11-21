@@ -1,5 +1,6 @@
 import { LangCode, LANGUAGES, TRANSLATIONS, getLocalizedGameName, getLocalizedRegionCountry, getLocalizedAreaDesc, getLocalizedNews } from "./i18n";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { AuditLogSection } from "./AuditLogSection";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
@@ -49,8 +50,12 @@ export const AREA_METAS: Record<string, { country: string; flag: string; gameSlu
   "FFWS BD": { country: "Bangladesh", flag: "🇧🇩", gameSlug: "free-fire", name: "FFWS Bangladesh" },
 };
 type Team = { team_id: number; name: string; tag: string; game_id: number };
+type TeamProfile = Team & { organization_id: number | null; logo_url: string | null };
 type TeamMember = { membership_id: number; user_id: number; username: string; role: string; status: string; joined_date: string; left_date: string | null };
-type TeamDetail = Team & { members: TeamMember[] };
+type TeamDetail = TeamProfile & { members: TeamMember[] };
+type Organization = { organization_id: number; name: string };
+type OrganizationDetail = Organization & { teams: Team[] };
+type OrganizationCapabilities = { organization_id: number; can_update: boolean };
 type Tournament = {
   tournament_id: number; name: string; game_id: number; area_id: number | null;
   format: "SINGLE_ELIM" | "DOUBLE_ELIM" | "ROUND_ROBIN"; start_date: string;
@@ -293,8 +298,19 @@ function localInputToIsoWithOffset(localValue: string): string | null {
   const offMins = String(absMinutes % 60).padStart(2, "0");
   return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offHours}:${offMins}`;
 }
-type GlobalCapabilities = { can_manage_catalog: boolean; can_create_tournament: boolean };
-type TeamCapabilities = { team_id: number; can_manage_members: boolean; can_register_for_tournament: boolean };
+type GlobalCapabilities = {
+  can_manage_catalog: boolean;
+  can_create_tournament: boolean;
+  can_view_audit?: boolean;
+  can_create_organization?: boolean;
+};
+type TeamCapabilities = {
+  team_id: number;
+  can_manage_members: boolean;
+  can_register_for_tournament: boolean;
+  can_update?: boolean;
+  editable_fields?: string[];
+};
 type AuthMode = "login" | "register";
 
 const API = import.meta.env.VITE_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -670,6 +686,34 @@ export default function App() {
   const [selectedTeam, setSelectedTeam] = useState<TeamDetail | null>(null);
   const [teamCapabilities, setTeamCapabilities] = useState<TeamCapabilities | null>(null);
   const [teamCapabilityError, setTeamCapabilityError] = useState("");
+  const [isEditingTeam, setIsEditingTeam] = useState(false);
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamTag, setEditTeamTag] = useState("");
+  const [editTeamGameId, setEditTeamGameId] = useState("");
+  const [editTeamOrgId, setEditTeamOrgId] = useState("");
+  const [editTeamLogoUrl, setEditTeamLogoUrl] = useState("");
+  const [teamEditLoading, setTeamEditLoading] = useState(false);
+  const [teamEditError, setTeamEditError] = useState("");
+  const [teamEditNotice, setTeamEditNotice] = useState("");
+
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [organizationsLoading, setOrganizationsLoading] = useState(false);
+  const [organizationsError, setOrganizationsError] = useState("");
+  const [selectedOrg, setSelectedOrg] = useState<OrganizationDetail | null>(null);
+  const [orgCapabilities, setOrgCapabilities] = useState<OrganizationCapabilities | null>(null);
+  const [orgDetailLoading, setOrgDetailLoading] = useState(false);
+  const [orgDetailError, setOrgDetailError] = useState("");
+  const [newOrgName, setNewOrgName] = useState("");
+  const [orgCreateLoading, setOrgCreateLoading] = useState(false);
+  const [orgCreateError, setOrgCreateError] = useState("");
+  const [orgNotice, setOrgNotice] = useState("");
+  const [isEditingOrg, setIsEditingOrg] = useState(false);
+  const [editOrgName, setEditOrgName] = useState("");
+  const [orgUpdateLoading, setOrgUpdateLoading] = useState(false);
+  const [orgUpdateError, setOrgUpdateError] = useState("");
+
+  const [tournamentDeleteLoading, setTournamentDeleteLoading] = useState(false);
+  const [tournamentDeleteError, setTournamentDeleteError] = useState("");
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
   const [tournamentCapabilities, setTournamentCapabilities] = useState<TournamentCapabilities | null>(null);
@@ -884,6 +928,46 @@ export default function App() {
   const refereeRevokeVersion = useRef(0);
   const refereeGrantInFlightRef = useRef(false);
   const refereeRevokeInFlightRef = useRef<number | null>(null);
+  const teamViewVersion = useRef(0);
+  const teamUpdateVersion = useRef(0);
+  const teamUpdateInFlightRef = useRef(false);
+  const organizationsVersion = useRef(0);
+  const orgViewVersion = useRef(0);
+  const orgCreateVersion = useRef(0);
+  const orgUpdateVersion = useRef(0);
+  const orgCreateInFlightRef = useRef(false);
+  const orgUpdateInFlightRef = useRef(false);
+  const tournamentDeleteVersion = useRef(0);
+  const tournamentDeleteInFlightRef = useRef(false);
+
+  const resetTeamEditState = () => {
+    teamUpdateVersion.current += 1;
+    teamUpdateInFlightRef.current = false;
+    setIsEditingTeam(false);
+    setEditTeamName("");
+    setEditTeamTag("");
+    setEditTeamGameId("");
+    setEditTeamOrgId("");
+    setEditTeamLogoUrl("");
+    setTeamEditLoading(false);
+    setTeamEditError("");
+    setTeamEditNotice("");
+  };
+
+  const resetOrgAuthState = () => {
+    orgCreateVersion.current += 1;
+    orgUpdateVersion.current += 1;
+    orgCreateInFlightRef.current = false;
+    orgUpdateInFlightRef.current = false;
+    setOrgCapabilities(null);
+    setOrgCreateLoading(false);
+    setOrgCreateError("");
+    setOrgNotice("");
+    setIsEditingOrg(false);
+    setEditOrgName("");
+    setOrgUpdateLoading(false);
+    setOrgUpdateError("");
+  };
 
   const resetRefereesState = () => {
     refereesListVersion.current += 1;
@@ -1039,6 +1123,12 @@ export default function App() {
     resetMatchesAuthState();
     resetBracketAuthState();
     resetRefereesState();
+    resetTeamEditState();
+    resetOrgAuthState();
+    tournamentDeleteVersion.current += 1;
+    tournamentDeleteInFlightRef.current = false;
+    setTournamentDeleteLoading(false);
+    setTournamentDeleteError("");
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -1150,8 +1240,27 @@ export default function App() {
     }
   };
 
+  const loadOrganizations = async () => {
+    const reqV = ++organizationsVersion.current;
+    setOrganizationsLoading(true);
+    setOrganizationsError("");
+    try {
+      const list = await request<Organization[]>("/organizations");
+      if (organizationsVersion.current !== reqV) return;
+      setOrganizations(list || []);
+    } catch (reason) {
+      if (organizationsVersion.current !== reqV) return;
+      setOrganizationsError((reason as Error).message || "Không thể tải danh sách tổ chức.");
+    } finally {
+      if (organizationsVersion.current === reqV) {
+        setOrganizationsLoading(false);
+      }
+    }
+  };
+
   useEffect(() => {
     loadTeams();
+    void loadOrganizations();
     loadCatalog().catch((reason) => {
       setError(`Không thể tải catalog: ${(reason as Error).message}`);
     });
@@ -1321,6 +1430,12 @@ export default function App() {
     resetMatchesAuthState();
     resetBracketAuthState();
     resetRefereesState();
+    resetTeamEditState();
+    resetOrgAuthState();
+    tournamentDeleteVersion.current += 1;
+    tournamentDeleteInFlightRef.current = false;
+    setTournamentDeleteLoading(false);
+    setTournamentDeleteError("");
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -1354,45 +1469,386 @@ export default function App() {
     }
   };
 
-  const loadTeamCapabilities = async (teamId: number) => {
-    if (!token) {
+  const loadTeamCapabilities = async (
+    teamId: number,
+    authToken = token,
+    expectedTeamVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<TeamCapabilities | null> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    if (!authToken) {
+      if (expectedTeamVersion !== undefined && teamViewVersion.current !== expectedTeamVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
       setTeamCapabilities(null);
       setTeamCapabilityError("");
-      return;
+      return null;
     }
     try {
       setTeamCapabilityError("");
-      const capabilities = await request<TeamCapabilities>(`/teams/${teamId}/capabilities`, {}, token);
+      const capabilities = await request<TeamCapabilities>(`/teams/${teamId}/capabilities`, {}, authToken);
+      if (expectedTeamVersion !== undefined && teamViewVersion.current !== expectedTeamVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
       setTeamCapabilities(capabilities);
+      return capabilities;
     } catch (reason) {
+      if (expectedTeamVersion !== undefined && teamViewVersion.current !== expectedTeamVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return null;
+      }
       setTeamCapabilities(null);
       setTeamCapabilityError((reason as Error).message || "Không thể tải quyền quản lý đội tuyển.");
+      return null;
     }
   };
 
   const viewTeam = async (teamId: number) => {
+    const teamV = ++teamViewVersion.current;
+    const sessionV = sessionVersion.current;
     setError("");
     setNotice("");
     setTeamCapabilityError("");
+    setTeamCapabilities(null);
+    resetTeamEditState();
     try {
       const team = await request<TeamDetail>(`/teams/${teamId}`);
+      if (teamViewVersion.current !== teamV || sessionVersion.current !== sessionV) return;
       setSelectedTeam(team);
-      await loadTeamCapabilities(teamId);
+      await loadTeamCapabilities(teamId, token, teamV, sessionV);
     } catch (reason) {
+      if (teamViewVersion.current !== teamV || sessionVersion.current !== sessionV) return;
       setError((reason as Error).message);
     }
   };
 
   const refreshSelectedTeam = async () => {
     if (!selectedTeam) return;
+    const teamV = teamViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const tid = selectedTeam.team_id;
     try {
-      const team = await request<TeamDetail>(`/teams/${selectedTeam.team_id}`);
+      const team = await request<TeamDetail>(`/teams/${tid}`);
+      if (teamViewVersion.current !== teamV || sessionVersion.current !== sessionV) return;
       setSelectedTeam(team);
-      await loadTeamCapabilities(selectedTeam.team_id);
+      await loadTeamCapabilities(tid, token, teamV, sessionV);
     } catch (reason) {
+      if (teamViewVersion.current !== teamV || sessionVersion.current !== sessionV) return;
       setError((reason as Error).message);
     }
   };
+
+  const openTeamEditForm = () => {
+    if (!selectedTeam) return;
+    setEditTeamName(selectedTeam.name);
+    setEditTeamTag(selectedTeam.tag);
+    setEditTeamGameId(String(selectedTeam.game_id));
+    setEditTeamOrgId(selectedTeam.organization_id !== null ? String(selectedTeam.organization_id) : "");
+    setEditTeamLogoUrl(selectedTeam.logo_url ?? "");
+    setTeamEditError("");
+    setTeamEditNotice("");
+    setIsEditingTeam(true);
+  };
+
+  const handleUpdateTeam = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token || !selectedTeam) return;
+    if (teamUpdateInFlightRef.current || teamEditLoading) return;
+
+    const editable = teamCapabilities?.editable_fields ?? [];
+    const payload: Record<string, string | number | null> = {};
+
+    if (editable.includes("name")) {
+      const trimmedName = editTeamName.trim();
+      if (trimmedName.length < 2 || trimmedName.length > 100) {
+        setTeamEditError("Tên đội phải từ 2 đến 100 ký tự.");
+        return;
+      }
+      if (trimmedName !== selectedTeam.name) payload.name = trimmedName;
+    }
+
+    if (editable.includes("tag")) {
+      const trimmedTag = editTeamTag.trim();
+      if (!/^[A-Za-z0-9]{2,10}$/.test(trimmedTag)) {
+        setTeamEditError("Tag đội chỉ gồm 2–10 ký tự chữ và số.");
+        return;
+      }
+      if (trimmedTag.toUpperCase() !== selectedTeam.tag.toUpperCase()) payload.tag = trimmedTag;
+    }
+
+    if (editable.includes("logo_url")) {
+      const trimmedLogo = editTeamLogoUrl.trim();
+      const nextLogo = trimmedLogo === "" ? null : trimmedLogo;
+      if (nextLogo !== null && !/^https?:\/\/\S+$/.test(nextLogo)) {
+        setTeamEditError("URL Logo phải bắt đầu bằng http:// hoặc https:// và không chứa khoảng trắng.");
+        return;
+      }
+      if (nextLogo !== (selectedTeam.logo_url ?? null)) payload.logo_url = nextLogo;
+    }
+
+    if (editable.includes("game_id")) {
+      const nextGameId = Number(editTeamGameId);
+      if (!Number.isInteger(nextGameId) || nextGameId <= 0) {
+        setTeamEditError("Vui lòng chọn tựa game hợp lệ.");
+        return;
+      }
+      if (nextGameId !== selectedTeam.game_id) payload.game_id = nextGameId;
+    }
+
+    if (editable.includes("organization_id")) {
+      const nextOrgId = editTeamOrgId.trim() === "" ? null : Number(editTeamOrgId);
+      if (nextOrgId !== null && (!Number.isInteger(nextOrgId) || nextOrgId <= 0)) {
+        setTeamEditError("Tổ chức không hợp lệ.");
+        return;
+      }
+      if (nextOrgId !== (selectedTeam.organization_id ?? null)) payload.organization_id = nextOrgId;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      setTeamEditError("Bạn chưa thay đổi thông tin nào của đội.");
+      return;
+    }
+
+    const teamV = teamViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const updV = ++teamUpdateVersion.current;
+    const startingToken = token;
+    const tid = selectedTeam.team_id;
+
+    teamUpdateInFlightRef.current = true;
+    setTeamEditLoading(true);
+    setTeamEditError("");
+    setTeamEditNotice("");
+    try {
+      const updated = await request<TeamProfile>(
+        `/teams/${tid}`,
+        { method: "PATCH", body: JSON.stringify(payload) },
+        startingToken
+      );
+      if (
+        teamViewVersion.current !== teamV ||
+        sessionVersion.current !== sessionV ||
+        teamUpdateVersion.current !== updV
+      ) {
+        return;
+      }
+      setSelectedTeam((prev) => (prev && prev.team_id === tid ? { ...prev, ...updated } : prev));
+      setIsEditingTeam(false);
+      setTeamEditError("");
+      setTeamEditNotice("Đã cập nhật thông tin đội tuyển thành công.");
+      await Promise.all([
+        loadTeams(),
+        loadTeamCapabilities(tid, startingToken, teamV, sessionV),
+      ]);
+      if (selectedOrg && (selectedOrg.organization_id === updated.organization_id || selectedOrg.organization_id === selectedTeam.organization_id)) {
+        void viewOrganization(selectedOrg.organization_id);
+      }
+    } catch (reason) {
+      if (
+        teamViewVersion.current !== teamV ||
+        sessionVersion.current !== sessionV ||
+        teamUpdateVersion.current !== updV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setTeamEditError((reason as Error).message || "Không thể cập nhật thông tin đội tuyển.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void loadTeamCapabilities(tid, startingToken, teamV, sessionV);
+      }
+    } finally {
+      if (
+        teamViewVersion.current === teamV &&
+        sessionVersion.current === sessionV &&
+        teamUpdateVersion.current === updV
+      ) {
+        teamUpdateInFlightRef.current = false;
+        setTeamEditLoading(false);
+      }
+    }
+  };
+
+  const loadOrgCapabilities = async (
+    orgId: number,
+    authToken = token,
+    expectedOrgVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<OrganizationCapabilities | null> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    if (!authToken) {
+      if (expectedOrgVersion !== undefined && orgViewVersion.current !== expectedOrgVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      setOrgCapabilities(null);
+      return null;
+    }
+    try {
+      const caps = await request<OrganizationCapabilities>(`/organizations/${orgId}/capabilities`, {}, authToken);
+      if (expectedOrgVersion !== undefined && orgViewVersion.current !== expectedOrgVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      setOrgCapabilities(caps);
+      return caps;
+    } catch (reason) {
+      if (expectedOrgVersion !== undefined && orgViewVersion.current !== expectedOrgVersion) return null;
+      if (sessionVersion.current !== sessionV) return null;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return null;
+      }
+      setOrgCapabilities(null);
+      return null;
+    }
+  };
+
+  const viewOrganization = async (orgId: number) => {
+    const orgV = ++orgViewVersion.current;
+    const sessionV = sessionVersion.current;
+    setOrgDetailLoading(true);
+    setOrgDetailError("");
+    setOrgUpdateError("");
+    setOrgNotice("");
+    setIsEditingOrg(false);
+    try {
+      const detail = await request<OrganizationDetail>(`/organizations/${orgId}`);
+      if (orgViewVersion.current !== orgV || sessionVersion.current !== sessionV) return;
+      setSelectedOrg(detail);
+      setEditOrgName(detail.name);
+      await loadOrgCapabilities(orgId, token, orgV, sessionV);
+    } catch (reason) {
+      if (orgViewVersion.current !== orgV || sessionVersion.current !== sessionV) return;
+      setOrgDetailError((reason as Error).message || "Không thể tải chi tiết tổ chức.");
+    } finally {
+      if (orgViewVersion.current === orgV && sessionVersion.current === sessionV) {
+        setOrgDetailLoading(false);
+      }
+    }
+  };
+
+  const handleCreateOrganization = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token) return;
+    if (orgCreateInFlightRef.current || orgCreateLoading) return;
+    const trimmed = newOrgName.trim();
+    if (trimmed.length < 2 || trimmed.length > 150) {
+      setOrgCreateError("Tên tổ chức phải từ 2 đến 150 ký tự.");
+      return;
+    }
+    const sessionV = sessionVersion.current;
+    const reqV = ++orgCreateVersion.current;
+    const startingToken = token;
+
+    orgCreateInFlightRef.current = true;
+    setOrgCreateLoading(true);
+    setOrgCreateError("");
+    setOrgNotice("");
+    try {
+      const created = await request<Organization>(
+        "/organizations",
+        { method: "POST", body: JSON.stringify({ name: trimmed }) },
+        startingToken
+      );
+      if (sessionVersion.current !== sessionV || orgCreateVersion.current !== reqV) return;
+      setNewOrgName("");
+      setOrgNotice(`Đã tạo tổ chức "${created.name}" thành công.`);
+      await loadOrganizations();
+    } catch (reason) {
+      if (sessionVersion.current !== sessionV || orgCreateVersion.current !== reqV) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setOrgCreateError((reason as Error).message || "Không thể tạo tổ chức.");
+      if (reason instanceof RequestError && reason.status === 403) {
+        void loadGlobalCapabilities();
+      }
+    } finally {
+      if (sessionVersion.current === sessionV && orgCreateVersion.current === reqV) {
+        orgCreateInFlightRef.current = false;
+        setOrgCreateLoading(false);
+      }
+    }
+  };
+
+  const handleUpdateOrganization = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!token || !selectedOrg) return;
+    if (orgUpdateInFlightRef.current || orgUpdateLoading) return;
+    const trimmed = editOrgName.trim();
+    if (trimmed.length < 2 || trimmed.length > 150) {
+      setOrgUpdateError("Tên tổ chức phải từ 2 đến 150 ký tự.");
+      return;
+    }
+    const orgV = orgViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const updV = ++orgUpdateVersion.current;
+    const startingToken = token;
+    const oid = selectedOrg.organization_id;
+
+    orgUpdateInFlightRef.current = true;
+    setOrgUpdateLoading(true);
+    setOrgUpdateError("");
+    setOrgNotice("");
+    try {
+      const updated = await request<Organization>(
+        `/organizations/${oid}`,
+        { method: "PATCH", body: JSON.stringify({ name: trimmed }) },
+        startingToken
+      );
+      if (
+        orgViewVersion.current !== orgV ||
+        sessionVersion.current !== sessionV ||
+        orgUpdateVersion.current !== updV
+      ) {
+        return;
+      }
+      setSelectedOrg((prev) => (prev && prev.organization_id === oid ? { ...prev, name: updated.name } : prev));
+      setIsEditingOrg(false);
+      setOrgNotice(`Đã đổi tên tổ chức thành "${updated.name}".`);
+      await loadOrganizations();
+    } catch (reason) {
+      if (
+        orgViewVersion.current !== orgV ||
+        sessionVersion.current !== sessionV ||
+        orgUpdateVersion.current !== updV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setOrgUpdateError((reason as Error).message || "Không thể cập nhật tổ chức.");
+      if (reason instanceof RequestError && reason.status === 403) {
+        void loadOrgCapabilities(oid, startingToken, orgV, sessionV);
+      }
+    } finally {
+      if (
+        orgViewVersion.current === orgV &&
+        sessionVersion.current === sessionV &&
+        orgUpdateVersion.current === updV
+      ) {
+        orgUpdateInFlightRef.current = false;
+        setOrgUpdateLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (selectedTeam) {
+      const teamV = teamViewVersion.current;
+      const sessionV = sessionVersion.current;
+      resetTeamEditState();
+      void loadTeamCapabilities(selectedTeam.team_id, token, teamV, sessionV);
+    }
+    if (selectedOrg) {
+      const orgV = orgViewVersion.current;
+      const sessionV = sessionVersion.current;
+      resetOrgAuthState();
+      void loadOrgCapabilities(selectedOrg.organization_id, token, orgV, sessionV);
+    }
+  }, [token]);
 
   const addMember = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1586,6 +2042,10 @@ export default function App() {
     resetMatchesState();
     resetBracketState();
     resetRefereesState();
+    tournamentDeleteVersion.current += 1;
+    tournamentDeleteInFlightRef.current = false;
+    setTournamentDeleteLoading(false);
+    setTournamentDeleteError("");
     setRosterLock(null);
     setLockLoading(false);
     setLockError("");
@@ -4675,6 +5135,10 @@ export default function App() {
     resetMatchesState();
     resetBracketState();
     resetRefereesState();
+    tournamentDeleteVersion.current += 1;
+    tournamentDeleteInFlightRef.current = false;
+    setTournamentDeleteLoading(false);
+    setTournamentDeleteError("");
     setAllApprovedTeamsLoading(true);
     setTournamentCapabilities(null);
     setCapabilityError("");
@@ -4889,6 +5353,67 @@ export default function App() {
     }
   };
 
+  const handleDeleteTournament = async () => {
+    if (!token || !selectedTournament) return;
+    if (tournamentDeleteInFlightRef.current || tournamentDeleteLoading) return;
+    if (
+      !window.confirm(
+        `Bạn có chắc chắn muốn xóa giải đấu "${selectedTournament.name}"? Chỉ xóa được giải chưa phát sinh dữ liệu và thao tác không thể hoàn tác.`
+      )
+    ) {
+      return;
+    }
+
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const delV = ++tournamentDeleteVersion.current;
+    const startingToken = token;
+    const tid = selectedTournament.tournament_id;
+    const deletedName = selectedTournament.name;
+
+    tournamentDeleteInFlightRef.current = true;
+    setTournamentDeleteLoading(true);
+    setTournamentDeleteError("");
+    try {
+      await request(`/tournaments/${tid}`, { method: "DELETE" }, startingToken);
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        tournamentDeleteVersion.current !== delV
+      ) {
+        return;
+      }
+      closeTournamentDetail();
+      setNotice(`Đã xóa giải đấu "${deletedName}" thành công.`);
+      await loadTournaments();
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        tournamentDeleteVersion.current !== delV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setTournamentDeleteError((reason as Error).message || "Không thể xóa giải đấu.");
+      if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
+        void loadTournamentCapabilities(tid, startingToken, version, sessionV);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === version &&
+        sessionVersion.current === sessionV &&
+        tournamentDeleteVersion.current === delV
+      ) {
+        tournamentDeleteInFlightRef.current = false;
+        setTournamentDeleteLoading(false);
+      }
+    }
+  };
+
   return (
     <>
       {/* Horizontal Top Navigation Bar */}
@@ -5045,6 +5570,22 @@ export default function App() {
                         }}
                       >
                         ⚙ {t.catalogAdminBtn}
+                      </button>
+                    </>
+                  )}
+                  {globalCapabilities?.can_view_audit && (
+                    <>
+                      <hr className="dropdown-divider" />
+                      <button
+                        type="button"
+                        className="dropdown-logout-btn dropdown-admin-btn"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          const el = document.getElementById("audit-logs");
+                          if (el) el.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        📋 Nhật ký hoạt động
                       </button>
                     </>
                   )}
@@ -5852,7 +6393,30 @@ export default function App() {
             )}
             <button className="button" disabled={tournamentLoading}>Lưu thay đổi</button>
           </form>
-        )}</div>}
+        )}
+          <div className="tournament-delete-box">
+            {tournamentDeleteError && (
+              <div className="error-banner" data-testid="tournament-delete-error-banner">
+                {tournamentDeleteError}
+              </div>
+            )}
+            {tournamentCapabilities.can_delete ? (
+              <button
+                type="button"
+                className="button secondary small danger-link"
+                data-testid="tournament-delete-btn"
+                disabled={tournamentDeleteLoading || tournamentLoading}
+                onClick={() => void handleDeleteTournament()}
+              >
+                {tournamentDeleteLoading ? "Đang xóa giải..." : "Xóa giải đấu"}
+              </button>
+            ) : (
+              <p className="muted small-text" data-testid="tournament-delete-unavailable-reason">
+                Giải đấu đã phát sinh dữ liệu hoặc không ở trạng thái UPCOMING — không thể xóa (dùng Hủy giải nếu cần).
+              </p>
+            )}
+          </div>
+        </div>}
 
         {(tournamentCapabilities?.can_manage || Boolean(refereesError) || Boolean(refereeFormError) || Boolean(refereesNotice)) && (
           <div className="referees-section" data-testid="tournament-referees-section">
@@ -8266,6 +8830,26 @@ export default function App() {
           )}
           </div>
         )}
+
+        <AuditLogSection
+          apiBase={API}
+          mode="tournament"
+          tournamentId={selectedTournament.tournament_id}
+          token={token}
+          canView={Boolean(token && tournamentCapabilities?.can_view_audit)}
+          prefix="tournament-audit"
+          title="Nhật ký hoạt động giải đấu"
+          subtitle="Lịch sử thay đổi thuộc giải đấu này (chỉ đọc, mới nhất trước, đã ẩn dữ liệu nhạy cảm)."
+          onAuthExpired={handleAuthExpired}
+          onPermissionDenied={() => {
+            void loadTournamentCapabilities(
+              selectedTournament.tournament_id,
+              token,
+              tournamentViewVersion.current,
+              sessionVersion.current
+            );
+          }}
+        />
       </div>}
     </section>
 
@@ -8374,6 +8958,21 @@ export default function App() {
         </div>
       </>}
     </section>}
+    {user && (
+      <AuditLogSection
+        apiBase={API}
+        mode="admin"
+        token={token}
+        canView={Boolean(token && globalCapabilities?.can_view_audit)}
+        prefix="admin-audit"
+        title="Nhật ký hoạt động hệ thống (ADMIN)"
+        subtitle="Toàn bộ nhật ký kiểm toán hệ thống (chỉ đọc, mới nhất trước, đã lọc email/mật khẩu/token)."
+        onAuthExpired={handleAuthExpired}
+        onPermissionDenied={() => {
+          void loadGlobalCapabilities();
+        }}
+      />
+    )}
     <section className="panel teams-panel" id="teams">
       <div className="panel-title"><h2>{t.teamsTitle}</h2><span>{teams.length} {t.teamsCount}</span></div>
       {user ? <form className="team-form" onSubmit={createTeam}>
@@ -8399,9 +8998,195 @@ export default function App() {
         </article>;
       })}</div>}
       {selectedTeam && <div className="team-detail">
-      <div className="panel-title"><h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3><button className="link-button" onClick={() => { setSelectedTeam(null); setTeamCapabilities(null); setTeamCapabilityError(""); }}>{t.teamCloseBtn}</button></div>
-        <p>{games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? "Game"}</p>
-        {teamCapabilityError && <div className="error-banner"><span>{teamCapabilityError}</span><button className="button secondary" onClick={() => void loadTeamCapabilities(selectedTeam.team_id)}>{t.retry}</button></div>}
+      <div className="panel-title">
+        <h3>{selectedTeam.name} <span>#{selectedTeam.tag}</span></h3>
+        <div className="team-detail-header-actions">
+          {teamCapabilities?.can_update && !isEditingTeam && (
+            <button
+              type="button"
+              className="button secondary small"
+              data-testid="team-edit-open-btn"
+              onClick={openTeamEditForm}
+            >
+              Sửa thông tin đội
+            </button>
+          )}
+          <button
+            type="button"
+            className="link-button"
+            onClick={() => {
+              teamViewVersion.current += 1;
+              setSelectedTeam(null);
+              setTeamCapabilities(null);
+              setTeamCapabilityError("");
+              resetTeamEditState();
+            }}
+          >
+            {t.teamCloseBtn}
+          </button>
+        </div>
+      </div>
+        <div className="team-profile-meta" data-testid="team-profile-meta">
+          <span>
+            <strong>Tựa game:</strong>{" "}
+            {games.find((game) => game.game_id === selectedTeam.game_id)?.name ?? `Game #${selectedTeam.game_id}`}
+          </span>
+          <span>
+            <strong>Tổ chức:</strong>{" "}
+            {selectedTeam.organization_id !== null
+              ? organizations.find((org) => org.organization_id === selectedTeam.organization_id)?.name ??
+                `Tổ chức #${selectedTeam.organization_id}`
+              : "Độc lập (chưa gắn tổ chức)"}
+          </span>
+          {selectedTeam.logo_url && (
+            <span>
+              <strong>Logo URL:</strong>{" "}
+              <a href={selectedTeam.logo_url} target="_blank" rel="noreferrer" className="team-logo-link">
+                {selectedTeam.logo_url}
+              </a>
+            </span>
+          )}
+        </div>
+        {teamCapabilityError && (
+          <div className="error-banner">
+            <span>{teamCapabilityError}</span>
+            <button
+              type="button"
+              className="button secondary"
+              onClick={() =>
+                void loadTeamCapabilities(selectedTeam.team_id, token, teamViewVersion.current, sessionVersion.current)
+              }
+            >
+              {t.retry}
+            </button>
+          </div>
+        )}
+        {teamEditNotice && (
+          <div className="notice-banner" data-testid="team-edit-notice-banner">
+            {teamEditNotice}
+          </div>
+        )}
+        {teamEditError && (
+          <div className="error-banner" data-testid="team-edit-error-banner">
+            {teamEditError}
+          </div>
+        )}
+        {isEditingTeam && teamCapabilities?.can_update && (
+          <form
+            className="team-edit-form"
+            noValidate
+            onSubmit={(e) => void handleUpdateTeam(e)}
+            data-testid="team-edit-form"
+          >
+            <h4>Cập nhật hồ sơ đội tuyển</h4>
+            <div className="team-edit-grid">
+              <label>
+                Tên đội (cập nhật) <span className="required">*</span>
+                <input
+                  type="text"
+                  name="edit_team_name"
+                  data-testid="team-edit-name-input"
+                  maxLength={100}
+                  value={editTeamName}
+                  disabled={teamEditLoading || !(teamCapabilities.editable_fields ?? []).includes("name")}
+                  onChange={(e) => setEditTeamName(e.target.value)}
+                />
+              </label>
+              <label>
+                Tag đội <span className="required">*</span>
+                <input
+                  type="text"
+                  name="edit_team_tag"
+                  data-testid="team-edit-tag-input"
+                  maxLength={10}
+                  value={editTeamTag}
+                  disabled={teamEditLoading || !(teamCapabilities.editable_fields ?? []).includes("tag")}
+                  onChange={(e) => setEditTeamTag(e.target.value)}
+                />
+              </label>
+              <label className="wide-field">
+                URL Logo (để trống để xóa logo)
+                <input
+                  type="url"
+                  name="edit_team_logo_url"
+                  data-testid="team-edit-logo-input"
+                  maxLength={255}
+                  placeholder="https://example.com/logo.png"
+                  value={editTeamLogoUrl}
+                  disabled={teamEditLoading || !(teamCapabilities.editable_fields ?? []).includes("logo_url")}
+                  onChange={(e) => setEditTeamLogoUrl(e.target.value)}
+                />
+              </label>
+              <label>
+                Tựa game (cập nhật)
+                <select
+                  name="edit_team_game_id"
+                  data-testid="team-edit-game-select"
+                  value={editTeamGameId}
+                  disabled={teamEditLoading || !(teamCapabilities.editable_fields ?? []).includes("game_id")}
+                  onChange={(e) => setEditTeamGameId(e.target.value)}
+                >
+                  {games
+                    .filter((game) => game.game_id > 0)
+                    .map((game) => (
+                      <option key={game.game_id} value={String(game.game_id)}>
+                        {getLocalizedGameName(game.name, lang)}
+                      </option>
+                    ))}
+                </select>
+                {!(teamCapabilities.editable_fields ?? []).includes("game_id") && (
+                  <small className="muted team-field-lock-hint" data-testid="team-game-locked-hint">
+                    Không thể đổi tựa game khi đội đang có đăng ký giải chưa kết thúc hoặc đã thi đấu với đội hình khóa.
+                  </small>
+                )}
+              </label>
+              <label>
+                Tổ chức (Organization)
+                <select
+                  name="edit_team_organization_id"
+                  data-testid="team-edit-org-select"
+                  value={editTeamOrgId}
+                  disabled={teamEditLoading || !(teamCapabilities.editable_fields ?? []).includes("organization_id")}
+                  onChange={(e) => setEditTeamOrgId(e.target.value)}
+                >
+                  <option value="">Độc lập (không thuộc tổ chức)</option>
+                  {organizations.map((org) => (
+                    <option key={org.organization_id} value={String(org.organization_id)}>
+                      {org.name}
+                    </option>
+                  ))}
+                </select>
+                {!(teamCapabilities.editable_fields ?? []).includes("organization_id") && (
+                  <small className="muted team-field-lock-hint" data-testid="team-org-locked-hint">
+                    Không thể đổi tổ chức lúc này (cần quyền quản lý tổ chức và không có đăng ký giải đang mở).
+                  </small>
+                )}
+              </label>
+            </div>
+            <div className="form-actions">
+              <button
+                type="submit"
+                className="button small"
+                data-testid="team-edit-save-btn"
+                disabled={teamEditLoading}
+              >
+                {teamEditLoading ? <><span className="spinner" /> Đang lưu...</> : "Lưu thay đổi đội"}
+              </button>
+              <button
+                type="button"
+                className="button secondary small"
+                data-testid="team-edit-cancel-btn"
+                disabled={teamEditLoading}
+                onClick={() => {
+                  setIsEditingTeam(false);
+                  setTeamEditError("");
+                }}
+              >
+                Hủy
+              </button>
+            </div>
+          </form>
+        )}
         {canManageSelectedTeam && <form className="member-form" onSubmit={addMember}>
           <label>{t.authUsername}<input name="username" placeholder={t.teamUsernamePlaceholder} maxLength={50} required /></label>
           <label>{t.teamRoleLabel}<select name="role_in_team" defaultValue="PLAYER"><option value="MANAGER">MANAGER</option><option value="COACH">COACH</option><option value="PLAYER">PLAYER</option><option value="SUBSTITUTE">SUBSTITUTE</option></select></label>
@@ -8421,6 +9206,229 @@ export default function App() {
           </div>}
         </div>)}</div>}
       </div>}
+
+      <div className="organizations-section" data-testid="organizations-section">
+        <div className="section-header">
+          <div>
+            <h3>Tổ chức Esports ({organizations.length})</h3>
+            <p className="muted small-text">
+              Danh sách tổ chức công khai. ADMIN có thể tạo mới; ADMIN hoặc quản lý tổ chức có thể đổi tên.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="button secondary small"
+            data-testid="organizations-reload-btn"
+            disabled={organizationsLoading}
+            onClick={() => void loadOrganizations()}
+          >
+            Tải lại
+          </button>
+        </div>
+
+        {orgNotice && (
+          <div className="notice-banner" data-testid="org-notice-banner">
+            {orgNotice}
+          </div>
+        )}
+        {organizationsError && (
+          <div className="error-banner" data-testid="organizations-error-banner">
+            <span>{organizationsError}</span>
+            <button type="button" className="button secondary small" onClick={() => void loadOrganizations()}>
+              Thử lại
+            </button>
+          </div>
+        )}
+
+        {orgCreateError && (
+          <div className="error-banner" data-testid="org-create-error-banner">
+            {orgCreateError}
+          </div>
+        )}
+
+        {globalCapabilities?.can_create_organization && (
+          <form
+            className="org-create-form"
+            noValidate
+            onSubmit={(e) => void handleCreateOrganization(e)}
+            data-testid="org-create-form"
+          >
+            <div className="referee-grant-row">
+              <label className="referee-userid-field">
+                <span>Tên tổ chức mới <span className="required">*</span></span>
+                <input
+                  type="text"
+                  name="new_org_name"
+                  data-testid="org-create-name-input"
+                  placeholder="Ví dụ: Nexus Esports Organization"
+                  maxLength={150}
+                  value={newOrgName}
+                  disabled={orgCreateLoading}
+                  onChange={(e) => setNewOrgName(e.target.value)}
+                />
+              </label>
+              <button
+                type="submit"
+                className="button small"
+                data-testid="org-create-submit-btn"
+                disabled={orgCreateLoading}
+              >
+                {orgCreateLoading ? "Đang tạo..." : "+ Tạo tổ chức"}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {organizationsLoading && organizations.length === 0 ? (
+          <div className="loading-state" data-testid="organizations-loading">
+            <span className="spinner" /> Đang tải danh sách tổ chức...
+          </div>
+        ) : organizations.length === 0 ? (
+          !organizationsError ? (
+            <p className="muted" data-testid="organizations-empty">
+              Chưa có tổ chức nào.
+            </p>
+          ) : null
+        ) : (
+          <div className="org-list" data-testid="organization-list">
+            {organizations.map((org) => (
+              <div
+                key={org.organization_id}
+                className={`org-card ${selectedOrg?.organization_id === org.organization_id ? "is-selected" : ""}`}
+                data-testid={`org-card-${org.organization_id}`}
+              >
+                <div>
+                  <strong>{org.name}</strong>
+                  <span className="referee-id-pill" style={{ marginLeft: "8px" }}>
+                    #{org.organization_id}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="button secondary small"
+                  data-testid={`org-view-btn-${org.organization_id}`}
+                  onClick={() => void viewOrganization(org.organization_id)}
+                >
+                  Xem tổ chức
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {orgDetailError && (
+          <div className="error-banner" data-testid="org-detail-error-banner">
+            {orgDetailError}
+          </div>
+        )}
+
+        {orgDetailLoading && (
+          <div className="loading-state" data-testid="org-detail-loading">
+            <span className="spinner" /> Đang tải chi tiết tổ chức...
+          </div>
+        )}
+
+        {selectedOrg && !orgDetailLoading && (
+          <div className="org-detail-panel" data-testid="org-detail-panel">
+            <div className="panel-title">
+              <h4>
+                Tổ chức: {selectedOrg.name} <span className="muted small-text">(#{selectedOrg.organization_id})</span>
+              </h4>
+              <div className="team-detail-header-actions">
+                {orgCapabilities?.can_update && !isEditingOrg && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    data-testid="org-edit-open-btn"
+                    onClick={() => {
+                      setEditOrgName(selectedOrg.name);
+                      setOrgUpdateError("");
+                      setIsEditingOrg(true);
+                    }}
+                  >
+                    Đổi tên tổ chức
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => {
+                    orgViewVersion.current += 1;
+                    setSelectedOrg(null);
+                    setOrgCapabilities(null);
+                    setIsEditingOrg(false);
+                    setOrgUpdateError("");
+                  }}
+                >
+                  Đóng ×
+                </button>
+              </div>
+            </div>
+
+            {orgUpdateError && (
+              <div className="error-banner" data-testid="org-edit-error-banner">
+                {orgUpdateError}
+              </div>
+            )}
+
+            {isEditingOrg && orgCapabilities?.can_update && (
+              <form
+                className="org-edit-form"
+                noValidate
+                onSubmit={(e) => void handleUpdateOrganization(e)}
+                data-testid="org-edit-form"
+              >
+                <div className="referee-grant-row">
+                  <label className="referee-userid-field">
+                    <span>Tên tổ chức (cập nhật) <span className="required">*</span></span>
+                    <input
+                      type="text"
+                      name="edit_org_name"
+                      data-testid="org-edit-name-input"
+                      maxLength={150}
+                      value={editOrgName}
+                      disabled={orgUpdateLoading}
+                      onChange={(e) => setEditOrgName(e.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    className="button small"
+                    data-testid="org-edit-save-btn"
+                    disabled={orgUpdateLoading}
+                  >
+                    {orgUpdateLoading ? "Đang lưu..." : "Lưu tên tổ chức"}
+                  </button>
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    disabled={orgUpdateLoading}
+                    onClick={() => {
+                      setIsEditingOrg(false);
+                      setOrgUpdateError("");
+                    }}
+                  >
+                    Hủy
+                  </button>
+                </div>
+              </form>
+            )}
+
+            <p className="muted small-text">Đội trực thuộc ({selectedOrg.teams.length}):</p>
+            {selectedOrg.teams.length === 0 ? (
+              <p className="muted small-text">Chưa có đội nào thuộc tổ chức này.</p>
+            ) : (
+              <ul className="org-teams-list" data-testid="org-teams-list">
+                {selectedOrg.teams.map((tm) => (
+                  <li key={tm.team_id}>
+                    <strong>{tm.name}</strong> <span className="tag">#{tm.tag}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   </main>
 
