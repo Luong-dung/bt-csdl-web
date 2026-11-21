@@ -96,6 +96,18 @@ def can_manage_team(db: Session, team_id: int, user: User) -> bool:
     return db.scalar(managed_teams_query(user).where(Team.team_id == team_id)) is not None
 
 
+def managed_organization_ids(user: User) -> set[int]:
+    """Organizations the user manages through an active TEAM_MANAGER assignment (not ADMIN)."""
+    return {
+        a.scope_id for a in user.assignments
+        if a.role.role_name == 'TEAM_MANAGER' and a.scope_type == 'ORGANIZATION' and a.scope_id is not None
+    }
+
+
+def can_manage_organization(organization_id: int, user: User) -> bool:
+    return has_role(user, 'ADMIN') or organization_id in managed_organization_ids(user)
+
+
 def can_manage_tournament(tournament, user: User) -> bool:
     """ADMIN, the ORGANIZER who created the tournament, or ORGANIZER assigned to it.
 

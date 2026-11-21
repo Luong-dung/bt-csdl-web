@@ -17,6 +17,7 @@ from middleware.auth import (
 from modules.identity.models import User
 from modules.teams.models import Team
 from modules.tournaments.models import Tournament
+from routes.team import can_move_organization, has_locked_roster, has_open_registration
 from routes.tournaments import ONGOING_EDITABLE, TournamentUpdate, status_transitions
 
 router = APIRouter(tags=["Capabilities"])
@@ -26,12 +27,16 @@ class GlobalCapabilities(BaseModel):
     can_manage_catalog: bool
     can_create_tournament: bool
     can_view_audit: bool
+    can_create_organization: bool
 
 
 class TeamCapabilities(BaseModel):
     team_id: int
     can_manage_members: bool
     can_register_for_tournament: bool
+    can_update: bool
+    # Fields PATCH /teams/{id} may change right now; game_id/organization_id drop out while blocked.
+    editable_fields: list[str]
 
 
 class TournamentCapabilities(BaseModel):
@@ -58,6 +63,7 @@ def global_capabilities(user: User = Depends(get_current_user)):
         can_manage_catalog=has_role(user, "ADMIN"),
         can_create_tournament=has_role(user, "ADMIN", "ORGANIZER"),
         can_view_audit=has_role(user, "ADMIN"),
+        can_create_organization=has_role(user, "ADMIN"),
     )
 
 
@@ -68,12 +74,21 @@ def team_capabilities(
     db: Session = Depends(get_db),
 ):
     managed_ids = managed_teams_query(user).with_only_columns(Team.team_id).correlate(None)
-    team = db.execute(select(Team.team_id, Team.team_id.in_(managed_ids).label('can_manage'))
+    team = db.execute(select(Team.team_id, Team.organization_id, Team.team_id.in_(managed_ids).label('can_manage'))
                       .where(Team.team_id == team_id)).one_or_none()
     if team is None:
         raise HTTPException(status_code=404, detail="Không tìm thấy đội tuyển")
-    allowed = team.can_manage
-    return TeamCapabilities(team_id=team_id, can_manage_members=allowed, can_register_for_tournament=allowed)
+    allowed = bool(team.can_manage)
+    fields = []
+    if allowed:
+        fields = ['name', 'tag', 'logo_url']
+        open_registration = has_open_registration(db, team_id)
+        if not open_registration and not has_locked_roster(db, team_id):
+            fields.append('game_id')
+        if not open_registration and can_move_organization(user, team.organization_id):
+            fields.append('organization_id')
+    return TeamCapabilities(team_id=team_id, can_manage_members=allowed, can_register_for_tournament=allowed,
+                            can_update=allowed, editable_fields=fields)
 
 
 @router.get("/api/v1/tournaments/{tournament_id}/capabilities", response_model=TournamentCapabilities)

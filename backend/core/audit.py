@@ -18,6 +18,8 @@ RESOURCE_ID_KEYS = {
     'match': 'match_id',
     'bracket': 'bracket_id',
     'team_membership': 'membership_id',
+    'team': 'team_id',
+    'organization': 'organization_id',
     'role_assignment': 'assignment_id',
     'publisher': 'publisher_id',
     'game': 'game_id',
