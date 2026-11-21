@@ -120,7 +120,7 @@ def test_audit_logs_admin_and_tournament_filters_diff_pagination_and_390px(
     expect(t_audit.locator('[data-action="ROLE_ASSIGNMENT_GRANTED"]')).to_have_count(1)
     expect(t_audit.locator('[data-action="TOURNAMENT_STAGE_CREATED"]')).to_have_count(0)
 
-    # Real backend 422 when since > until; preserves filter inputs
+    # Real backend 422 when since > until; preserves filter inputs and clears stale rows from previous filter
     t_audit.locator('[data-testid="tournament-audit-filter-since"]').fill("2026-12-31T10:00")
     t_audit.locator('[data-testid="tournament-audit-filter-until"]').fill("2026-01-01T10:00")
     with page.expect_response(
@@ -129,6 +129,10 @@ def test_audit_logs_admin_and_tournament_filters_diff_pagination_and_390px(
         t_audit.locator('[data-testid="tournament-audit-filter-apply-btn"]').click()
     assert bad_filter_resp.value.status == 422
     expect(t_audit.locator('[data-testid="tournament-audit-error-banner"]')).to_be_visible()
+    expect(t_audit.locator('[data-testid="tournament-audit-list"]')).to_have_count(0)
+    expect(t_audit.locator(".audit-log-card")).to_have_count(0)
+    expect(t_audit.locator('[data-action="ROLE_ASSIGNMENT_GRANTED"]')).to_have_count(0)
+    expect(t_audit.locator('[data-testid="tournament-audit-empty"]')).to_have_count(0)
     expect(t_audit.locator('[data-testid="tournament-audit-filter-since"]')).to_have_value("2026-12-31T10:00")
     expect(t_audit.locator('[data-testid="tournament-audit-filter-until"]')).to_have_value("2026-01-01T10:00")
 
@@ -294,13 +298,14 @@ def test_team_org_edit_capabilities_409_preserve_input_and_tournament_delete(
 
         create_team(mgr_page, t1_name, t1_tag)
         _other_user, other_token = _register_and_login_api(mgr_page, api_base_url, "othertm", demo_password)
-        _api_request(
+        t2_created = _api_request(
             mgr_page,
             "POST",
             f"{api_base_url}/teams",
             token=other_token,
             data={"name": t2_name, "tag": t2_tag, "game_id": valorant_game["game_id"]},
         )
+        t2_id = t2_created["team_id"]
 
         # Open Team 1 detail and edit name/tag/logo_url/game_id
         t1_card = mgr_page.locator(".team-list article").filter(has_text=t1_name)
@@ -361,8 +366,11 @@ def test_team_org_edit_capabilities_409_preserve_input_and_tournament_delete(
             data={"team_id": int(t1_id)},
         )
 
-        # Now try changing game_id -> real backend 409; form stays open preserving input,
-        # capabilities refresh disables game_id select and renders lock hints!
+        # Now try changing game_id along with an unsaved name draft -> real backend 409;
+        # capabilities refresh disables game_id, reverts game_id to saved value matching header,
+        # and preserves still-editable fields (name).
+        final_name = f"LockedGameOK {unique_username('ok')[-6:]}"
+        detail.locator('[data-testid="team-edit-name-input"]').fill(final_name)
         detail.locator('[data-testid="team-edit-game-select"]').select_option(str(alt_game["game_id"]))
         with mgr_page.expect_response(
             lambda r: urlparse(r.url).path.endswith(f"/teams/{t1_id}") and r.request.method == "PATCH"
@@ -371,6 +379,8 @@ def test_team_org_edit_capabilities_409_preserve_input_and_tournament_delete(
         assert lock_409_resp.value.status == 409
         expect(detail.locator('[data-testid="team-edit-error-banner"]')).to_be_visible()
         expect(detail.locator('[data-testid="team-edit-game-select"]')).to_be_disabled()
+        expect(detail.locator('[data-testid="team-edit-game-select"]')).to_have_value(str(valorant_game["game_id"]))
+        expect(detail.locator('[data-testid="team-edit-name-input"]')).to_have_value(final_name)
         expect(detail.locator('[data-testid="team-game-locked-hint"]')).to_be_visible()
         expect(detail.locator('[data-testid="team-org-locked-hint"]')).to_be_visible()
 
@@ -380,17 +390,57 @@ def test_team_org_edit_capabilities_409_preserve_input_and_tournament_delete(
         assert not has_overflow, "Team Edit / Organizations UI overflows horizontally at 390px viewport"
         mgr_page.set_viewport_size({"width": 1280, "height": 900})
 
-        # Name remains editable even while game_id is locked
-        final_name = f"LockedGameOK {unique_username('ok')[-6:]}"
-        detail.locator('[data-testid="team-edit-name-input"]').fill(final_name)
+        # Preserved editable name can be submitted immediately while locked game_id stays at saved value
         with mgr_page.expect_response(
             lambda r: urlparse(r.url).path.endswith(f"/teams/{t1_id}") and r.request.method == "PATCH"
         ) as name_ok_resp:
             detail.locator('[data-testid="team-edit-save-btn"]').click()
         assert name_ok_resp.value.status == 200
         expect(detail.get_by_role("heading", name=final_name)).to_be_visible()
+        expect(detail.locator('[data-testid="team-profile-meta"]')).to_contain_text(valorant_game["name"])
     finally:
         mgr_page.close()
+
+    # 2b) ADMIN locked organization_id 409: reverts organization_id to saved value while preserving editable name
+    page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_admin")
+    t2_card = page.locator(".team-list article").filter(has_text=t2_name)
+    t2_card.get_by_role("button", name="Xem đội").click()
+    admin_team_detail = page.locator(".team-detail")
+    admin_team_detail.locator('[data-testid="team-edit-open-btn"]').click()
+
+    org_lock_name = f"LockedOrgOK {unique_username('olo')[-6:]}"
+    admin_team_detail.locator('[data-testid="team-edit-name-input"]').fill(org_lock_name)
+    admin_team_detail.locator('[data-testid="team-edit-org-select"]').select_option(str(org_a_id))
+
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{t_ctx['tournament_id']}/registrations",
+        token=other_token,
+        data={"team_id": t2_id},
+    )
+    with page.expect_response(
+        lambda r: urlparse(r.url).path.endswith(f"/teams/{t2_id}") and r.request.method == "PATCH"
+    ) as org_409_resp:
+        admin_team_detail.locator('[data-testid="team-edit-save-btn"]').click()
+    assert org_409_resp.value.status == 409
+    expect(admin_team_detail.locator('[data-testid="team-edit-error-banner"]')).to_be_visible()
+    expect(admin_team_detail.locator('[data-testid="team-edit-org-select"]')).to_be_disabled()
+    expect(admin_team_detail.locator('[data-testid="team-edit-org-select"]')).to_have_value("")
+    expect(admin_team_detail.locator('[data-testid="team-edit-game-select"]')).to_be_disabled()
+    expect(admin_team_detail.locator('[data-testid="team-edit-game-select"]')).to_have_value(
+        str(valorant_game["game_id"])
+    )
+    expect(admin_team_detail.locator('[data-testid="team-edit-name-input"]')).to_have_value(org_lock_name)
+
+    with page.expect_response(
+        lambda r: urlparse(r.url).path.endswith(f"/teams/{t2_id}") and r.request.method == "PATCH"
+    ) as org_name_ok:
+        admin_team_detail.locator('[data-testid="team-edit-save-btn"]').click()
+    assert org_name_ok.value.status == 200
+    expect(admin_team_detail.get_by_role("heading", name=org_lock_name)).to_be_visible()
+    expect(admin_team_detail.locator('[data-testid="team-profile-meta"]')).to_contain_text("Độc lập")
 
     # 3) Non-manager viewer sees neither team edit nor org create/edit
     viewer_page = browser.new_page(viewport={"width": 1280, "height": 900})

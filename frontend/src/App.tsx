@@ -1657,7 +1657,31 @@ export default function App() {
       }
       setTeamEditError((reason as Error).message || "Không thể cập nhật thông tin đội tuyển.");
       if (reason instanceof RequestError && (reason.status === 403 || reason.status === 409)) {
-        void loadTeamCapabilities(tid, startingToken, teamV, sessionV);
+        const [freshCaps, freshTeam] = await Promise.all([
+          loadTeamCapabilities(tid, startingToken, teamV, sessionV),
+          request<TeamDetail>(`/teams/${tid}`).catch(() => null),
+        ]);
+        if (
+          teamViewVersion.current !== teamV ||
+          sessionVersion.current !== sessionV ||
+          teamUpdateVersion.current !== updV
+        ) {
+          return;
+        }
+        const savedTeam = freshTeam ?? selectedTeam;
+        if (freshTeam) {
+          setSelectedTeam(freshTeam);
+        }
+        if (freshCaps) {
+          const nextEditable = freshCaps.editable_fields ?? [];
+          if (!nextEditable.includes("name")) setEditTeamName(savedTeam.name);
+          if (!nextEditable.includes("tag")) setEditTeamTag(savedTeam.tag);
+          if (!nextEditable.includes("logo_url")) setEditTeamLogoUrl(savedTeam.logo_url ?? "");
+          if (!nextEditable.includes("game_id")) setEditTeamGameId(String(savedTeam.game_id));
+          if (!nextEditable.includes("organization_id")) {
+            setEditTeamOrgId(savedTeam.organization_id !== null ? String(savedTeam.organization_id) : "");
+          }
+        }
       }
     } finally {
       if (

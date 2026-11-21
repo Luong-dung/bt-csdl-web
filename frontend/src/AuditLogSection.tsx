@@ -144,6 +144,10 @@ export function AuditLogSection({
 
   const requestVersion = useRef(0);
   const mountedRef = useRef(true);
+  const lastRequestedRef = useRef<{ filters: AuditFilters; page: number }>({
+    filters: EMPTY_FILTERS,
+    page: 0,
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -157,6 +161,7 @@ export function AuditLogSection({
     if (!token || !canView) return;
     if (mode === "tournament" && !tournamentId) return;
 
+    lastRequestedRef.current = { filters, page: targetPage };
     const reqV = ++requestVersion.current;
     setLoading(true);
     setError("");
@@ -177,9 +182,11 @@ export function AuditLogSection({
       const trimmed = rawVal.trim();
       if (trimmed) {
         if (!/^[1-9]\d*$/.test(trimmed)) {
+          setLogs([]);
+          setTotal(0);
+          setLoaded(true);
           setError(`Bộ lọc ${key} phải là số nguyên dương.`);
           setLoading(false);
-          setLoaded(true);
           return;
         }
         params.set(key, trimmed);
@@ -188,16 +195,20 @@ export function AuditLogSection({
 
     const sinceIso = localInputToIsoOffset(filters.since);
     if (sinceIso === "__INVALID__") {
+      setLogs([]);
+      setTotal(0);
+      setLoaded(true);
       setError("Thời điểm 'Từ lúc' (since) không hợp lệ.");
       setLoading(false);
-      setLoaded(true);
       return;
     }
     const untilIso = localInputToIsoOffset(filters.until);
     if (untilIso === "__INVALID__") {
+      setLogs([]);
+      setTotal(0);
+      setLoaded(true);
       setError("Thời điểm 'Đến lúc' (until) không hợp lệ.");
       setLoading(false);
-      setLoaded(true);
       return;
     }
     if (sinceIso) params.set("since", sinceIso);
@@ -238,6 +249,8 @@ export function AuditLogSection({
           onPermissionDenied?.(msg);
           return;
         }
+        setLogs([]);
+        setTotal(0);
         setLoaded(true);
         setError(msg);
         return;
@@ -250,9 +263,13 @@ export function AuditLogSection({
       const parsedTotal = totalHeader !== null ? Number(totalHeader) : list.length;
       setLogs(list);
       setTotal(Number.isNaN(parsedTotal) ? list.length : parsedTotal);
+      setAppliedFilters(filters);
+      setPage(targetPage);
       setLoaded(true);
     } catch (reason) {
       if (!mountedRef.current || requestVersion.current !== reqV) return;
+      setLogs([]);
+      setTotal(0);
       setLoaded(true);
       setError((reason as Error).message || "Không thể tải nhật ký hoạt động.");
     } finally {
@@ -273,6 +290,7 @@ export function AuditLogSection({
 
     requestVersion.current += 1;
     if (scopeChanged) {
+      lastRequestedRef.current = { filters: EMPTY_FILTERS, page: 0 };
       setLogs([]);
       setTotal(0);
       setPage(0);
@@ -300,21 +318,15 @@ export function AuditLogSection({
 
   const handleApplyFilters = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const nextFilters = { ...draftFilters };
-    setAppliedFilters(nextFilters);
-    setPage(0);
-    void fetchLogs(nextFilters, 0);
+    void fetchLogs({ ...draftFilters }, 0);
   };
 
   const handleResetFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
-    setAppliedFilters(EMPTY_FILTERS);
-    setPage(0);
     void fetchLogs(EMPTY_FILTERS, 0);
   };
 
   const handlePageChange = (nextPage: number) => {
-    setPage(nextPage);
     void fetchLogs(appliedFilters, nextPage);
   };
 
@@ -421,11 +433,13 @@ export function AuditLogSection({
         <div>
           {mode === "admin" ? (
             <h2>
-              {title} ({total})
+              {title}
+              {!error ? ` (${total})` : ""}
             </h2>
           ) : (
             <h4>
-              {title} ({total})
+              {title}
+              {!error ? ` (${total})` : ""}
             </h4>
           )}
           <p className="muted small-text">{subtitle}</p>
@@ -461,7 +475,7 @@ export function AuditLogSection({
               type="button"
               className="button secondary small"
               data-testid={`${prefix}-retry-btn`}
-              onClick={() => void fetchLogs(appliedFilters, page)}
+              onClick={() => void fetchLogs(lastRequestedRef.current.filters, lastRequestedRef.current.page)}
             >
               Thử lại
             </button>
