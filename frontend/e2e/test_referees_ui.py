@@ -179,13 +179,13 @@ def test_referees_errors_401_403_404_409_422_retry_and_closed_tournament(
     clean_ref, _clean_tok = _register_and_login_api(page, api_base_url, "refok", demo_password)
     me_org = _api_request(page, "GET", f"{api_base_url}/auth/me", token=token)
 
-    suffix = unique_username("rt")[-4:]
+    suffix = unique_username("rt")[-8:]
     team = _api_request(
         page,
         "POST",
         f"{api_base_url}/teams",
         token=mgr_tok,
-        data={"name": f"RefTeam {suffix}", "tag": f"RT{suffix[:4]}".upper(), "game_id": game_id},
+        data={"name": f"RefTeam {suffix}", "tag": f"RT{suffix}".upper()[:10], "game_id": game_id},
     )
     _api_request(
         page,

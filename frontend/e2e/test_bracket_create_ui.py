@@ -56,7 +56,7 @@ def _setup_bracket_tournament(
     for idx in range(1, team_count + 1):
         _mgr_user, mgr_token = _register_and_login_api(page, api_base_url, f"bmgr{idx}", demo_password)
         plr_user, _plr_token = _register_and_login_api(page, api_base_url, f"bplr{idx}", demo_password)
-        suffix = unique_username(f"t{idx}")[-4:]
+        suffix = unique_username(f"t{idx}")[-7:]
         team = _api_request(
             page,
             "POST",
@@ -64,7 +64,7 @@ def _setup_bracket_tournament(
             token=mgr_token,
             data={
                 "name": f"BTeam {idx:02d} {suffix}",
-                "tag": f"B{idx:02d}{suffix[:3]}".upper()[:10],
+                "tag": f"B{idx:02d}{suffix}".upper()[:10],
                 "game_id": game_id,
             },
         )
