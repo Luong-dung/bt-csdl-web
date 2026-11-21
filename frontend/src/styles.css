@@ -3802,3 +3802,264 @@ input:focus, select:focus, textarea:focus { border-color: var(--fantasy-lilac); 
   }
 }
 
+/* W47-05: Tournament Referee Management UI */
+.referees-section {
+  margin-top: 24px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.48);
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.referees-section .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.referees-section .section-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 18px;
+}
+
+.referees-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.referees-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #cbd5e1;
+  cursor: pointer;
+  margin: 0;
+}
+
+.referees-toggle-label input[type="checkbox"] {
+  width: auto;
+  margin: 0;
+}
+
+.referee-grant-panel {
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.58);
+  border: 1px solid rgba(56, 189, 248, 0.26);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.referee-search-form,
+.referee-grant-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.referee-search-field,
+.referee-userid-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e2e8f0;
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+}
+
+.referee-search-row,
+.referee-grant-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.referee-search-row input,
+.referee-grant-row input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.referee-candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.referee-candidate-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.68);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.referee-candidate-item.is-selected {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(56, 189, 248, 0.12);
+}
+
+.referee-candidate-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.referee-selected-pill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  font-size: 13px;
+  color: #e0f2fe;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.referee-id-pill {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+}
+
+.referee-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.referee-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: rgba(30, 41, 59, 0.65);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.referee-card.is-revoked {
+  opacity: 0.78;
+  border-style: dashed;
+}
+
+.referee-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.referee-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.referee-card-meta {
+  margin: 0;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.referee-status-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.referee-status-badge.status-active {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(34, 197, 94, 0.38);
+}
+
+.referee-status-badge.status-revoked {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.referee-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .referees-section {
+    padding: 12px;
+  }
+  .referee-grant-panel {
+    padding: 12px;
+  }
+  .referee-search-row,
+  .referee-grant-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .referee-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .referee-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
