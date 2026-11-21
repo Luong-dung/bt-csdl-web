@@ -302,7 +302,57 @@ def test_permission_lists_are_not_cached(access, match_case):
     assignment = grant(client, headers, match_case['tid'], users).json()['assignment_id']
     responses = [client.get(path(match_case['tid']), headers=headers('organizer')),
                  client.get(path(match_case['tid'])),
+                 client.get(path(match_case['tid'], '/candidates?q=ref'), headers=headers('organizer')),
+                 client.get(path(match_case['tid'], '/candidates?q=ref'), headers=headers('viewer')),
                  client.delete(path(match_case['tid'], f'/{assignment}'), headers=headers('organizer')),
                  client.get(ADMIN, headers=headers('admin')),
                  client.get(ADMIN, headers=headers('viewer'))]
-    assert [r.headers.get('cache-control') for r in responses] == ['private, no-store'] * 5
+    assert [r.headers.get('cache-control') for r in responses] == ['private, no-store'] * 7
+
+
+# ---------- W47-05 candidate user search (no email exposure) ----------
+
+def test_search_referee_candidates_matches_username_and_real_name_without_email(access, session_factory, match_case):
+    client, headers, users, *_ = access
+    tid = match_case['tid']
+    with session_factory.begin() as db:
+        ref = db.get(User, users['referee'])
+        ref.real_name = 'Trọng Tài Minh'
+        ref.email = 'secret_unique_email_999@private.example'
+
+    by_username = client.get(path(tid, '/candidates?q=ref'), headers=headers('organizer'))
+    assert by_username.status_code == 200
+    rows = by_username.json()
+    assert any(r['user_id'] == users['referee'] for r in rows)
+    for row in rows:
+        assert set(row.keys()) == {'user_id', 'username', 'real_name'}
+        assert 'email' not in row
+
+    by_real_name = client.get(path(tid, '/candidates?q=Minh'), headers=headers('admin'))
+    assert by_real_name.status_code == 200
+    assert [r['user_id'] for r in by_real_name.json()] == [users['referee']]
+
+    # Must NOT search or leak by email
+    by_email = client.get(path(tid, '/candidates?q=secret_unique_email_999'), headers=headers('organizer'))
+    assert by_email.status_code == 200
+    assert by_email.json() == []
+
+    # Wildcards % and _ must be escaped, not dump all users
+    wildcard_pct = client.get(path(tid, '/candidates'), params={'q': '%%'}, headers=headers('organizer'))
+    assert wildcard_pct.status_code == 200
+    assert wildcard_pct.json() == []
+
+    wildcard_us = client.get(path(tid, '/candidates'), params={'q': '__'}, headers=headers('organizer'))
+    assert wildcard_us.status_code == 200
+    assert wildcard_us.json() == []
+
+
+@pytest.mark.parametrize('who,code', [(None, 401), ('viewer', 403), ('manager', 403), ('referee', 403)])
+def test_search_referee_candidates_permissions_and_validation(access, match_case, who, code):
+    client, headers, *_ = access
+    tid = match_case['tid']
+    auth = headers(who) if who else {}
+    assert client.get(path(tid, '/candidates?q=ref'), headers=auth).status_code == code
+    assert client.get(path(tid, '/candidates?q=a'), headers=headers('organizer')).status_code == 422
+    assert client.get(path(tid, '/candidates?q=%20%20'), headers=headers('organizer')).status_code == 422
+    assert client.get(path(999999, '/candidates?q=ref'), headers=headers('organizer')).status_code == 404

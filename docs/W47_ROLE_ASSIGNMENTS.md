@@ -24,6 +24,7 @@ Quyền: quản lý đúng giải (`can_manage_tournament`) hoặc ADMIN. REFERE
 | Thao tác | Endpoint | Ghi chú |
 |---|---|---|
 | Danh sách | `GET /api/v1/tournaments/{id}/referees?include_revoked=false&offset=0&limit=50` | `X-Total-Count`; sắp theo `assignment_id`; mặc định chỉ hiệu lực |
+| Tìm ứng viên | `GET /api/v1/tournaments/{id}/referees/candidates?q=<min 2 ký tự>&limit=10` | Quản lý giải/ADMIN; tìm theo `username`/`real_name` (không tìm/không trả email); tối đa 20 dòng; thoát ký tự `%`/`_`; `no-store` |
 | Cấp | `POST /api/v1/tournaments/{id}/referees` body `{"user_id": int}` (strict, không nhận field lạ) | 201 |
 | Thu hồi | `DELETE /api/v1/tournaments/{id}/referees/{assignment_id}` | 200, trả bản ghi đã thu hồi |
 

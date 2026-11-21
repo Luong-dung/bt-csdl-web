@@ -63,7 +63,25 @@ type TournamentCapabilities = {
   can_approve_registrations: boolean; roster_locked: boolean;
   can_lock_roster: boolean; can_manage_stages?: boolean;
   can_manage_matches?: boolean; can_create_bracket?: boolean;
+  can_manage_referees?: boolean; can_view_audit?: boolean; can_delete?: boolean;
   editable_fields: string[]; allowed_status_transitions: string[];
+};
+type RefereeAssignment = {
+  assignment_id: number;
+  tournament_id: number;
+  user_id: number;
+  username: string;
+  real_name: string | null;
+  granted_by: number | null;
+  granted_at: string | null;
+  revoked_by: number | null;
+  revoked_at: string | null;
+  active: boolean;
+};
+type RefereeCandidate = {
+  user_id: number;
+  username: string;
+  real_name: string | null;
 };
 type BracketPlanMatch = {
   round_index: number;
@@ -194,6 +212,14 @@ type MatchCapabilities = {
 const APPROVED_TEAMS_PER_PAGE = 10;
 const REGISTRATIONS_PER_PAGE = 10;
 const MATCHES_PER_PAGE = 10;
+const REFEREES_PER_PAGE = 10;
+
+function formatRefereeTimestamp(isoValue: string | null): string {
+  if (!isoValue) return "Không rõ";
+  const date = new Date(isoValue);
+  if (Number.isNaN(date.getTime())) return isoValue;
+  return date.toLocaleString("vi-VN");
+}
 
 function getLocalTimezoneLabel(date: Date = new Date()): string {
   const offsetMinutes = -date.getTimezoneOffset();
@@ -820,6 +846,25 @@ export default function App() {
   const [registrationTotal, setRegistrationTotal] = useState(0);
   const [registrationPage, setRegistrationPage] = useState(0);
 
+  const [referees, setReferees] = useState<RefereeAssignment[]>([]);
+  const [refereesTotal, setRefereesTotal] = useState(0);
+  const [refereesPage, setRefereesPage] = useState(0);
+  const [refereesIncludeRevoked, setRefereesIncludeRevoked] = useState(false);
+  const [refereesLoading, setRefereesLoading] = useState(false);
+  const [refereesLoaded, setRefereesLoaded] = useState(false);
+  const [refereesError, setRefereesError] = useState("");
+  const [refereesNotice, setRefereesNotice] = useState("");
+  const [refereeSearchQuery, setRefereeSearchQuery] = useState("");
+  const [refereeCandidates, setRefereeCandidates] = useState<RefereeCandidate[]>([]);
+  const [refereeSearchLoading, setRefereeSearchLoading] = useState(false);
+  const [refereeSearchError, setRefereeSearchError] = useState("");
+  const [refereeSearchSubmitted, setRefereeSearchSubmitted] = useState(false);
+  const [selectedRefereeCandidate, setSelectedRefereeCandidate] = useState<RefereeCandidate | null>(null);
+  const [refereeUserIdInput, setRefereeUserIdInput] = useState("");
+  const [refereeGrantLoading, setRefereeGrantLoading] = useState(false);
+  const [refereeFormError, setRefereeFormError] = useState("");
+  const [refereeRevokingId, setRefereeRevokingId] = useState<number | null>(null);
+
   const sessionVersion = useRef(0);
   const tournamentViewVersion = useRef(0);
   const rosterTeamVersion = useRef(0);
@@ -833,6 +878,39 @@ export default function App() {
   const bracketDataRef = useRef<BracketRead | null>(null);
   bracketDataRef.current = bracketData;
   const userSelectedBracketStageRef = useRef(false);
+  const refereesListVersion = useRef(0);
+  const refereeSearchVersion = useRef(0);
+  const refereeGrantVersion = useRef(0);
+  const refereeRevokeVersion = useRef(0);
+  const refereeGrantInFlightRef = useRef(false);
+  const refereeRevokeInFlightRef = useRef<number | null>(null);
+
+  const resetRefereesState = () => {
+    refereesListVersion.current += 1;
+    refereeSearchVersion.current += 1;
+    refereeGrantVersion.current += 1;
+    refereeRevokeVersion.current += 1;
+    refereeGrantInFlightRef.current = false;
+    refereeRevokeInFlightRef.current = null;
+    setReferees([]);
+    setRefereesTotal(0);
+    setRefereesPage(0);
+    setRefereesIncludeRevoked(false);
+    setRefereesLoading(false);
+    setRefereesLoaded(false);
+    setRefereesError("");
+    setRefereesNotice("");
+    setRefereeSearchQuery("");
+    setRefereeCandidates([]);
+    setRefereeSearchLoading(false);
+    setRefereeSearchError("");
+    setRefereeSearchSubmitted(false);
+    setSelectedRefereeCandidate(null);
+    setRefereeUserIdInput("");
+    setRefereeGrantLoading(false);
+    setRefereeFormError("");
+    setRefereeRevokingId(null);
+  };
 
   const resetBracketAuthState = () => {
     bracketRequestVersion.current += 1;
@@ -960,6 +1038,7 @@ export default function App() {
     resetStagesAuthState();
     resetMatchesAuthState();
     resetBracketAuthState();
+    resetRefereesState();
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -1241,6 +1320,7 @@ export default function App() {
     resetStagesAuthState();
     resetMatchesAuthState();
     resetBracketAuthState();
+    resetRefereesState();
     setLockError("");
     setLockNotice("");
     setApprovedRosterStatuses({});
@@ -1505,6 +1585,7 @@ export default function App() {
     resetStagesState();
     resetMatchesState();
     resetBracketState();
+    resetRefereesState();
     setRosterLock(null);
     setLockLoading(false);
     setLockError("");
@@ -3624,12 +3705,350 @@ export default function App() {
       }
     }
   };
+  const loadTournamentReferees = async (
+    tournamentId: number,
+    includeRevoked = refereesIncludeRevoked,
+    page = refereesPage,
+    authToken = token,
+    expectedVersion?: number,
+    expectedSessionVersion?: number
+  ): Promise<{ list: RefereeAssignment[]; total: number }> => {
+    const sessionV = expectedSessionVersion ?? sessionVersion.current;
+    const listV = ++refereesListVersion.current;
+    if (!authToken) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
+      if (sessionVersion.current !== sessionV || refereesListVersion.current !== listV) return { list: [], total: 0 };
+      setReferees([]);
+      setRefereesTotal(0);
+      setRefereesLoading(false);
+      setRefereesError("");
+      return { list: [], total: 0 };
+    }
+    setRefereesLoading(true);
+    setRefereesError("");
+    try {
+      const offset = page * REFEREES_PER_PAGE;
+      const params = new URLSearchParams({
+        include_revoked: includeRevoked ? "true" : "false",
+        offset: String(offset),
+        limit: String(REFEREES_PER_PAGE),
+      });
+      const res = await fetch(`${API}/tournaments/${tournamentId}/referees?${params}`, {
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as { detail?: string | ValidationError[] } | null;
+        const detail = body?.detail;
+        const msg =
+          typeof detail === "string"
+            ? detail
+            : Array.isArray(detail)
+              ? detail.map((item) => item.msg ?? "Dữ liệu không hợp lệ").join("; ")
+              : "Không thể tải danh sách trọng tài.";
+        throw new RequestError(msg, res.status);
+      }
+      const totalHeader = res.headers.get("X-Total-Count");
+      const list = (await res.json()) as RefereeAssignment[];
+      const total = totalHeader !== null ? Number(totalHeader) : list.length;
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list, total };
+      if (sessionVersion.current !== sessionV || refereesListVersion.current !== listV) return { list, total };
+      setReferees(list);
+      setRefereesTotal(Number.isNaN(total) ? list.length : total);
+      setRefereesLoaded(true);
+      return { list, total: Number.isNaN(total) ? list.length : total };
+    } catch (reason) {
+      if (expectedVersion !== undefined && tournamentViewVersion.current !== expectedVersion) return { list: [], total: 0 };
+      if (sessionVersion.current !== sessionV || refereesListVersion.current !== listV) return { list: [], total: 0 };
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return { list: [], total: 0 };
+      }
+      setRefereesLoaded(true);
+      if (reason instanceof RequestError && reason.status === 403) {
+        setReferees([]);
+        setRefereesTotal(0);
+        setRefereesError(reason.message || "Bạn không có quyền quản lý trọng tài của giải đấu này.");
+        void loadTournamentCapabilities(tournamentId, authToken, expectedVersion, sessionV);
+        return { list: [], total: 0 };
+      }
+      setRefereesError((reason as Error).message || "Không thể tải danh sách trọng tài.");
+      return { list: [], total: 0 };
+    } finally {
+      if (
+        (expectedVersion === undefined || tournamentViewVersion.current === expectedVersion) &&
+        sessionVersion.current === sessionV &&
+        refereesListVersion.current === listV
+      ) {
+        setRefereesLoading(false);
+      }
+    }
+  };
+
+  const handleRefereesIncludeRevokedChange = async (nextInclude: boolean) => {
+    setRefereesIncludeRevoked(nextInclude);
+    setRefereesPage(0);
+    if (!selectedTournament || !token) return;
+    await loadTournamentReferees(
+      selectedTournament.tournament_id,
+      nextInclude,
+      0,
+      token,
+      tournamentViewVersion.current,
+      sessionVersion.current
+    );
+  };
+
+  const handleRefereesPageChange = async (newPage: number) => {
+    if (!selectedTournament || !token) return;
+    setRefereesPage(newPage);
+    await loadTournamentReferees(
+      selectedTournament.tournament_id,
+      refereesIncludeRevoked,
+      newPage,
+      token,
+      tournamentViewVersion.current,
+      sessionVersion.current
+    );
+  };
+
+  const handleSearchRefereeCandidates = async (e?: FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    if (!token || !selectedTournament) return;
+    const trimmed = refereeSearchQuery.trim();
+    if (trimmed.length < 2) {
+      setRefereeSearchError("Nhập ít nhất 2 ký tự (username hoặc họ tên) để tìm người dùng.");
+      setRefereeCandidates([]);
+      setRefereeSearchSubmitted(false);
+      return;
+    }
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const searchV = ++refereeSearchVersion.current;
+    const startingToken = token;
+    const tid = selectedTournament.tournament_id;
+
+    setRefereeSearchLoading(true);
+    setRefereeSearchError("");
+    setRefereeSearchSubmitted(false);
+    try {
+      const params = new URLSearchParams({ q: trimmed, limit: "10" });
+      const list = await request<RefereeCandidate[]>(
+        `/tournaments/${tid}/referees/candidates?${params}`,
+        {},
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeSearchVersion.current !== searchV
+      ) {
+        return;
+      }
+      setRefereeCandidates(list);
+      setRefereeSearchSubmitted(true);
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeSearchVersion.current !== searchV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setRefereeCandidates([]);
+      setRefereeSearchSubmitted(false);
+      setRefereeSearchError((reason as Error).message || "Không thể tìm kiếm người dùng.");
+      if (reason instanceof RequestError && reason.status === 403) {
+        void loadTournamentCapabilities(tid, startingToken, version, sessionV);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === version &&
+        sessionVersion.current === sessionV &&
+        refereeSearchVersion.current === searchV
+      ) {
+        setRefereeSearchLoading(false);
+      }
+    }
+  };
+
+  const handleSelectRefereeCandidate = (candidate: RefereeCandidate) => {
+    setSelectedRefereeCandidate(candidate);
+    setRefereeUserIdInput(String(candidate.user_id));
+    setRefereeFormError("");
+    setRefereesNotice("");
+  };
+
+  const handleGrantReferee = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!token || !selectedTournament) return;
+    if (refereeGrantInFlightRef.current || refereeGrantLoading) return;
+
+    const rawId = refereeUserIdInput.trim();
+    if (!/^[1-9]\d*$/.test(rawId)) {
+      setRefereeFormError("Vui lòng nhập User ID hợp lệ (số nguyên dương) hoặc chọn từ kết quả tìm kiếm.");
+      return;
+    }
+    const userIdNum = Number(rawId);
+    if (!Number.isSafeInteger(userIdNum) || userIdNum <= 0 || userIdNum > 2147483647) {
+      setRefereeFormError("User ID vượt quá giới hạn cho phép.");
+      return;
+    }
+
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const grantV = ++refereeGrantVersion.current;
+    const startingToken = token;
+    const tid = selectedTournament.tournament_id;
+
+    refereeGrantInFlightRef.current = true;
+    setRefereeGrantLoading(true);
+    setRefereeFormError("");
+    setRefereesNotice("");
+    try {
+      const created = await request<RefereeAssignment>(
+        `/tournaments/${tid}/referees`,
+        {
+          method: "POST",
+          body: JSON.stringify({ user_id: userIdNum }),
+        },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeGrantVersion.current !== grantV
+      ) {
+        return;
+      }
+      setRefereeUserIdInput("");
+      setSelectedRefereeCandidate(null);
+      setRefereeFormError("");
+      setRefereesNotice(`Đã cấp quyền trọng tài cho ${created.username} (#${created.user_id}) thành công.`);
+      await loadTournamentReferees(tid, refereesIncludeRevoked, refereesPage, startingToken, version, sessionV);
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeGrantVersion.current !== grantV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setRefereeFormError((reason as Error).message || "Không thể cấp quyền trọng tài.");
+      if (reason instanceof RequestError && reason.status === 403) {
+        await loadTournamentCapabilities(tid, startingToken, version, sessionV);
+      } else if (reason instanceof RequestError && reason.status === 409) {
+        await Promise.all([
+          loadTournamentCapabilities(tid, startingToken, version, sessionV),
+          loadTournamentReferees(tid, refereesIncludeRevoked, refereesPage, startingToken, version, sessionV),
+        ]);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === version &&
+        sessionVersion.current === sessionV &&
+        refereeGrantVersion.current === grantV
+      ) {
+        refereeGrantInFlightRef.current = false;
+        setRefereeGrantLoading(false);
+      }
+    }
+  };
+
+  const handleRevokeReferee = async (ref: RefereeAssignment) => {
+    if (!token || !selectedTournament) return;
+    if (refereeRevokeInFlightRef.current !== null || refereeRevokingId !== null) return;
+    if (
+      !window.confirm(
+        `Bạn có chắc chắn muốn thu hồi quyền trọng tài của "${ref.username}" (#${ref.user_id}) trong giải đấu này?`
+      )
+    ) {
+      return;
+    }
+
+    const version = tournamentViewVersion.current;
+    const sessionV = sessionVersion.current;
+    const revokeV = ++refereeRevokeVersion.current;
+    const startingToken = token;
+    const tid = selectedTournament.tournament_id;
+
+    refereeRevokeInFlightRef.current = ref.assignment_id;
+    setRefereeRevokingId(ref.assignment_id);
+    setRefereesError("");
+    setRefereesNotice("");
+    try {
+      const revoked = await request<RefereeAssignment>(
+        `/tournaments/${tid}/referees/${ref.assignment_id}`,
+        { method: "DELETE" },
+        startingToken
+      );
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeRevokeVersion.current !== revokeV
+      ) {
+        return;
+      }
+      const nextPage =
+        !refereesIncludeRevoked && referees.length === 1 && refereesPage > 0 ? refereesPage - 1 : refereesPage;
+      setRefereesPage(nextPage);
+      setRefereesNotice(`Đã thu hồi quyền trọng tài của ${revoked.username}.`);
+      await loadTournamentReferees(tid, refereesIncludeRevoked, nextPage, startingToken, version, sessionV);
+    } catch (reason) {
+      if (
+        tournamentViewVersion.current !== version ||
+        sessionVersion.current !== sessionV ||
+        refereeRevokeVersion.current !== revokeV
+      ) {
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      if (reason instanceof RequestError && reason.status === 409) {
+        // Per W47-01 contract: 409 on revoke means already revoked -> treat as done and refresh list.
+        setRefereesNotice(`Quyền trọng tài của ${ref.username} đã được thu hồi trước đó. Đã tải lại danh sách.`);
+        await Promise.all([
+          loadTournamentReferees(tid, refereesIncludeRevoked, refereesPage, startingToken, version, sessionV),
+          loadTournamentCapabilities(tid, startingToken, version, sessionV),
+        ]);
+        return;
+      }
+      setRefereesError((reason as Error).message || "Không thể thu hồi quyền trọng tài.");
+      if (reason instanceof RequestError && reason.status === 403) {
+        await loadTournamentCapabilities(tid, startingToken, version, sessionV);
+      } else if (reason instanceof RequestError && reason.status === 404) {
+        await loadTournamentReferees(tid, refereesIncludeRevoked, refereesPage, startingToken, version, sessionV);
+      }
+    } finally {
+      if (
+        tournamentViewVersion.current === version &&
+        sessionVersion.current === sessionV &&
+        refereeRevokeVersion.current === revokeV
+      ) {
+        refereeRevokeInFlightRef.current = null;
+        setRefereeRevokingId(null);
+      }
+    }
+  };
+
   const retryTournamentCapabilities = async (tournament: Tournament) => {
     const version = tournamentViewVersion.current;
     const currentSession = sessionVersion.current;
     const currentToken = token;
     const caps = await loadTournamentCapabilities(tournament.tournament_id, currentToken, version, currentSession);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
+    if (currentToken && caps?.can_manage) {
+      void loadTournamentReferees(tournament.tournament_id, refereesIncludeRevoked, refereesPage, currentToken, version, currentSession);
+    }
     let teamsToCheck = approvedTeams;
     if (teamsToCheck.length === 0) {
       const approvedData = await loadApprovedTeams(tournament.tournament_id, approvedTeamsPage, version);
@@ -3659,6 +4078,9 @@ export default function App() {
     ]);
     if (tournamentViewVersion.current !== version || sessionVersion.current !== currentSession || token !== currentToken) return;
     const effectiveCaps = caps ?? tournamentCapabilities;
+    if (currentToken && effectiveCaps?.can_manage) {
+      void loadTournamentReferees(tournament.tournament_id, refereesIncludeRevoked, refereesPage, currentToken, version, currentSession);
+    }
     if (currentToken && approvedData?.list && (effectiveCaps?.can_manage || effectiveCaps?.can_lock_roster)) {
       await loadApprovedTeamRosterStatuses(tournament.tournament_id, approvedData.list, currentToken, version, currentSession);
     }
@@ -3671,6 +4093,7 @@ export default function App() {
     if (!selectedTournament) return;
     const version = tournamentViewVersion.current;
     const sessionV = sessionVersion.current;
+    resetRefereesState();
     if (!token) {
       setTournamentCapabilities(null);
       setCapabilityError("");
@@ -3716,7 +4139,17 @@ export default function App() {
       if (tournamentViewVersion.current !== version || sessionVersion.current !== sessionV) return;
       const [, caps, approvedData] = await Promise.all([
         loadTournamentRegistrations(selectedTournament.tournament_id, registrationStatusFilter, token, version, managedTeams, registrationPage, sessionV),
-        loadTournamentCapabilities(selectedTournament.tournament_id, token, version, sessionV),
+        loadTournamentCapabilities(selectedTournament.tournament_id, token, version, sessionV).then((loadedCaps) => {
+          if (
+            token &&
+            loadedCaps?.can_manage &&
+            tournamentViewVersion.current === version &&
+            sessionVersion.current === sessionV
+          ) {
+            void loadTournamentReferees(selectedTournament.tournament_id, false, 0, token, version, sessionV);
+          }
+          return loadedCaps;
+        }),
         loadApprovedTeams(selectedTournament.tournament_id, approvedTeamsPage, version),
         loadRosterLock(selectedTournament.tournament_id, version),
         loadTournamentStages(selectedTournament.tournament_id, version, sessionV),
@@ -4241,6 +4674,7 @@ export default function App() {
     resetStagesState();
     resetMatchesState();
     resetBracketState();
+    resetRefereesState();
     setAllApprovedTeamsLoading(true);
     setTournamentCapabilities(null);
     setCapabilityError("");
@@ -4261,7 +4695,17 @@ export default function App() {
       setSelectedTournament(tournament);
 
       const managedTeamsPromise = loadManagedTeamsForTournament(tournament.game_id, token, version, sessionV);
-      const capsPromise = loadTournamentCapabilities(tournamentId, token, version, sessionV);
+      const capsPromise = loadTournamentCapabilities(tournamentId, token, version, sessionV).then((caps) => {
+        if (
+          token &&
+          caps?.can_manage &&
+          tournamentViewVersion.current === version &&
+          sessionVersion.current === sessionV
+        ) {
+          void loadTournamentReferees(tournamentId, false, 0, token, version, sessionV);
+        }
+        return caps;
+      });
       const approvedPromise = loadApprovedTeams(tournamentId, 0, version);
       const lockPromise = loadRosterLock(tournamentId, version);
       const stagesPromise = loadTournamentStages(tournamentId, version, sessionV);
@@ -4349,13 +4793,28 @@ export default function App() {
       }
       const currentMatches = matchesRef.current;
       const currentListVersion = matchesListVersion.current;
-      await loadTournamentCapabilities(updated.tournament_id, startingToken, currentTournamentVersion, startingSession);
+      const updatedCaps = await loadTournamentCapabilities(
+        updated.tournament_id,
+        startingToken,
+        currentTournamentVersion,
+        startingSession
+      );
       if (
         tournamentViewVersion.current !== currentTournamentVersion ||
         sessionVersion.current !== startingSession ||
         token !== startingToken
       ) {
         return;
+      }
+      if (updatedCaps?.can_manage) {
+        await loadTournamentReferees(
+          updated.tournament_id,
+          refereesIncludeRevoked,
+          refereesPage,
+          startingToken,
+          currentTournamentVersion,
+          startingSession
+        );
       }
       if (currentMatches.length > 0) {
         await loadMatchCapabilitiesForList(
@@ -5394,6 +5853,357 @@ export default function App() {
             <button className="button" disabled={tournamentLoading}>Lưu thay đổi</button>
           </form>
         )}</div>}
+
+        {(tournamentCapabilities?.can_manage || Boolean(refereesError) || Boolean(refereeFormError) || Boolean(refereesNotice)) && (
+          <div className="referees-section" data-testid="tournament-referees-section">
+            <div className="section-header">
+              <div>
+                <h4>
+                  Quản lý Trọng tài ({refereesTotal} {refereesIncludeRevoked ? "phân quyền" : "đang hiệu lực"})
+                </h4>
+                <p className="muted small-text">
+                  Phân công và thu hồi trọng tài trong phạm vi giải đấu này. Thông tin email không được hiển thị.
+                </p>
+              </div>
+              {tournamentCapabilities?.can_manage && (
+                <div className="referees-header-actions">
+                  <label className="referees-toggle-label">
+                    <input
+                      type="checkbox"
+                      data-testid="referees-include-revoked-toggle"
+                      checked={refereesIncludeRevoked}
+                      disabled={refereesLoading}
+                      onChange={(e) => void handleRefereesIncludeRevokedChange(e.target.checked)}
+                    />
+                    <span>Hiện lịch sử đã thu hồi</span>
+                  </label>
+                  {refereesLoading && referees.length > 0 && (
+                    <span className="matches-refreshing-indicator" data-testid="referees-refreshing-indicator">
+                      <span className="spinner" /> Đang cập nhật...
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    data-testid="referees-reload-btn"
+                    disabled={refereesLoading}
+                    onClick={() =>
+                      void loadTournamentReferees(
+                        selectedTournament.tournament_id,
+                        refereesIncludeRevoked,
+                        refereesPage,
+                        token,
+                        tournamentViewVersion.current,
+                        sessionVersion.current
+                      )
+                    }
+                  >
+                    Tải lại
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {refereesNotice && (
+              <div className="notice-banner" data-testid="referees-notice-banner">
+                {refereesNotice}
+              </div>
+            )}
+
+            {refereesError && (
+              <div className="error-banner" data-testid="referees-error-banner">
+                <span>{refereesError}</span>
+                {tournamentCapabilities?.can_manage && (
+                  <button
+                    type="button"
+                    className="button secondary small"
+                    data-testid="referees-retry-btn"
+                    onClick={() =>
+                      void loadTournamentReferees(
+                        selectedTournament.tournament_id,
+                        refereesIncludeRevoked,
+                        refereesPage,
+                        token,
+                        tournamentViewVersion.current,
+                        sessionVersion.current
+                      )
+                    }
+                  >
+                    Thử lại
+                  </button>
+                )}
+              </div>
+            )}
+
+            {!tournamentCapabilities?.can_manage ? (
+              <>
+                {refereeFormError && (
+                  <div className="error-banner" data-testid="referee-form-error-banner">
+                    {refereeFormError}
+                  </div>
+                )}
+                <p className="muted small-text" data-testid="referee-grant-unavailable-reason">
+                  Bạn không còn quyền quản lý trọng tài của giải đấu này.
+                </p>
+              </>
+            ) : !tournamentCapabilities.can_manage_referees ? (
+              <>
+                {refereeFormError && (
+                  <div className="error-banner" data-testid="referee-form-error-banner">
+                    {refereeFormError}
+                  </div>
+                )}
+                <p className="warning-banner" data-testid="referee-grant-unavailable-reason">
+                  Giải đấu đã kết thúc hoặc bị hủy — không thể cấp thêm trọng tài mới. Bạn vẫn có thể xem danh sách và thu hồi trọng tài đang hiệu lực.
+                </p>
+              </>
+            ) : (
+              <div className="referee-grant-panel" data-testid="referee-grant-panel">
+                <form
+                  className="referee-search-form"
+                  noValidate
+                  onSubmit={(e) => void handleSearchRefereeCandidates(e)}
+                  data-testid="referee-user-search-form"
+                >
+                  <label className="referee-search-field">
+                    <span>Tìm người dùng (theo username hoặc họ tên, không lộ email)</span>
+                    <div className="referee-search-row">
+                      <input
+                        type="text"
+                        name="referee_search_query"
+                        data-testid="referee-user-search-input"
+                        placeholder="Nhập tối thiểu 2 ký tự, ví dụ: demo_referee..."
+                        maxLength={100}
+                        value={refereeSearchQuery}
+                        onChange={(e) => setRefereeSearchQuery(e.target.value)}
+                        disabled={refereeSearchLoading || refereeGrantLoading}
+                      />
+                      <button
+                        type="submit"
+                        className="button secondary small"
+                        data-testid="referee-user-search-btn"
+                        disabled={refereeSearchLoading || refereeGrantLoading}
+                      >
+                        {refereeSearchLoading ? <><span className="spinner" /> Đang tìm...</> : "Tìm người dùng"}
+                      </button>
+                    </div>
+                  </label>
+                </form>
+
+                {refereeSearchError && (
+                  <div className="error-banner" data-testid="referee-search-error-banner">
+                    <span>{refereeSearchError}</span>
+                    <button
+                      type="button"
+                      className="button secondary small"
+                      data-testid="referee-search-retry-btn"
+                      onClick={() => void handleSearchRefereeCandidates()}
+                    >
+                      Thử lại
+                    </button>
+                  </div>
+                )}
+
+                {refereeSearchLoading && (
+                  <div className="loading-state" data-testid="referee-search-loading">
+                    <span className="spinner" /> Đang tìm kiếm người dùng...
+                  </div>
+                )}
+
+                {refereeSearchSubmitted && !refereeSearchLoading && !refereeSearchError && refereeCandidates.length === 0 && (
+                  <p className="muted small-text" data-testid="referee-search-empty">
+                    Không tìm thấy người dùng nào khớp với từ khóa &ldquo;{refereeSearchQuery.trim()}&rdquo;.
+                  </p>
+                )}
+
+                {refereeCandidates.length > 0 && (
+                  <div className="referee-candidate-list" data-testid="referee-candidate-list">
+                    {refereeCandidates.map((cand) => {
+                      const isSelected = selectedRefereeCandidate?.user_id === cand.user_id;
+                      const isSelf = user?.id === cand.user_id;
+                      const isAlreadyActiveRef = referees.some((r) => r.active && r.user_id === cand.user_id);
+                      return (
+                        <div
+                          key={cand.user_id}
+                          className={`referee-candidate-item ${isSelected ? "is-selected" : ""}`}
+                          data-testid={`referee-candidate-item-${cand.user_id}`}
+                        >
+                          <div className="referee-candidate-info">
+                            <strong>{cand.username}</strong>
+                            {cand.real_name && <span className="muted small-text">· {cand.real_name}</span>}
+                            <span className="referee-id-pill">ID #{cand.user_id}</span>
+                            {isSelf && <span className="referee-id-pill">Bạn</span>}
+                            {isAlreadyActiveRef && (
+                              <span className="referee-status-badge status-active">Đã là trọng tài</span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="button secondary small"
+                            data-testid={`referee-candidate-select-${cand.user_id}`}
+                            disabled={refereeGrantLoading}
+                            onClick={() => handleSelectRefereeCandidate(cand)}
+                          >
+                            {isSelected ? "Đã chọn" : "Chọn"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <form
+                  className="referee-grant-form"
+                  noValidate
+                  onSubmit={(e) => void handleGrantReferee(e)}
+                  data-testid="referee-grant-form"
+                >
+                  {refereeFormError && (
+                    <div className="error-banner" data-testid="referee-form-error-banner">
+                      {refereeFormError}
+                    </div>
+                  )}
+
+                  {selectedRefereeCandidate && (
+                    <div className="referee-selected-pill" data-testid="referee-selected-candidate">
+                      <span>
+                        Ứng viên đã chọn: <strong>{selectedRefereeCandidate.username}</strong>
+                        {selectedRefereeCandidate.real_name ? ` (${selectedRefereeCandidate.real_name})` : ""} — ID #{selectedRefereeCandidate.user_id}
+                      </span>
+                      <button
+                        type="button"
+                        className="link-button"
+                        disabled={refereeGrantLoading}
+                        onClick={() => {
+                          setSelectedRefereeCandidate(null);
+                          setRefereeUserIdInput("");
+                        }}
+                      >
+                        Bỏ chọn
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="referee-grant-row">
+                    <label className="referee-userid-field">
+                      <span>User ID trọng tài <span className="required">*</span></span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        name="referee_user_id"
+                        data-testid="referee-user-id-input"
+                        placeholder="Chọn từ tìm kiếm hoặc nhập User ID..."
+                        value={refereeUserIdInput}
+                        onChange={(e) => {
+                          const nextVal = e.target.value;
+                          setRefereeUserIdInput(nextVal);
+                          if (selectedRefereeCandidate && String(selectedRefereeCandidate.user_id) !== nextVal.trim()) {
+                            setSelectedRefereeCandidate(null);
+                          }
+                        }}
+                        disabled={refereeGrantLoading}
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="button small"
+                      data-testid="referee-grant-submit-btn"
+                      disabled={refereeGrantLoading}
+                    >
+                      {refereeGrantLoading ? <><span className="spinner" /> Đang cấp quyền...</> : "+ Cấp trọng tài"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {tournamentCapabilities?.can_manage && (
+              ((!refereesLoaded && !refereesError) || (refereesLoading && referees.length === 0)) ? (
+                <div className="loading-state" data-testid="referees-loading">
+                  <span className="spinner" /> Đang tải danh sách trọng tài...
+                </div>
+              ) : referees.length === 0 ? (
+                !refereesError ? (
+                  <p className="muted" data-testid="referees-empty">
+                    {refereesIncludeRevoked
+                      ? "Giải đấu chưa có lịch sử phân quyền trọng tài nào."
+                      : "Giải đấu chưa có trọng tài nào đang hiệu lực."}
+                  </p>
+                ) : null
+              ) : (
+                <>
+                  <div className="referee-list" data-testid="referees-list">
+                    {referees.map((ref) => (
+                      <div
+                        key={ref.assignment_id}
+                        className={`referee-card ${ref.active ? "is-active" : "is-revoked"}`}
+                        data-testid={`referee-row-${ref.assignment_id}`}
+                        data-assignment-id={ref.assignment_id}
+                        data-user-id={ref.user_id}
+                        data-active={String(ref.active)}
+                      >
+                        <div className="referee-card-info">
+                          <div className="referee-card-title">
+                            <strong>{ref.username}</strong>
+                            {ref.real_name && <span className="muted small-text">({ref.real_name})</span>}
+                            <span className="referee-id-pill">ID #{ref.user_id}</span>
+                            <span
+                              className={`referee-status-badge ${ref.active ? "status-active" : "status-revoked"}`}
+                              data-testid={`referee-status-${ref.assignment_id}`}
+                            >
+                              {ref.active ? "Đang hiệu lực" : "Đã thu hồi"}
+                            </span>
+                          </div>
+                          <p className="referee-card-meta muted small-text">
+                            Mã phân quyền #{ref.assignment_id} · Cấp lúc: {formatRefereeTimestamp(ref.granted_at)}
+                            {ref.revoked_at ? ` · Thu hồi lúc: ${formatRefereeTimestamp(ref.revoked_at)}` : ""}
+                          </p>
+                        </div>
+                        {ref.active && (
+                          <div className="referee-card-actions">
+                            <button
+                              type="button"
+                              className="button secondary small danger-link"
+                              data-testid={`referee-revoke-btn-${ref.assignment_id}`}
+                              disabled={refereeRevokingId !== null}
+                              onClick={() => void handleRevokeReferee(ref)}
+                            >
+                              {refereeRevokingId === ref.assignment_id ? "Đang thu hồi..." : "Thu hồi"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {refereesTotal > REFEREES_PER_PAGE && (
+                    <div className="pagination-controls" data-testid="referees-pagination">
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        disabled={refereesPage === 0 || refereesLoading}
+                        onClick={() => void handleRefereesPageChange(refereesPage - 1)}
+                      >
+                        ‹ {t.pagePrev}
+                      </button>
+                      <span className="pagination-info">
+                        Trang {refereesPage + 1} / {Math.max(1, Math.ceil(refereesTotal / REFEREES_PER_PAGE))} (Tổng {refereesTotal} phân quyền)
+                      </span>
+                      <button
+                        type="button"
+                        className="button secondary small"
+                        disabled={refereesPage >= Math.ceil(refereesTotal / REFEREES_PER_PAGE) - 1 || refereesLoading}
+                        onClick={() => void handleRefereesPageChange(refereesPage + 1)}
+                      >
+                        {t.pageNext} ›
+                      </button>
+                    </div>
+                  )}
+                </>
+              )
+            )}
+          </div>
+        )}
 
         <div className="stages-section" data-testid="tournament-stages-section">
           <div className="section-header">

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from config.database import get_db
@@ -39,6 +39,17 @@ class RefereeRead(BaseModel):
     active: bool
 
 
+class RefereeCandidateRead(BaseModel):
+    """No email: managers search candidate referees by username/real name only."""
+    user_id: int
+    username: str
+    real_name: str | None
+
+
+def _escape_like(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def to_read(a: RoleAssignment, user: User) -> RefereeRead:
     return RefereeRead(assignment_id=a.assignment_id, tournament_id=a.scope_id, user_id=a.user_id,
                        username=user.username, real_name=user.real_name, granted_by=a.granted_by,
@@ -69,6 +80,32 @@ def list_referees(
     query = query.order_by(RoleAssignment.assignment_id)
     response.headers[TOTAL_COUNT_HEADER] = str(db.scalar(select(func.count()).select_from(query.order_by(None).subquery())))
     return [to_read(a, u) for a, u in db.execute(query.offset(offset).limit(limit)).all()]
+
+
+@router.get('/candidates', response_model=list[RefereeCandidateRead])
+def search_referee_candidates(
+    tournament_id: ResourceId,
+    q: str = Query(..., min_length=1, max_length=100),
+    limit: int = Query(10, ge=1, le=20),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Privacy-safe user search for tournament managers: matches username/real_name only, never email."""
+    ensure_tournament_manager(get_tournament_or_404(db, tournament_id), user)
+    term = q.strip()
+    if len(term) < 2:
+        raise HTTPException(status_code=422, detail='Từ khóa tìm kiếm cần tối thiểu 2 ký tự')
+    pattern = f'%{_escape_like(term)}%'
+    query = (
+        select(User)
+        .where(or_(User.username.ilike(pattern, escape='\\'), User.real_name.ilike(pattern, escape='\\')))
+        .order_by(User.username, User.user_id)
+        .limit(limit)
+    )
+    return [
+        RefereeCandidateRead(user_id=u.user_id, username=u.username, real_name=u.real_name)
+        for u in db.scalars(query).all()
+    ]
 
 
 @router.post('', response_model=RefereeRead, status_code=201)
