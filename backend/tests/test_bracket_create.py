@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 
 from config.settings import get_settings
 from core.brackets import PREVIEW_AUDIENCE, issue_preview_token
-from modules.identity.models import AuditLog, RoleAssignment, User
+from modules.identity.models import AuditLog, User
 from modules.teams.models import Team
 from modules.tournaments.models import (BracketMatch, Match, Stage, Tournament, TournamentBracket,
                                         TournamentRegistration, TournamentRoster)
@@ -15,6 +15,7 @@ from test_bracket_foundation import bracket_case
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -212,13 +213,12 @@ def test_preview_and_create_reject_invalid_input(access, session_factory, four, 
 
 @pytest.mark.parametrize('who', ['anonymous', 'viewer', 'manager', 'referee', 'global_referee'])
 def test_only_tournament_managers_preview_or_create(access, session_factory, four, who):
-    client, headers, users, _, roles = access
+    client, headers, users, *_ = access
     token = preview(client, headers, four).json()['preview_token']
-    if who.endswith('referee'):
-        with session_factory.begin() as db:
-            scope = ('TOURNAMENT', four['tid']) if who == 'referee' else ('GLOBAL', None)
-            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                                  scope_type=scope[0], scope_id=scope[1]))
+    if who == 'referee':
+        assert grant_referee(client, headers, four['tid'], users['referee']).status_code == 201
+    elif who == 'global_referee':
+        assert admin_grant_referee(client, headers, None, users['referee'], 'GLOBAL').status_code == 422
     name = 'referee' if who.endswith('referee') else who
     auth = {} if who == 'anonymous' else headers(name)
     expected = 401 if who == 'anonymous' else 403

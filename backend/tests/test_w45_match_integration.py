@@ -14,6 +14,7 @@ from modules.tournaments.models import Match, Stage, Tournament, TournamentRegis
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access, organizer_tournament
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -54,7 +55,7 @@ def test_large_match_dataset_pagination_filters_and_ordering(access, session_fac
     - Filtering by stage_id, team_id, and status
     - Public DTO compliance: no emails/drafts leaked; result is None unless COMPLETED
     """
-    client, headers, users, teams, roles = access
+    client, headers, users, teams, _ = access
     tid = organizer_tournament(client, headers)
     now = datetime.now(timezone.utc)
     total_matches = 55
@@ -196,7 +197,7 @@ def test_full_match_lifecycle_audit_chain_and_idempotency(access, session_factor
     POST create -> PATCH update -> POST start -> PUT result -> idempotent replay & conflicts.
     Verifies that the audit log maintains an exact, intact chain with before/after state.
     """
-    client, headers, users, teams, roles = access
+    client, headers, users, teams, _ = access
     tid = match_case['tid']
     stage_id = match_case['stage']
     organizer_auth = headers('organizer')
@@ -421,9 +422,7 @@ def test_referee_without_tournament_assignment_cannot_write(access, session_fact
     auth = headers('referee')
 
     if scope == 'GLOBAL':
-        with session_factory.begin() as db:
-            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                                  scope_type='GLOBAL', scope_id=None))
+        assert admin_grant_referee(client, headers, None, users['referee'], 'GLOBAL').status_code == 422
 
     capabilities = client.get(f"{match_url(tid, mid)}/capabilities", headers=auth).json()
     assert {key: capabilities[key] for key in (
@@ -551,13 +550,7 @@ def test_comprehensive_match_permission_matrix(access, session_factory, match_ca
         assert caps['can_submit_result'] is False  # match is PENDING
 
     # 2. Grant REFEREE assignment scoped to THIS tournament
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(
-            user_id=users['referee'],
-            role_id=roles['REFEREE'],
-            scope_type='TOURNAMENT',
-            scope_id=tid,
-        ))
+    assert grant_referee(client, headers, tid, users['referee']).status_code == 201
 
     ref_auth = headers('referee')
     ref_caps = client.get(f"{match_url(tid, mid)}/capabilities", headers=ref_auth).json()

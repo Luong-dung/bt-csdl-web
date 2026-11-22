@@ -91,6 +91,8 @@ def test_permission_matrix(setup, session_factory):
     assert patch(client, headers, teams['Alpha'], {'name': 'Nope'}, name=None).status_code == 401
     assert patch(client, headers, teams['Beta'], {'name': 'Nope'}).status_code == 403  # manages Alpha only
     assert patch(client, headers, teams['Alpha'], {'name': 'Nope'}, name='organizer').status_code == 403
+    assert patch(client, headers, teams['Alpha'], {'name': 'Nope'}, name='manager').status_code == 403
+    assert patch(client, headers, teams['Alpha'], {'name': 'Nope'}, name='referee').status_code == 403
     assert patch(client, headers, 999999, {'name': 'Nope'}).status_code == 404
     assert patch(client, headers, teams['Beta'], {'name': 'Beta by admin'}, name='admin').status_code == 200
     assert len(logs(session_factory)) == 1  # only the admin update
@@ -260,6 +262,9 @@ def test_update_organization_rights_and_audit(setup, session_factory):
     path = org_path(orgs['Org'])
     assert client.patch(path, json={'name': 'Renamed'}).status_code == 401
     assert client.patch(path, json={'name': 'Renamed'}, headers=headers('viewer')).status_code == 403
+    assert client.patch(path, json={'name': 'Renamed'}, headers=headers('referee')).status_code == 403
+    assert client.patch(path, json={'name': 'Renamed'}, headers=headers('organizer')).status_code == 403
+    assert client.patch(path, json={'name': 'Org'}, headers=headers('admin')).status_code == 200
     assert client.patch(org_path(999999), json={'name': 'Renamed'}, headers=headers('admin')).status_code == 404
     caps = client.get(path + '/capabilities', headers=headers('manager')).json()
     assert caps == {'organization_id': orgs['Org'], 'can_update': False}

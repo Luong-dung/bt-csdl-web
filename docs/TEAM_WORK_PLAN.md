@@ -205,7 +205,7 @@ Một đầu việc chỉ được nghiệm thu khi:
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
 |---|---|---|---|---|---|
 | W09-01 | Viết integration test cho flow chính | `DUC` | `DUNG` | Auth/catalog/teams đã có test W42-07; còn các luồng giải đấu | `IN PROGRESS` |
-| W09-02 | GitHub Actions lint/typecheck/test/build | `DUC` | `DUONG` | Test/typecheck/build đã đạt W42-08; chưa có bước lint riêng | `IN PROGRESS` |
+| W09-02 | GitHub Actions lint/typecheck/test/build | `DUC` | `DUONG` | Ruff backend lint (`E9`, `F821`, `F822`) đã thêm ở W47-07; cần CI và review trên head cuối | `IN PROGRESS` |
 | W09-03 | Seed dữ liệu demo đầy đủ | `DUNG` | `DOANH` | Seed + reset guide | `TODO` |
 | W09-04 | Hoàn thiện dashboard quản trị | `DUONG` | `DUC` | Admin UI | `TODO` |
 

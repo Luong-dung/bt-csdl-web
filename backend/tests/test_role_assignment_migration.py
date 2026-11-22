@@ -19,7 +19,7 @@ def columns(connection):
 
 def insert(connection, users, roles, user='referee', scope=7):
     connection.execute(text('INSERT INTO role_assignments (user_id, role_id, scope_type, scope_id) '
-                            "VALUES (:u, :r, 'TOURNAMENT', :s)"), {'u': users[user], 'r': roles['REFEREE'], 's': scope})
+                            "VALUES (:u, :r, 'TOURNAMENT', :s)"), {'u': users[user], 'r': roles['ORGANIZER'], 's': scope})
 
 
 def test_upgrade_keeps_legacy_rows_active_without_inventing_history(request, session_factory, access):

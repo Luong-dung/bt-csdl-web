@@ -5,12 +5,13 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import event, select
 
-from modules.identity.models import AuditLog, RoleAssignment
+from modules.identity.models import AuditLog
 from modules.teams.models import Team
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -43,9 +44,9 @@ def set_tournament(factory, tid, **values):
 
 
 def make_referee(access, factory, tid, name='referee'):
-    _, _, users, _, roles = access
-    with factory.begin() as db:
-        db.add(RoleAssignment(user_id=users[name], role_id=roles['REFEREE'], scope_type='TOURNAMENT', scope_id=tid))
+    client, headers, users, *_ = access
+    response = grant_referee(client, headers, tid, users[name])
+    assert response.status_code == 201, response.text
 
 
 def new_body(ids, teams, **extra):
@@ -421,17 +422,17 @@ def test_start_with_missing_legacy_team_conflicts(access, session_factory, match
 ])
 def test_referee_start_needs_assignment_for_this_tournament(access, session_factory, match_case, scope, start_code):
     client, headers, users, _, roles = access
-    if scope:
-        with session_factory.begin() as db:
-            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                                  scope_type='GLOBAL' if scope == 'GLOBAL' else 'TOURNAMENT',
-                                  scope_id=None if scope == 'GLOBAL' else match_case[scope]))
+    if scope == 'GLOBAL':
+        assert admin_grant_referee(client, headers, None, users['referee'], 'GLOBAL').status_code == 422
+    elif scope:
+        make_referee(access, session_factory, match_case[scope])
     assert status(client, match_case, headers('referee'), 'ONGOING').status_code == start_code
 
 
 def test_referee_from_a_playing_team_cannot_start(access, session_factory, match_case):
     client, headers, *_ = access
-    make_referee(access, session_factory, match_case['tid'], 'viewer')  # viewer is an Alpha PLAYER
+    _, _, users, *_ = access
+    assert grant_referee(client, headers, match_case['tid'], users['viewer']).status_code == 409
     assert status(client, match_case, headers('viewer'), 'ONGOING').status_code == 403
 
 
@@ -539,11 +540,9 @@ def test_completed_match_has_no_write_capability(access, session_factory, match_
 
 
 def test_referee_capabilities_by_scope(access, session_factory, match_case):
-    client, headers, users, _, roles = access
+    client, headers, *_ = access
     assert flags(caps(client, match_case, headers('referee'))) == (False,) * 5
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                              scope_type='TOURNAMENT', scope_id=match_case['other']))
+    make_referee(access, session_factory, match_case['other'])
     assert flags(caps(client, match_case, headers('referee'))) == (False,) * 5
     make_referee(access, session_factory, match_case['tid'])
     assert flags(caps(client, match_case, headers('referee'))) == (False, False, True, False, False)
@@ -552,10 +551,11 @@ def test_referee_capabilities_by_scope(access, session_factory, match_case):
 
 
 @pytest.mark.parametrize('name', ['manager', 'viewer'])
-def test_players_have_no_capability_even_with_referee_assignment(access, session_factory, match_case, name):
+def test_players_cannot_be_granted_referee_or_get_capability(access, session_factory, match_case, name):
     client, headers, *_ = access
     assert flags(caps(client, match_case, headers(name))) == (False,) * 5
-    make_referee(access, session_factory, match_case['tid'], name)
+    _, _, users, *_ = access
+    assert grant_referee(client, headers, match_case['tid'], users[name]).status_code == 409
     assert flags(caps(client, match_case, headers(name))) == (False,) * 5
 
 

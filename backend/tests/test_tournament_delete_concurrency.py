@@ -56,7 +56,7 @@ def test_delete_waits_and_rechecks_rights(access, session_factory, tournament):
 
 
 def test_parallel_delete_and_registration_never_lose_data(access, session_factory, tournament):
-    _, headers, _, teams, _ = access
+    _, headers, users, teams, _ = access
     path = f'/api/v1/tournaments/{tournament}'
     requests = [('DELETE', path, 'organizer', None),
                 ('POST', path + '/registrations', 'manager', {'team_id': teams['Alpha']})]
@@ -68,4 +68,17 @@ def test_parallel_delete_and_registration_never_lose_data(access, session_factor
         registrations = db.scalars(select(TournamentRegistration)).all()
         assert (db.get(Tournament, tournament) is None) == (delete == 204)
         assert len(registrations) == (1 if register == 201 else 0)
-    assert len(deleted(session_factory)) == (1 if delete == 204 else 0)
+        logs = list(db.scalars(select(AuditLog).where(
+            AuditLog.action.in_(['TOURNAMENT_DELETED', 'TOURNAMENT_REGISTRATION_CREATED'])
+        ).order_by(AuditLog.log_id)))
+    if delete == 204:
+        assert [(log.action, log.user_id, log.resource, log.tournament_id) for log in logs] == [
+            ('TOURNAMENT_DELETED', users['organizer'], 'tournament', tournament),
+        ]
+        assert logs[0].details['before']['tournament_id'] == tournament
+        assert logs[0].details['after'] is None
+    else:
+        assert [(log.action, log.user_id, log.resource, log.tournament_id) for log in logs] == [
+            ('TOURNAMENT_REGISTRATION_CREATED', users['manager'], 'tournament_registration', tournament),
+        ]
+        assert logs[0].details['after']['status'] == 'PENDING'
