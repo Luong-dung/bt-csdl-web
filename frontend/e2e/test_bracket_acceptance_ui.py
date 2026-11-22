@@ -73,8 +73,10 @@ def test_bracket_full_lifecycle_referee_matrix_and_reload(
     finally:
         reg_page.close()
 
-    assign_tournament_referee(ref_scoped_name, tid)
-    assign_tournament_referee(ref_foreign_name, other_tid)
+    assign_tournament_referee(page, api_base_url, token, ref_scoped_name, tid)
+    assign_tournament_referee(
+        page, api_base_url, token, ref_foreign_name, other_tid
+    )
 
     # 3. Organizer creates bracket in UI
     open_tournament(page, str(tid), tname)
