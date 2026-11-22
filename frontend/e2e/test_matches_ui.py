@@ -935,7 +935,9 @@ def test_scoped_referee_match_operations_ui(
 
     # Register a new user and assign tournament-scoped REFEREE ONLY on Tournament A
     ref_user, _ref_tok = _register_and_login_api(page, api_base_url, "referee", demo_password)
-    assign_tournament_referee(ref_user["username"], tour_a_id)
+    assign_tournament_referee(
+        page, api_base_url, organizer_token, ref_user["username"], tour_a_id
+    )
 
     ref_page = browser.new_page(viewport={"width": 1440, "height": 1000})
     ref_page.set_default_timeout(10_000)

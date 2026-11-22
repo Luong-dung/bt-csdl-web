@@ -4,6 +4,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import psycopg2
+from playwright.sync_api import Page
 
 
 def assign_tournament_organizer(username: str, tournament_id: int) -> None:
@@ -32,30 +33,46 @@ def assign_tournament_organizer(username: str, tournament_id: int) -> None:
                 raise RuntimeError(f"Could not assign scoped ORGANIZER role to {username}")
 
 
-def assign_tournament_referee(username: str, tournament_id: int) -> None:
-    database_url = os.environ.get("E2E_DATABASE_URL")
-    expected_database = os.environ.get("E2E_DB_NAME")
-    if not database_url or not expected_database or not expected_database.endswith("_test"):
-        raise RuntimeError("Scoped-role E2E requires E2E_DATABASE_URL and an E2E_DB_NAME ending in _test")
+def assign_tournament_referee(
+    page: Page,
+    api_base_url: str,
+    organizer_token: str,
+    username: str,
+    tournament_id: int,
+) -> None:
+    headers = {"Authorization": f"Bearer {organizer_token}"}
+    candidates_response = page.request.get(
+        f"{api_base_url}/tournaments/{tournament_id}/referees/candidates",
+        params={"q": username, "limit": 20},
+        headers=headers,
+    )
+    if not candidates_response.ok:
+        raise RuntimeError(
+            f"Could not search referee candidate {username}: "
+            f"HTTP {candidates_response.status} {candidates_response.text()}"
+        )
 
-    with psycopg2.connect(database_url) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute("SELECT current_database()")
-            if cursor.fetchone()[0] != expected_database:
-                raise RuntimeError("Refusing scoped-role setup outside the configured E2E database")
-            cursor.execute(
-                """
-                INSERT INTO role_assignments (user_id, role_id, scope_type, scope_id)
-                SELECT u.user_id, r.role_id, 'TOURNAMENT', %s
-                FROM users AS u
-                JOIN roles AS r ON r.role_id = (SELECT role_id FROM roles WHERE role_name = 'REFEREE')
-                JOIN roles AS viewer ON viewer.role_name = 'VIEWER'
-                WHERE u.username = %s AND u.role_id = viewer.role_id
-                """,
-                (tournament_id, username),
-            )
-            if cursor.rowcount != 1:
-                raise RuntimeError(f"Could not assign scoped REFEREE role to {username}")
+    candidate = next(
+        (
+            item
+            for item in candidates_response.json()
+            if item["username"] == username
+        ),
+        None,
+    )
+    if candidate is None:
+        raise RuntimeError(f"Could not find referee candidate {username}")
+
+    grant_response = page.request.post(
+        f"{api_base_url}/tournaments/{tournament_id}/referees",
+        headers=headers,
+        data={"user_id": candidate["user_id"]},
+    )
+    if grant_response.status != 201:
+        raise RuntimeError(
+            f"Could not assign scoped REFEREE role to {username}: "
+            f"HTTP {grant_response.status} {grant_response.text()}"
+        )
 
 
 def seed_match_pagination(
