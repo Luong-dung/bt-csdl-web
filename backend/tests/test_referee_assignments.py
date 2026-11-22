@@ -189,17 +189,22 @@ def test_audit_failure_rolls_back_grant(access, session_factory, match_case):
 
 def test_database_allows_one_active_assignment_but_keeps_revoked_history(access, session_factory, match_case):
     _, _, users, _, roles = access
-    row = dict(user_id=users['referee'], role_id=roles['VIEWER'], scope_type='GLOBAL', scope_id=None)
+    row = dict(user_id=users['referee'], role_id=roles['ORGANIZER'],
+                scope_type='TOURNAMENT', scope_id=match_case['tid'])
+    global_row = dict(user_id=users['referee'], role_id=roles['VIEWER'],
+                      scope_type='GLOBAL', scope_id=None)
     with session_factory.begin() as db:
         from datetime import datetime, timezone
         db.add(RoleAssignment(**row, revoked_at=datetime.now(timezone.utc)))
         db.add(RoleAssignment(**row))
+        db.add(RoleAssignment(**global_row, revoked_at=datetime.now(timezone.utc)))
+        db.add(RoleAssignment(**global_row))
     with pytest.raises(IntegrityError):
         with session_factory.begin() as db:
             db.add(RoleAssignment(**row))
     with pytest.raises(IntegrityError):  # NULL scope_id must not bypass uniqueness
         with session_factory.begin() as db:
-            db.add(RoleAssignment(**row))
+            db.add(RoleAssignment(**global_row))
 
 
 def test_revoked_assignment_grants_nothing_to_checkers(access, session_factory, match_case):
