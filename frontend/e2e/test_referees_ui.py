@@ -11,12 +11,17 @@ Validates:
 """
 import re
 from datetime import date, timedelta
+from pathlib import Path
 from urllib.parse import urlparse
 
 from playwright.sync_api import Page, expect
 
 from helpers import login, unique_username, wait_for_held_request
-from test_matches_ui import _api_request, _register_and_login_api
+from test_matches_ui import (
+    _api_request,
+    _register_and_login_api,
+    _setup_locked_tournament_with_two_teams,
+)
 from test_tournaments import open_tournament
 
 
@@ -162,6 +167,219 @@ def test_referees_search_grant_revoke_history_and_390px_mobile_ui(
     new_assignment_id = regrant_resp.value.json()["assignment_id"]
     assert new_assignment_id != assignment_id
     expect(section.locator(f'[data-testid="referee-status-{new_assignment_id}"]')).to_have_text("Đang hiệu lực")
+
+
+def test_w47_referee_lifecycle_audit_revoke_and_mobile_acceptance(
+    page: Page, browser, app_base_url: str, api_base_url: str, demo_password: str
+):
+    ctx = _setup_locked_tournament_with_two_teams(page, api_base_url, demo_password)
+    tid = ctx["tournament_id"]
+    tname = ctx["tournament_name"]
+    organizer_token = ctx["organizer_token"]
+
+    _api_request(
+        page,
+        "POST",
+        f"{api_base_url}/tournaments/{tid}/status",
+        token=organizer_token,
+        data={"status": "ONGOING"},
+    )
+    match_ids = []
+    for round_no in (1, 2):
+        match = _api_request(
+            page,
+            "POST",
+            f"{api_base_url}/tournaments/{tid}/matches",
+            token=organizer_token,
+            data={
+                "stage_id": ctx["stage_1"]["stage_id"],
+                "round_no": round_no,
+                "team1_id": ctx["team_1"]["team_id"],
+                "team2_id": ctx["team_2"]["team_id"],
+            },
+        )
+        match_ids.append(match["match_id"])
+    result_match_id, pending_match_id = match_ids
+
+    referee, referee_token = _register_and_login_api(
+        page, api_base_url, "w47ref", demo_password
+    )
+    page.reload()
+    expect(page.locator(".profile")).to_contain_text("demo_organizer")
+    open_tournament(page, str(tid), tname)
+
+    referee_section = page.locator('[data-testid="tournament-referees-section"]')
+    search_input = referee_section.locator('[data-testid="referee-user-search-input"]')
+    search_input.fill(referee["username"])
+    referee_section.locator('[data-testid="referee-user-search-btn"]').click()
+    candidate = referee_section.locator(
+        f'[data-testid="referee-candidate-item-{referee["user_id"]}"]'
+    )
+    expect(candidate).to_be_visible()
+    referee_section.locator(
+        f'[data-testid="referee-candidate-select-{referee["user_id"]}"]'
+    ).click()
+
+    with page.expect_response(
+        lambda response: urlparse(response.url).path.endswith(f"/tournaments/{tid}/referees")
+        and response.request.method == "POST"
+    ) as grant_response:
+        referee_section.locator('[data-testid="referee-grant-submit-btn"]').click()
+    assert grant_response.value.status == 201
+    assignment_id = grant_response.value.json()["assignment_id"]
+    expect(
+        referee_section.locator(f'[data-testid="referee-row-{assignment_id}"]')
+    ).to_contain_text(referee["username"])
+
+    referee_page = browser.new_page(viewport={"width": 1280, "height": 900})
+    referee_page.set_default_timeout(10_000)
+    try:
+        referee_page.goto(app_base_url)
+        login(referee_page, referee["username"], demo_password)
+        open_tournament(referee_page, str(tid), tname)
+        result_card = referee_page.locator(
+            f'[data-testid="match-card-{result_match_id}"]'
+        )
+        result_card.locator(
+            f'[data-testid="match-start-btn-{result_match_id}"]'
+        ).click()
+        expect(result_card.locator(".match-status-badge")).to_have_text("ONGOING")
+        result_card.locator(
+            f'[data-testid="match-result-btn-{result_match_id}"]'
+        ).click()
+        result_form = result_card.locator(
+            f'[data-testid="match-result-form-{result_match_id}"]'
+        )
+        result_form.locator('input[name="score_team1"]').fill("2")
+        result_form.locator('input[name="score_team2"]').fill("1")
+        with referee_page.expect_response(
+            lambda response: urlparse(response.url).path.endswith(
+                f"/tournaments/{tid}/matches/{result_match_id}/result"
+            )
+            and response.request.method == "PUT"
+        ) as result_response:
+            result_form.get_by_role("button", name="Xác nhận & Lưu kết quả").click()
+        assert result_response.value.status == 200
+        expect(result_card.locator(".match-status-badge")).to_have_text("COMPLETED")
+        expect(
+            result_card.locator(f'[data-testid="match-score-{result_match_id}"]')
+        ).to_have_text("2 - 1")
+        referee_page.screenshot(
+            path=str(
+                Path(__file__).resolve().parents[1]
+                / "e2e-artifacts"
+                / f"w47-08-referee-result-{tid}-desktop.png"
+            ),
+            full_page=True,
+        )
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        with page.expect_response(
+            lambda response: urlparse(response.url).path.endswith(
+                f"/tournaments/{tid}/referees/{assignment_id}"
+            )
+            and response.request.method == "DELETE"
+        ) as revoke_response:
+            referee_section.locator(
+                f'[data-testid="referee-revoke-btn-{assignment_id}"]'
+            ).click()
+        assert revoke_response.value.status == 200
+        expect(referee_section.locator('[data-testid="referees-empty"]')).to_be_visible()
+
+        audit = page.locator('[data-testid="tournament-audit-section"]')
+        with page.expect_response(
+            lambda response: urlparse(response.url).path.endswith(
+                f"/tournaments/{tid}/audit-logs"
+            )
+            and response.request.method == "GET"
+        ) as audit_reload:
+            audit.locator('[data-testid="tournament-audit-reload-btn"]').click()
+        assert audit_reload.value.status == 200
+        audit.locator('[data-testid="tournament-audit-filter-resource"]').select_option(
+            "match"
+        )
+        audit.locator('[data-testid="tournament-audit-filter-action"]').fill(
+            "MATCH_RESULT_SUBMITTED"
+        )
+        audit.locator('[data-testid="tournament-audit-filter-apply-btn"]').click()
+        result_audit = audit.locator('[data-action="MATCH_RESULT_SUBMITTED"]').first
+        expect(result_audit).to_be_visible()
+        expect(result_audit.locator(".audit-log-actor")).to_contain_text(
+            referee["username"]
+        )
+
+        audit.locator('[data-testid="tournament-audit-filter-resource"]').select_option(
+            "role_assignment"
+        )
+        audit.locator('[data-testid="tournament-audit-filter-action"]').fill(
+            "ROLE_ASSIGNMENT_GRANTED"
+        )
+        audit.locator('[data-testid="tournament-audit-filter-apply-btn"]').click()
+        grant_audit = audit.locator('[data-action="ROLE_ASSIGNMENT_GRANTED"]').first
+        expect(grant_audit).to_be_visible()
+        expect(grant_audit.locator(".audit-log-actor")).to_contain_text("demo_organizer")
+
+        audit.locator('[data-testid="tournament-audit-filter-action"]').fill(
+            "ROLE_ASSIGNMENT_REVOKED"
+        )
+        audit.locator('[data-testid="tournament-audit-filter-apply-btn"]').click()
+        revoke_audit = audit.locator('[data-action="ROLE_ASSIGNMENT_REVOKED"]').first
+        expect(revoke_audit).to_be_visible()
+        expect(revoke_audit.locator(".audit-log-actor")).to_contain_text("demo_organizer")
+
+        referee_page.reload()
+        expect(referee_page.locator(".profile")).to_contain_text(referee["username"])
+        open_tournament(referee_page, str(tid), tname)
+        persisted_result = referee_page.locator(
+            f'[data-testid="match-card-{result_match_id}"]'
+        )
+        expect(persisted_result.locator(".match-status-badge")).to_have_text("COMPLETED")
+        expect(
+            persisted_result.locator(f'[data-testid="match-score-{result_match_id}"]')
+        ).to_have_text("2 - 1")
+
+        pending_card = referee_page.locator(
+            f'[data-testid="match-card-{pending_match_id}"]'
+        )
+        expect(pending_card.locator(".match-status-badge")).to_have_text("PENDING")
+        expect(
+            pending_card.locator(f'[data-testid="match-start-btn-{pending_match_id}"]')
+        ).to_have_count(0)
+        expect(
+            pending_card.locator(f'[data-testid="match-result-btn-{pending_match_id}"]')
+        ).to_have_count(0)
+
+        denied_start = referee_page.request.post(
+            f"{api_base_url}/tournaments/{tid}/matches/{pending_match_id}/status",
+            headers={"Authorization": f"Bearer {referee_token}"},
+            data={"status": "ONGOING"},
+        )
+        assert denied_start.status == 403
+        persisted_matches = _api_request(
+            page,
+            "GET",
+            f"{api_base_url}/tournaments/{tid}/matches",
+            token=organizer_token,
+        )
+        persisted_pending = next(
+            match for match in persisted_matches if match["match_id"] == pending_match_id
+        )
+        assert persisted_pending["status"] == "PENDING"
+
+        referee_page.set_viewport_size({"width": 390, "height": 844})
+        assert referee_page.evaluate(
+            "document.documentElement.scrollWidth <= window.innerWidth"
+        ), "Revoked referee match view overflows horizontally at 390px"
+        referee_page.screenshot(
+            path=str(
+                Path(__file__).resolve().parents[1]
+                / "e2e-artifacts"
+                / f"w47-08-referee-revoked-{tid}-390px.png"
+            ),
+            full_page=True,
+        )
+    finally:
+        referee_page.close()
 
 
 def test_referees_errors_401_403_404_409_422_retry_and_closed_tournament(
