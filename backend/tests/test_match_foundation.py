@@ -10,11 +10,12 @@ from sqlalchemy.exc import IntegrityError
 from core.matches import (as_utc, to_utc, can_cancel_match, can_manage_matches, can_start_match, can_submit_result,
                           ensure_match_teams, ensure_stage_in_tournament, lock_match_context, match_cancellable,
                           match_editable, match_result_open, match_startable, match_state)
-from modules.identity.models import RoleAssignment, User
+from modules.identity.models import User
 from modules.teams.models import Team, TeamMembership
 from modules.tournaments.models import Match, Stage, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import session_factory
 from test_permissions import access, organizer_tournament
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -120,11 +121,6 @@ def test_as_utc_normalizes_aware_values_from_any_session_timezone():
     assert as_utc(None) is None
 
 
-def assign(session_factory, users, roles, user, role, scope_type, scope_id):
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(user_id=users[user], role_id=roles[role], scope_type=scope_type, scope_id=scope_id))
-
-
 @pytest.mark.parametrize('user,assignment,manage,referee', [
     ('admin', None, True, True),
     ('organizer', None, True, True),             # creator of the tournament
@@ -140,10 +136,15 @@ def assign(session_factory, users, roles, user, role, scope_type, scope_id):
     ('viewer', None, False, False),              # PLAYER of a playing team
 ])
 def test_shared_checkers_follow_tournament_scope(access, session_factory, match_case, user, assignment, manage, referee):
-    _, _, users, _, roles = access
+    client, headers, users, *_ = access
     if assignment:
         scope_type, scope = assignment
-        assign(session_factory, users, roles, user, 'REFEREE', scope_type, match_case.get(scope))
+        target_id = match_case.get(scope)
+        if scope_type == 'GLOBAL':
+            assert admin_grant_referee(client, headers, target_id, users[user], scope_type).status_code == 422
+        else:
+            response = grant_referee(client, headers, target_id, users[user])
+            assert response.status_code == (409 if user in ('viewer', 'manager') else 201), response.text
     with session_factory() as db:
         tournament, match = db.get(Tournament, match_case['tid']), db.get(Match, match_case['match'])
         actor = db.get(User, users[user])
@@ -154,8 +155,8 @@ def test_shared_checkers_follow_tournament_scope(access, session_factory, match_
 
 
 def test_referee_who_is_active_member_of_a_playing_team_is_blocked(access, session_factory, match_case):
-    _, _, users, teams, roles = access
-    assign(session_factory, users, roles, 'referee', 'REFEREE', 'TOURNAMENT', match_case['tid'])
+    client, headers, users, teams, _ = access
+    assert grant_referee(client, headers, match_case['tid'], users['referee']).status_code == 201
     with session_factory.begin() as db:
         db.add(TeamMembership(team_id=teams['Beta'], user_id=users['referee'], role_in_team='MANAGER'))
     with session_factory() as db:
@@ -170,8 +171,8 @@ def test_referee_who_is_active_member_of_a_playing_team_is_blocked(access, sessi
 
 
 def test_lock_context_rechecks_after_lock_and_scopes_404(access, session_factory, match_case):
-    _, _, users, _, roles = access
-    assign(session_factory, users, roles, 'referee', 'REFEREE', 'TOURNAMENT', match_case['tid'])
+    client, headers, users, *_ = access
+    assert grant_referee(client, headers, match_case['tid'], users['referee']).status_code == 201
     with session_factory() as db:
         actor = db.get(User, users['referee'])
         tournament, match, actor = lock_match_context(db, match_case['tid'], match_case['match'], actor,

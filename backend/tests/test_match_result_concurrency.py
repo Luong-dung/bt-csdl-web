@@ -14,6 +14,7 @@ from test_match_foundation import match_case
 from test_match_result_api import ongoing, result_logs, stored, url
 from test_permissions import access
 from test_registration_concurrency import session_factory
+from referee_helpers import grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -46,13 +47,10 @@ def test_same_result_twice_concurrently_audits_once(access, session_factory, ong
     ('cancel_match', 409), ('finish_tournament', 409), ('revoke_referee', 403),
 ])
 def test_result_rechecks_after_waiting_for_tournament_lock(access, session_factory, ongoing, change, expected):
-    _, headers, users, _, roles = access
-    with session_factory.begin() as db:
-        assignment = RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                                    scope_type='TOURNAMENT', scope_id=ongoing['tid'])
-        db.add(assignment)
-        db.flush()
-        aid = assignment.assignment_id
+    client, headers, users, *_ = access
+    assignment = grant_referee(client, headers, ongoing['tid'], users['referee'])
+    assert assignment.status_code == 201, assignment.text
+    aid = assignment.json()['assignment_id']
     engine = session_factory.kw['bind']
     waiting = Event()
 

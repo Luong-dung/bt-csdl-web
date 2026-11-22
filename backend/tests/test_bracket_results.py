@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import select
 
-from modules.identity.models import AuditLog, RoleAssignment, User
+from modules.identity.models import AuditLog, User
 from modules.teams.models import Team
 from modules.tournaments.models import BracketMatch, Match, Tournament, TournamentRegistration, TournamentRoster
 from test_catalog_api import session_factory
 from test_permissions import access
+from referee_helpers import admin_grant_referee, grant_referee
 from test_match_foundation import match_case
 from test_bracket_foundation import bracket_case, add_bracket, add_node
 
@@ -266,17 +267,20 @@ def test_terminal_tournament_reports_lifecycle_before_bracket_format(access, ses
 @pytest.mark.parametrize('kind,expected', [('admin', 200), ('organizer', 200), ('scoped', 200),
                                          ('foreign', 403), ('global', 403), ('role_only', 403), ('own_roster', 403)])
 def test_result_scope_is_enforced_for_managed_matches(access, session_factory, bracket_results, kind, expected):
-    client, headers, users, _, roles = access
+    client, headers, users, *_ = access
     ids = bracket_results
     actor = kind if kind in ('admin', 'organizer') else 'referee'
-    with session_factory.begin() as db:
-        if kind in ('scoped', 'foreign', 'global', 'own_roster'):
-            db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                                  scope_type='GLOBAL' if kind == 'global' else 'TOURNAMENT',
-                                  scope_id=None if kind == 'global' else ids['other' if kind == 'foreign' else 'tid']))
-        if kind == 'own_roster':
+    if kind == 'scoped':
+        assert grant_referee(client, headers, ids['tid'], users['referee']).status_code == 201
+    elif kind == 'foreign':
+        assert grant_referee(client, headers, ids['other'], users['referee']).status_code == 201
+    elif kind == 'global':
+        assert admin_grant_referee(client, headers, None, users['referee'], 'GLOBAL').status_code == 422
+    elif kind == 'own_roster':
+        with session_factory.begin() as db:
             db.add(TournamentRoster(tournament_id=ids['tid'], team_id=ids['alpha'],
                                     user_id=users['referee'], role_in_team='SUBSTITUTE'))
+        assert grant_referee(client, headers, ids['tid'], users['referee']).status_code == 409
     assert result(client, headers, ids, name=actor).status_code == expected
     assert len(match_logs(session_factory)) == (1 if expected == 200 else 0)
     assert state(session_factory, ids['final'])[1] == (ids['alpha'] if expected == 200 else None)

@@ -18,6 +18,7 @@ from test_bracket_foundation import bracket_case
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -462,13 +463,7 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
     assert 'Trận thuộc bracket chỉ được sửa lịch thi đấu' in bad_struct.json()['detail']
 
     # 7. Grant REFEREE scoped to THIS tournament
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(
-            user_id=users['referee'],
-            role_id=roles['REFEREE'],
-            scope_type='TOURNAMENT',
-            scope_id=tid,
-        ))
+    assert grant_referee(client, headers, tid, users['referee']).status_code == 201
 
     # Scoped referee CANNOT preview or create bracket
     assert client.post(bracket_url(tid, '/preview'), headers=ref_auth, json={'stage_id': stage_id, 'team_ids': team_order}).status_code == 403
@@ -487,25 +482,13 @@ def test_comprehensive_bracket_permission_matrix(access, session_factory, four_t
     assert client.put(f"{match_url(tid, semi1_id)}/result", headers=ref_auth, json={'score_team1': 2, 'score_team2': 0}).status_code == 200
 
     # 8. Foreign referee (scoped to other_tid) has NO write permissions here
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(
-            user_id=users['viewer'],
-            role_id=roles['REFEREE'],
-            scope_type='TOURNAMENT',
-            scope_id=other_tid,
-        ))
+    assert grant_referee(client, headers, other_tid, users['viewer']).status_code == 201
     foreign_ref_auth = headers('viewer')
     assert client.post(f"{match_url(tid, semi2_id)}/status", headers=foreign_ref_auth, json={'status': 'ONGOING'}).status_code == 403
     assert client.put(f"{match_url(tid, semi2_id)}/result", headers=foreign_ref_auth, json={'score_team1': 2, 'score_team2': 1}).status_code == 403
 
     # 9. Global referee has NO write permissions (policy requires TOURNAMENT assignment)
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(
-            user_id=users['manager'],
-            role_id=roles['REFEREE'],
-            scope_type='GLOBAL',
-            scope_id=None,
-        ))
+    assert admin_grant_referee(client, headers, None, users['manager'], 'GLOBAL').status_code == 422
     global_ref_auth = headers('manager')
     assert client.post(f"{match_url(tid, semi2_id)}/status", headers=global_ref_auth, json={'status': 'ONGOING'}).status_code == 403
     assert client.put(f"{match_url(tid, semi2_id)}/result", headers=global_ref_auth, json={'score_team1': 2, 'score_team2': 1}).status_code == 403
