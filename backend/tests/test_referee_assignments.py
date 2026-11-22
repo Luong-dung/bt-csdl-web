@@ -83,6 +83,18 @@ def test_non_managers_cannot_list_grant_or_revoke(access, session_factory, match
     assert len(audits(session_factory)) == 1
 
 
+@pytest.mark.parametrize('who,code', [
+    ('admin', 200), ('organizer', 200), ('referee', 403), ('viewer', 403), ('manager', 403), (None, 401),
+])
+def test_w47_tournament_read_permission_matrix(access, session_factory, match_case, who, code):
+    client, headers, users, *_ = access
+    tid = match_case['tid']
+    assert grant(client, headers, tid, users).status_code == 201
+    auth = headers(who) if who else {}
+    assert client.get(path(tid), headers=auth).status_code == code
+    assert client.get(f'/api/v1/tournaments/{tid}/audit-logs', headers=auth).status_code == code
+
+
 def test_scoped_referee_cannot_grant_other_referees(access, session_factory, match_case):
     client, headers, users, *_ = access
     assert grant(client, headers, match_case['tid'], users).status_code == 201
@@ -93,7 +105,9 @@ def test_manager_of_other_tournament_cannot_touch_this_one(access, session_facto
     client, headers, users, *_ = access
     with session_factory.begin() as db:
         db.get(Tournament, match_case['tid']).created_by = users['admin']
+    assert client.get(path(match_case['tid']), headers=headers('organizer')).status_code == 403
     assert grant(client, headers, match_case['tid'], users).status_code == 403
+    assert client.get(path(match_case['tid']), headers=headers('admin')).status_code == 200
     assignment = grant(client, headers, match_case['tid'], users, who='admin').json()['assignment_id']
     # Assignment of tournament A addressed through tournament B is not found there.
     assert client.delete(path(match_case['other'], f'/{assignment}'), headers=headers('organizer')).status_code == 404
@@ -175,7 +189,7 @@ def test_audit_failure_rolls_back_grant(access, session_factory, match_case):
 
 def test_database_allows_one_active_assignment_but_keeps_revoked_history(access, session_factory, match_case):
     _, _, users, _, roles = access
-    row = dict(user_id=users['referee'], role_id=roles['REFEREE'], scope_type='TOURNAMENT', scope_id=match_case['tid'])
+    row = dict(user_id=users['referee'], role_id=roles['VIEWER'], scope_type='GLOBAL', scope_id=None)
     with session_factory.begin() as db:
         from datetime import datetime, timezone
         db.add(RoleAssignment(**row, revoked_at=datetime.now(timezone.utc)))
@@ -183,12 +197,9 @@ def test_database_allows_one_active_assignment_but_keeps_revoked_history(access,
     with pytest.raises(IntegrityError):
         with session_factory.begin() as db:
             db.add(RoleAssignment(**row))
-    global_row = dict(user_id=users['referee'], role_id=roles['VIEWER'], scope_type='GLOBAL', scope_id=None)
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(**global_row))
     with pytest.raises(IntegrityError):  # NULL scope_id must not bypass uniqueness
         with session_factory.begin() as db:
-            db.add(RoleAssignment(**global_row))
+            db.add(RoleAssignment(**row))
 
 
 def test_revoked_assignment_grants_nothing_to_checkers(access, session_factory, match_case):
@@ -242,6 +253,7 @@ def test_admin_api_is_admin_only_and_cannot_target_self(access, session_factory,
     client, headers, users, *_ = access
     body = {'user_id': users['referee'], 'role': 'ADMIN', 'scope_type': 'GLOBAL'}
     assert client.post(ADMIN, json=body).status_code == 401
+    assert client.get(ADMIN).status_code == 401
     for who in ('organizer', 'viewer', 'referee'):
         assert client.post(ADMIN, headers=headers(who), json=body).status_code == 403
         assert client.get(ADMIN, headers=headers(who)).status_code == 403

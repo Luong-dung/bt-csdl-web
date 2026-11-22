@@ -3,11 +3,12 @@
 import pytest
 from sqlalchemy import select
 
-from modules.identity.models import AuditLog, RoleAssignment
+from modules.identity.models import AuditLog
 from modules.tournaments.models import Match, Tournament
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access
+from referee_helpers import admin_grant_referee, grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -34,11 +35,13 @@ def ongoing(session_factory, match_case):
     return match_case
 
 
-def referee(session_factory, access, scope_type, scope_id):
-    _, _, users, _, roles = access
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'],
-                              scope_type=scope_type, scope_id=scope_id))
+def referee(access, scope_type, scope_id):
+    client, headers, users, *_ = access
+    if scope_type == 'GLOBAL':
+        response = admin_grant_referee(client, headers, scope_id, users['referee'], scope_type)
+    else:
+        response = grant_referee(client, headers, scope_id, users['referee'])
+    assert response.status_code == (422 if scope_type == 'GLOBAL' else 201), response.text
 
 
 def test_manager_submits_result_atomically_with_audit(access, session_factory, ongoing):
@@ -77,7 +80,7 @@ def test_replay_same_result_is_idempotent_and_different_result_conflicts(access,
 def test_referee_needs_assignment_for_this_tournament(access, session_factory, ongoing, scope, expected):
     client, headers, *_ = access
     if scope:
-        referee(session_factory, access, scope[0], ongoing.get(scope[1]))
+        referee(access, scope[0], ongoing.get(scope[1]))
     response = client.put(url(ongoing['tid'], ongoing['match']), headers=headers('referee'),
                           json={'score_team1': 1, 'score_team2': 0})
     assert response.status_code == expected
@@ -86,12 +89,10 @@ def test_referee_needs_assignment_for_this_tournament(access, session_factory, o
 
 @pytest.mark.parametrize('name', ['manager', 'viewer'])
 @pytest.mark.parametrize('assigned_referee', [False, True])
-def test_playing_team_members_cannot_submit(access, session_factory, ongoing, name, assigned_referee):
-    client, headers, users, _, roles = access
+def test_playing_team_members_cannot_be_granted_referee_or_submit(access, session_factory, ongoing, name, assigned_referee):
+    client, headers, users, *_ = access
     if assigned_referee:
-        with session_factory.begin() as db:
-            db.add(RoleAssignment(user_id=users[name], role_id=roles['REFEREE'],
-                                  scope_type='TOURNAMENT', scope_id=ongoing['tid']))
+        assert grant_referee(client, headers, ongoing['tid'], users[name]).status_code == 409
     response = client.put(url(ongoing['tid'], ongoing['match']), headers=headers(name),
                           json={'score_team1': 1, 'score_team2': 0})
     assert response.status_code == 403

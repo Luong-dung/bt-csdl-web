@@ -59,6 +59,17 @@ def test_permission_matrix(access, session_factory):
     assert client.delete(path(tid), headers=headers('admin')).status_code == 204
 
 
+def test_organizer_of_another_tournament_cannot_delete(access, session_factory):
+    client, headers, users, *_ = access
+    tid = organizer_tournament(client, headers)
+    organizer_tournament(client, headers)
+    with session_factory.begin() as db:
+        db.get(Tournament, tid).created_by = users['admin']
+    assert client.delete(path(tid), headers=headers('organizer')).status_code == 403
+    assert exists(session_factory, tid) and deleted_logs(session_factory) == []
+    assert client.delete(path(tid), headers=headers('admin')).status_code == 204
+
+
 @pytest.mark.parametrize('status', ['ONGOING', 'COMPLETED', 'CANCELLED'])
 def test_only_upcoming_can_be_deleted(access, session_factory, status):
     client, headers, *_ = access

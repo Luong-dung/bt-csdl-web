@@ -14,21 +14,27 @@ from test_registration_concurrency import session_factory
 from test_permissions import access
 from test_match_foundation import match_case
 from test_bracket_foundation import bracket_case, add_bracket, add_node
+from referee_helpers import grant_referee
 
 pytestmark = pytest.mark.postgres
 
 
 @pytest.mark.parametrize('operation,role', [('create', 'ORGANIZER'), ('result', 'REFEREE')])
 def test_revoked_assignment_is_rechecked_after_bracket_lock(access, session_factory, bracket_case, operation, role):
-    _, _, users, _, roles = access
+    client, headers, users, _, roles = access
     tid = bracket_case['tid']
     with session_factory.begin() as db:
-        db.add(RoleAssignment(user_id=users['referee'], role_id=roles[role], scope_type='TOURNAMENT', scope_id=tid))
+        if role == 'ORGANIZER':
+            db.add(RoleAssignment(user_id=users['referee'], role_id=roles[role],
+                                  scope_type='TOURNAMENT', scope_id=tid))
         bracket = add_bracket(db, bracket_case, users, 4)
         add_node(db, bracket, 2, 1)
         source = add_node(db, bracket, 1, 1)
         add_node(db, bracket, 1, 2)
         mid = source.match_id
+    if role == 'REFEREE':
+        assignment = grant_referee(client, headers, tid, users['referee'])
+        assert assignment.status_code == 201, assignment.text
     attempted = Event()
     engine = session_factory.kw['bind']
 

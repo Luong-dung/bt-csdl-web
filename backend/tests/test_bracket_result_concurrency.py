@@ -1,15 +1,16 @@
-"""W46-02 result/slot/audit races through real HTTP and independent PostgreSQL connections."""
+"""Result and W47 referee races through independent PostgreSQL connections."""
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event
+from time import monotonic, sleep
 
 import pytest
-from sqlalchemy import delete, event, select
+from sqlalchemy import select, text
 
 from core.tournaments import lock_tournament
 from modules.identity.models import AuditLog, RoleAssignment
 from modules.tournaments.models import Tournament
 from test_catalog_api import make_client
 from test_registration_concurrency import session_factory
+from referee_helpers import grant_referee as grant_referee_api
 from test_permissions import access
 from test_match_foundation import match_case
 from test_bracket_foundation import bracket_case
@@ -21,6 +22,31 @@ pytestmark = pytest.mark.postgres
 def submit(factory, headers, ids, key='first', scores=(2, 0), name='organizer'):
     with make_client(factory, logged_in=False) as client:
         return result(client, headers, ids, key, scores, name).status_code
+
+
+def grant_referee(factory, headers, tid, user_id):
+    with make_client(factory, logged_in=False) as client:
+        return grant_referee_api(client, headers, tid, user_id).status_code
+
+
+def revoke_referee(factory, headers, tid, assignment_id):
+    with make_client(factory, logged_in=False) as client:
+        return client.delete(f'/api/v1/tournaments/{tid}/referees/{assignment_id}',
+                             headers=headers('organizer')).status_code
+
+
+def wait_for_lock_waiters(factory, expected):
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
+        with factory() as db:
+            count = db.scalar(text(
+                "SELECT count(*) FROM pg_stat_activity "
+                "WHERE wait_event_type = 'Lock' AND query ILIKE '%tournaments%'"
+            ))
+        if count >= expected:
+            return True
+        sleep(0.025)
+    return False
 
 
 def change_status(factory, headers, ids, status):
@@ -89,27 +115,48 @@ def test_cancel_tournament_races_with_semifinal_result(access, session_factory, 
         assert db.get(Tournament, ids['tid']).status == 'CANCELLED'
 
 
-def test_result_rechecks_referee_revocation_before_advancing_slot(access, session_factory, bracket_results):
+def test_concurrent_referee_grants_create_one_assignment_and_one_audit(access, session_factory, bracket_results):
     _, headers, users, _, roles = access
+    tid = bracket_results['tid']
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        codes = list(pool.map(lambda _: grant_referee(session_factory, headers, tid, users['referee']), range(2)))
+    assert sorted(codes) == [201, 409]
+    with session_factory() as db:
+        assignments = list(db.scalars(select(RoleAssignment).where(
+            RoleAssignment.user_id == users['referee'],
+            RoleAssignment.role_id == roles['REFEREE'],
+            RoleAssignment.scope_type == 'TOURNAMENT',
+            RoleAssignment.scope_id == tid,
+            RoleAssignment.revoked_at.is_(None),
+        )))
+        audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'role_assignment')))
+    assert len(assignments) == 1
+    assert [audit.action for audit in audits] == ['ROLE_ASSIGNMENT_GRANTED']
+    assert audits[0].details['tournament_id'] == tid
+
+
+def test_result_rechecks_referee_revocation_before_advancing_slot(access, session_factory, bracket_results):
+    client, headers, users, _, _ = access
     ids = bracket_results
-    with session_factory.begin() as db:
-        db.add(RoleAssignment(user_id=users['referee'], role_id=roles['REFEREE'], scope_type='TOURNAMENT', scope_id=ids['tid']))
-    engine = session_factory.kw['bind']
-    waiting = Event()
-    def notice(connection, cursor, statement, parameters, context, executemany):
-        if 'FROM tournaments' in statement and 'FOR UPDATE' in statement:
-            waiting.set()
-    with ThreadPoolExecutor(max_workers=1) as pool:
-        try:
-            with session_factory.begin() as holder:
-                lock_tournament(holder, ids['tid'])
-                holder.execute(delete(RoleAssignment).where(RoleAssignment.user_id == users['referee']))
-                event.listen(engine, 'before_cursor_execute', notice)
-                future = pool.submit(submit, session_factory, headers, ids, name='referee')
-                assert waiting.wait(5)
-            assert future.result(timeout=10) == 403
-        finally:
-            event.remove(engine, 'before_cursor_execute', notice)
+    created = grant_referee_api(client, headers, ids['tid'], users['referee'])
+    assert created.status_code == 201, created.text
+    assignment_id = created.json()['assignment_id']
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        with session_factory.begin() as holder:
+            lock_tournament(holder, ids['tid'])
+            revoke = pool.submit(revoke_referee, session_factory, headers, ids['tid'], assignment_id)
+            assert wait_for_lock_waiters(session_factory, 1), 'revoke request never waited for tournament lock'
+            result_request = pool.submit(submit, session_factory, headers, ids, name='referee')
+            assert wait_for_lock_waiters(session_factory, 2), 'result request never waited behind revocation'
+        assert revoke.result(timeout=10) == 200
+        assert result_request.result(timeout=10) == 403
     assert state(session_factory, ids['first'])[0] == 'ONGOING'
     assert state(session_factory, ids['final']) == ('PENDING', None, None, None)
     assert match_logs(session_factory) == []
+    with session_factory() as db:
+        assignment = db.get(RoleAssignment, assignment_id)
+        assert assignment.revoked_by == users['organizer'] and assignment.revoked_at is not None
+        audits = list(db.scalars(select(AuditLog).where(AuditLog.resource == 'role_assignment')
+                                 .order_by(AuditLog.log_id)))
+    assert [audit.action for audit in audits] == ['ROLE_ASSIGNMENT_GRANTED', 'ROLE_ASSIGNMENT_REVOKED']
+    assert all(audit.details['tournament_id'] == ids['tid'] for audit in audits)

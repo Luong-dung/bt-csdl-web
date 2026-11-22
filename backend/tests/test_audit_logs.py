@@ -8,6 +8,7 @@ from sqlalchemy import event, func, select
 from core.audit import derive_ids, record_audit
 from modules.catalog.models import Publisher
 from modules.identity.models import AuditLog
+from modules.tournaments.models import Tournament
 from test_catalog_api import session_factory
 from test_match_foundation import match_case
 from test_permissions import access
@@ -130,6 +131,15 @@ def test_manager_sees_only_own_tournament_newest_first(access, session_factory, 
 def test_tournament_logs_need_manager(access, match_case, who, code):
     client, headers, *_ = access
     assert client.get(tlogs(match_case['tid']), headers=headers(who) if who else {}).status_code == code
+
+
+def test_manager_of_another_tournament_cannot_view_logs(access, session_factory, match_case):
+    client, headers, users, *_ = access
+    with session_factory.begin() as db:
+        db.get(Tournament, match_case['tid']).created_by = users['admin']
+    assert client.get(tlogs(match_case['tid']), headers=headers('organizer')).status_code == 403
+    assert client.get(tlogs(match_case['other']), headers=headers('organizer')).status_code == 200
+    assert client.get(tlogs(match_case['tid']), headers=headers('admin')).status_code == 200
 
 
 def test_admin_logs_are_admin_only(access, match_case):

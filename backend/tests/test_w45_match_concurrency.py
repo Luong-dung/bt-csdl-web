@@ -21,6 +21,7 @@ from modules.tournaments.models import Match, Stage, Tournament, TournamentRegis
 from test_catalog_api import make_client
 from test_permissions import access, organizer_tournament
 from test_registration_concurrency import session_factory
+from referee_helpers import grant_referee
 
 pytestmark = pytest.mark.postgres
 
@@ -249,20 +250,13 @@ def test_start_rechecks_referee_revocation_under_lock(access, session_factory, m
     and the referee's role assignment is revoked by the lock holder,
     the start request must reload actor permissions and return 403.
     """
-    _, headers, users, _, roles = access
+    client, headers, users, _, _ = access
     tid = match_case['tid']
     mid = match_case['match']
 
-    with session_factory.begin() as db:
-        assignment = RoleAssignment(
-            user_id=users['referee'],
-            role_id=roles['REFEREE'],
-            scope_type='TOURNAMENT',
-            scope_id=tid,
-        )
-        db.add(assignment)
-        db.flush()
-        aid = assignment.assignment_id
+    assignment = grant_referee(client, headers, tid, users['referee'])
+    assert assignment.status_code == 201, assignment.text
+    aid = assignment.json()['assignment_id']
 
     engine = session_factory.kw['bind']
     waiting = Event()
