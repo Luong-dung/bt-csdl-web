@@ -41,7 +41,8 @@ def wait_for_lock_waiters(factory, expected):
         with factory() as db:
             count = db.scalar(text(
                 "SELECT count(*) FROM pg_stat_activity "
-                "WHERE wait_event_type = 'Lock' AND query ILIKE '%tournaments%'"
+                "WHERE datname = current_database() "
+                "AND wait_event_type = 'Lock' AND query ILIKE '%tournaments%'"
             ))
         if count >= expected:
             return True
