@@ -1,6 +1,6 @@
-# Dữ liệu demo W43-01
+# Dữ liệu demo (W43-01, mở rộng W48-01)
 
-`backend/seed_demo.py` tạo tài khoản và đội demo riêng. `python seed.py` vẫn chỉ tạo dữ liệu nền, không tạo tài khoản.
+`backend/seed_demo.py` tạo tài khoản, đội và (từ W48) bộ giải demo đủ trạng thái. `python seed.py` vẫn chỉ tạo dữ liệu nền, không tạo tài khoản.
 
 ## 1. Chuẩn bị database riêng
 
@@ -29,6 +29,14 @@ try {
 }
 ```
 
+**Reset sạch bằng một lệnh** (thay cho lệnh trên khi muốn làm lại từ đầu):
+
+```powershell
+.\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --reset
+```
+
+`--reset` **xóa toàn bộ schema `public` của database demo** (`DROP SCHEMA public CASCADE`), tạo lại, migrate tới `head` rồi seed; chỉ chạy được với PostgreSQL và tên database đuôi `_demo`/`_test`, khác `DB_NAME` trong `.env`. Đo local 23/11/2026: khoảng 8–9 giây. `--base-only` chỉ tạo phần W43 (dùng cho Browser E2E/CI).
+
 `--migrate` chạy Alembic tới `head` bằng connection trỏ vào đúng database chỉ định. Có thể bỏ tùy chọn này nếu database đó đã migrate. Migration và seed chạy trong một transaction PostgreSQL; lỗi sẽ rollback. Không ghi mật khẩu vào source, log hay tài liệu.
 
 ## 3. Tài khoản và dữ liệu
@@ -42,7 +50,24 @@ try {
 | `demo_free_player` | PLAYER | Chưa thuộc đội, dùng để thử thêm thành viên hoặc tạo đội |
 | `demo_viewer` | VIEWER | Chưa thuộc đội; dùng kiểm tra quyền đọc và từ chối thao tác quản trị |
 
-Tài khoản mới dùng mật khẩu nhập tại bước 2; email có dạng `<username>@example.com`. Dữ liệu kèm theo: dữ liệu nền từ `seed.py`, tổ chức `W43 Demo Organization`, đội VALORANT `W43 Demo Team` với tag `DEMO43` và hai membership ACTIVE. Không tạo giải/roster/match hoặc assignment theo scope trong task này.
+Bổ sung từ W48-01:
+
+| Username | Role tài khoản | Dữ liệu/phạm vi demo |
+|---|---|---|
+| `demo_referee` | VIEWER | Trọng tài được `demo_organizer` cấp **qua API** cho `W48 Demo Cup` và `W48 Demo Open`; đã tự nhập kết quả trận chung kết Cup |
+| `demo_manager_b/c/d` | TEAM_MANAGER | Quản lý đội `DEMO48B/C/D` (W48 Demo Bravo/Charlie/Delta) |
+| `demo_player_b/c/d` | PLAYER | Tuyển thủ của đội tương ứng |
+
+| Giải (người tạo `demo_organizer`, VALORANT) | Trạng thái | Dùng để demo |
+|---|---|---|
+| `W48 Demo Cup` | COMPLETED | 4 đội, roster khóa, bracket đã đấu xong, standings FINAL, nhật ký audit đầy đủ |
+| `W48 Demo Open` | ONGOING | Bracket 4 đội, đã xong 1 bán kết; còn bán kết 2 và chung kết để nhập kết quả trực tiếp (organizer hoặc `demo_referee`), thử thu hồi trọng tài |
+| `W48 Demo League` | UPCOMING (+14 ngày) | 1 đơn APPROVED (DEMO43), 2 đơn PENDING (DEMO48B/C) để duyệt/từ chối, khóa roster |
+| `W48 Demo Draft` | UPCOMING (+30 ngày) | Chưa có dữ liệu thi đấu, xóa được (W47-04) |
+
+Mọi thao tác nghiệp vụ của kịch bản W48 (tạo đội, đăng ký, duyệt, roster, khóa, stage, bracket, cấp trọng tài, kết quả) đi qua API thật trong cùng transaction nên có audit đúng actor; ngày bắt đầu tính theo ngày chạy seed.
+
+Tài khoản mới dùng mật khẩu nhập tại bước 2; email có dạng `<username>@example.com`. Dữ liệu kèm theo: dữ liệu nền từ `seed.py`, tổ chức `W43 Demo Organization`, đội VALORANT `W43 Demo Team` với tag `DEMO43` và hai membership ACTIVE. Phần giải/roster/match/trọng tài do kịch bản W48 ở trên tạo.
 
 ## 4. Chạy ứng dụng với database demo
 
@@ -91,18 +116,19 @@ Kết quả mong đợi gồm `TOURNAMENT_CREATED`, `TOURNAMENT_UPDATED` và `TO
 
 ## 5. Chạy lại và xử lý dữ liệu đã thay đổi
 
+- Kịch bản W48: nếu đủ 4 giải demo thì chạy lại không ghi gì; nếu chỉ còn một phần (ví dụ đã xóa `W48 Demo Draft` khi demo) hoặc tag `DEMO48*` bị chiếm, seed báo lỗi và rollback — dùng `--reset`.
 - Chạy lại cùng lệnh trên dữ liệu demo chưa đổi sẽ thêm 0 bản ghi; không đổi ID hoặc mật khẩu của tài khoản đã có. Đổi DEMO_PASSWORD chỉ áp dụng cho tài khoản tạo mới.
 - Không ghi đè user có username demo nhưng khác email/role; email bị chiếm hoặc tag đội trùng dữ liệu khác sẽ báo lỗi và rollback toàn bộ lượt seed.
 - Membership demo đã đổi vị trí, chuyển đội hoặc kết thúc sẽ báo lỗi; không tự khôi phục lịch sử hay đưa người đã rời trở lại đội. Dữ liệu khác được giữ nguyên.
-- Muốn một kịch bản sạch sau khi demo: tạo database riêng mới có hậu tố `_demo`/`_test`, chạy seed vào đó rồi trỏ server demo sang database mới. Không cần xóa database cá nhân. Dữ liệu demo cũ có thể giữ lại để đối chiếu.
+- Muốn một kịch bản sạch sau khi demo: chạy `--reset` (mục 2), hoặc tạo database riêng mới có hậu tố `_demo`/`_test`, chạy seed vào đó rồi trỏ server demo sang database mới. Không cần xóa database cá nhân. Dữ liệu demo cũ có thể giữ lại để đối chiếu.
 
 ## 6. Kiểm tra tự động
 
 Từ thư mục `backend`:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py -q
-.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py --postgres -m postgres -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py tests/test_seed_demo_scenario.py -q
+.\.venv\Scripts\python.exe -m pytest tests/test_seed_demo.py tests/test_seed_demo_scenario.py --postgres -m postgres -q
 ```
 
 Mặc định dùng SQLite in-memory. Để chạy PostgreSQL, đặt `TEST_DATABASE_URL` tới database test riêng như hướng dẫn tại README rồi dùng `--postgres -m postgres`; test dùng schema tạm và rollback, không seed tài khoản vào schema ứng dụng. Kiểm tra gồm chạy lại, bảo toàn dữ liệu/mật khẩu, rollback khi xung đột, không phục hồi membership đã kết thúc, đăng nhập thật bằng JWT và quyền catalog/đội/giải.

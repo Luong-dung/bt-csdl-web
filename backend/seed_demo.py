@@ -6,7 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from modules.catalog.models import Game
 from modules.identity.models import Role, User
 from modules.teams.models import Organization, Team, TeamMembership
 from seed import seed_reference_data
+from seed_demo_scenario import SCENARIO_ACCOUNTS, TOURNAMENT_NAMES, seed_demo_scenario
 
 
 ACCOUNTS = (
@@ -108,6 +109,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", required=True, help="Separate existing PostgreSQL database ending in _demo/_test")
     parser.add_argument("--migrate", action="store_true", help="Run Alembic upgrade head on the demo target before seeding")
+    parser.add_argument("--reset", action="store_true",
+                        help="DROP and recreate schema public of the demo target, then migrate and seed (implies --migrate)")
+    parser.add_argument("--base-only", action="store_true", help="Only the W43 accounts/team, skip the W48 scenario")
     args = parser.parse_args()
     try:
         url = demo_database_url(args.database)
@@ -119,7 +123,12 @@ def main() -> None:
     engine = create_engine(url, connect_args={"connect_timeout": 5})
     try:
         with engine.begin() as connection:
-            if args.migrate:
+            if args.reset:
+                if connection.dialect.name != "postgresql":
+                    raise SystemExit("--reset only supports PostgreSQL")
+                connection.execute(text("DROP SCHEMA public CASCADE"))
+                connection.execute(text("CREATE SCHEMA public"))
+            if args.migrate or args.reset:
                 config = Config(str(Path(__file__).parent / "alembic.ini"))
                 config.set_main_option("script_location", str(Path(__file__).parent / "alembic"))
                 config.attributes["connection"] = connection
@@ -127,8 +136,13 @@ def main() -> None:
             with Session(bind=connection, autoflush=False) as db:
                 added = seed_demo_data(db, password)
                 db.flush()
+            if not args.base_only:
+                added.update({"scenario_" + k: v for k, v in seed_demo_scenario(connection, password).items()})
         print("Demo seed completed in " + args.database + ": " + ", ".join(f"{k} +{v}" for k, v in added.items()))
-        print("Accounts: " + ", ".join(username for username, _ in ACCOUNTS))
+        accounts = [u for u, _ in ACCOUNTS] + ([] if args.base_only else [u for u, _ in SCENARIO_ACCOUNTS])
+        print("Accounts: " + ", ".join(accounts))
+        if not args.base_only:
+            print("Tournaments: " + ", ".join(TOURNAMENT_NAMES))
         print("Existing account passwords were preserved; DEMO_PASSWORD applies only to newly created accounts.")
     finally:
         engine.dispose()
