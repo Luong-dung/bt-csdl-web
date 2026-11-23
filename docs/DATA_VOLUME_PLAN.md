@@ -1,12 +1,14 @@
 # Kế hoạch dữ liệu quy mô lớn (dự kiến W49)
 
 - **Ngày lập:** `2026-11-23`; **người lập:** DUNG. **Trạng thái:** đề xuất, chưa triển khai.
-- **Bối cảnh:** giáo viên yêu cầu ≥ 20 bảng, có thông tin một số bảng cần cỡ **triệu dòng**. **Cần xác nhận lại với giáo viên:** bao nhiêu bảng phải đạt triệu dòng, ngưỡng tối thiểu, có cho phép dữ liệu tổng hợp (synthetic) và có phải nộp file dump không.
+- **Bối cảnh:** giáo viên yêu cầu ≥ 20 bảng, có thông tin một số bảng cần cỡ **triệu dòng**. Giảng viên đã đồng ý **dùng AI để tạo đủ dữ liệu** (DUNG hỏi trực tiếp, ghi nhận 23/11). **Cần xác nhận lại với giáo viên:** bao nhiêu bảng phải đạt triệu dòng, ngưỡng tối thiểu, có cho phép dữ liệu tổng hợp (synthetic) và có phải nộp file dump không.
 - **Liên quan:** [W48](./weeks/2026-W48.md) (W48-04 làm `permissions`/`tournament_standings` có dữ liệu, thêm `role_permissions`), [ADR-002 chatbot](./ADR/002-chatbot-tra-cuu.md) (W49).
 
 ## 1. Nguyên tắc
 
 - **Danh mục dùng dữ liệu thật** (ít dòng). **Dữ liệu nghiệp vụ quy mô lớn sinh bằng script**, tên người/đội/tổ chức **giả** (Faker, email `@example.com`), random seed cố định để tái lập được.
+- **Cách dùng AI:** (1) AI viết script sinh dữ liệu (tạo khối lượng triệu dòng); (2) AI sinh phần cần tự nhiên — ~2.000 tên đội/tổ chức, vài trăm mô tả giải, vài nghìn câu hỏi mẫu chatbot — lưu thành file mẫu trong repo kèm prompt/cách sinh, script trộn mẫu để nhân lên. Không cho LLM sinh trực tiếp từng dòng (chậm, tốn, trùng lặp, sai ràng buộc). Ghi vào [AI_WORK_LOG.md](./AI_WORK_LOG.md).
+- **Kết quả trận có quy luật:** mỗi đội có sức mạnh ẩn thay đổi theo thời gian (đổi thành viên, phong độ); kết quả sinh theo xác suất từ chênh lệch sức mạnh, để dữ liệu trông thật và dùng được cho phân tích/dự đoán.
 - Không gắn kết quả giả cho đội/tuyển thủ/tổ chức có thật. Nếu sau này có dữ liệu thật (Liquipedia, Kaggle) thì để riêng, không trộn với kết quả giả.
 - Dữ liệu sinh phải đúng ràng buộc và luật nghiệp vụ: winner thuộc hai đội, bracket đúng nhánh, roster chỉ gồm thành viên đội được duyệt, trạng thái/ngày hợp lệ.
 - Nạp vào database riêng (ví dụ `esports_tournament_bigdata`), không dùng DB demo/CI/cá nhân. Báo cáo ghi rõ: "dữ liệu quy mô lớn là dữ liệu tổng hợp, sinh bằng script, tên là giả".
@@ -70,7 +72,19 @@ Database thử nghiệm tạo riêng và đã xóa sau khi đo. Dữ liệu đo 
 - Nạp dự kiến ~15 phút với cách hiện tại; có thể nhanh hơn bằng `COPY`, tạm bỏ index rồi tạo lại (chưa thử).
 - **Liquipedia:** điều khoản API (đọc 23/11) không hỗ trợ dùng MediaWiki API cho mục đích lấy dữ liệu, cấm cào HTML; dữ liệu có cấu trúc qua LiquipediaDB API cần đăng ký và được duyệt; nội dung CC-BY-SA 3.0 (phải ghi nguồn). Không phụ thuộc nguồn này cho kế hoạch.
 
-## 5. Đầu ra dự kiến khi triển khai (W49)
+## 5. Phân phối dữ liệu (không đưa dữ liệu lên GitHub)
+
+- GitHub chặn file > 100 MB; Git LFS miễn phí ~1 GB, không đủ; dữ liệu trong repo làm clone rất nặng. **Commit script + file mẫu, không commit dữ liệu.**
+- Script dùng random seed cố định → ai chạy cũng ra cùng bộ dữ liệu; mỗi người tự nạp vào DB riêng (ước tính ~15 phút, chưa đo toàn bộ), in tiến độ từng bảng.
+- Nếu cần nộp: `pg_dump -Fc` (ước tính vài trăm MB, chưa đo) đưa lên **GitHub Releases** (asset ≤ 2 GB/file, không vào lịch sử git) hoặc Google Drive, kèm file ghi số dòng từng bảng và checksum.
+
+## 6. Thứ tự trong W49 (dự kiến)
+
+1. **Đầu tuần:** chốt schema `match_games`, `chat_messages` (script sinh cần biết). Chatbot phát triển và test trên **dữ liệu demo W48-01** (`seed_demo.py --reset`); CI dùng mock, không cần dữ liệu lớn.
+2. **Giữa tuần:** script sinh dữ liệu xong, mọi người chạy local.
+3. **Cuối tuần:** chạy chatbot trên DB lớn, đo thời gian trả lời, `EXPLAIN ANALYZE`; xuất dump nếu cần nộp.
+
+## 7. Đầu ra dự kiến khi triển khai (W49)
 
 - Script sinh dữ liệu (seed cố định, in tiến độ từng bảng, kiểm tra ràng buộc sau khi nạp) và hướng dẫn chạy.
 - Báo cáo: số dòng/dung lượng thật từng bảng, thời gian nạp, kích thước `pg_dump -Fc`.
