@@ -47,6 +47,8 @@ Kế hoạch chi tiết được tách theo tuần để dễ cập nhật và g
 
 - [2026-W47 — 16/11/2026 đến 22/11/2026](./weeks/2026-W47.md): lập 16/11, **`0/8 DONE`, `8 TODO`**. Lộ trình Tuần 8: API/UI cấp-thu hồi trọng tài theo scope, chuẩn audit và API đọc nhật ký; đóng W03-02 (country), W04-01 (sửa đội), W05-01 (xóa giải chưa phát sinh dữ liệu); integration ma trận quyền/race, lint CI và Browser E2E.
 
+- [2026-W48 — 23/11/2026 đến 29/11/2026](./weeks/2026-W48.md): lập 23/11, **`0/8 DONE`, `8 TODO`**. Gộp lộ trình Tuần 9 + Tuần 10 (trừ W10-04 báo cáo cuối kỳ): seed demo/reset, migration-backup-staging, kiểm thử README, sửa lỗi ưu tiên cao, dashboard quản trị, demo script/slide, integration flow giải đấu + sửa E2E chập chờn, CI/regression report. Xong W48 thì đủ điều kiện chatbot (ADR-002) từ W49.
+
 W42 và W43 đã hoàn thành; W43 chốt `8/8 DONE` ngày 23/10. W44 (26/10–01/11) đã chốt sớm `8/8 DONE` ngày 26/10 theo yêu cầu nhóm trưởng. Đợt tiếp theo dùng tên nội bộ W44(2), thực hiện 27/10–01/11 trong cùng tuần lịch W44 theo phụ thuộc trong kế hoạch. “Tuần 2/3” trong file W43/W44 là tuần triển khai thực tế của nhóm; các mục tuần 1–10 bên dưới là lộ trình theo giai đoạn, có thể được thực hiện sớm hoặc điều chỉnh qua bảng tuần lịch.
 
 ### Tiến độ đối chiếu W42 — 18/10/2026
@@ -200,6 +202,8 @@ Một đầu việc chỉ được nghiệm thu khi:
 
 ### Tuần 9 — Kiểm thử, CI và staging
 
+> Thực hiện gộp trong [W48](./weeks/2026-W48.md) (23–29/11/2026).
+
 **Mục tiêu:** tự động hóa kiểm tra và chuẩn bị demo ổn định.
 
 | ID | Công việc | Phụ trách | Review | Đầu ra | Trạng thái |
@@ -212,6 +216,8 @@ Một đầu việc chỉ được nghiệm thu khi:
 **Nghiệm thu tuần:** Pull Request mới phải chạy CI; một thành viên mới có thể dựng môi trường theo README.
 
 ### Tuần 10 — Ổn định, demo và bàn giao
+
+> Thực hiện gộp trong [W48](./weeks/2026-W48.md) (23–29/11/2026), trừ W10-04 làm cuối kỳ.
 
 **Mục tiêu:** chốt sản phẩm, tài liệu và đánh giá thành viên.
 
