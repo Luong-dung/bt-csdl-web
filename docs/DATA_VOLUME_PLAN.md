@@ -1,7 +1,7 @@
 # Kế hoạch dữ liệu quy mô lớn (dự kiến W49)
 
 - **Ngày lập:** `2026-11-23`; **người lập:** DUNG. **Trạng thái:** đề xuất, chưa triển khai.
-- **Bối cảnh:** giáo viên yêu cầu ≥ 20 bảng, có thông tin một số bảng cần cỡ **triệu dòng**. Giảng viên đã đồng ý **dùng AI để tạo đủ dữ liệu** (DUNG hỏi trực tiếp, ghi nhận 23/11). **Cần xác nhận lại với giáo viên:** bao nhiêu bảng phải đạt triệu dòng, ngưỡng tối thiểu, có cho phép dữ liệu tổng hợp (synthetic) và có phải nộp file dump không.
+- **Bối cảnh:** giáo viên yêu cầu ≥ 20 bảng, có thông tin một số bảng cần cỡ **triệu dòng**. Có thông tin giảng viên gợi ý dùng AI để tạo đủ dữ liệu, nhưng **chưa hỏi lại và chưa được xác nhận chính thức** — cần hỏi cùng các câu dưới đây trước khi triển khai. **Cần xác nhận lại với giáo viên:** bao nhiêu bảng phải đạt triệu dòng, ngưỡng tối thiểu, có cho phép dữ liệu tổng hợp (synthetic) và có phải nộp file dump không.
 - **Liên quan:** [W48](./weeks/2026-W48.md) (W48-04 làm `permissions`/`tournament_standings` có dữ liệu, thêm `role_permissions`), [ADR-002 chatbot](./ADR/002-chatbot-tra-cuu.md) (W49).
 
 ## 1. Nguyên tắc
