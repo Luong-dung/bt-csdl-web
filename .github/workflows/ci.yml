@@ -127,7 +127,7 @@ jobs:
           python -c "import os, psycopg2; connection = psycopg2.connect(host=os.environ['DB_HOST'], port=os.environ['DB_PORT'], dbname='postgres', user=os.environ['DB_USER'], password=os.environ['DB_PASSWORD']); connection.autocommit = True; connection.cursor().execute('CREATE DATABASE ' + os.environ['E2E_DB_NAME']); connection.close()"
       - name: Migrate and seed demo accounts
         working-directory: backend
-        run: python seed_demo.py --database "$E2E_DB_NAME" --migrate
+        run: python seed_demo.py --database "$E2E_DB_NAME" --migrate --base-only
       - name: Run browser tests
         shell: bash
         run: |
