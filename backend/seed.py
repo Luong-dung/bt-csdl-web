@@ -8,8 +8,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from config.database import SessionLocal
+from core.permissions import PERMISSIONS, ROLE_PERMISSIONS
 from modules.catalog.models import CompetitionArea, Country, Game, Publisher
-from modules.identity.models import Role
+from modules.identity.models import Permission, Role, role_permissions
 
 
 ROLE_NAMES = ("ADMIN", "ORGANIZER", "REFEREE", "TEAM_MANAGER", "PLAYER", "VIEWER")
@@ -73,11 +74,29 @@ AREA_COUNTRIES = {
 
 def seed_reference_data(db: Session) -> dict[str, int]:
     """Insert missing records using natural keys, without fixed primary keys."""
-    added = {"roles": 0, "publishers": 0, "games": 0, "competition_areas": 0, "countries": 0}
+    added = {"roles": 0, "permissions": 0, "role_permissions": 0,
+             "publishers": 0, "games": 0, "competition_areas": 0, "countries": 0}
     for name in ROLE_NAMES:
         if db.scalar(select(Role).where(Role.role_name == name)) is None:
             db.add(Role(role_name=name))
             added["roles"] += 1
+    db.flush()
+
+    # Default grants are written only together with a newly created permission, so a grant an
+    # operator removed on purpose is not restored by re-running the seed.
+    role_ids = dict(db.execute(select(Role.role_name, Role.role_id)).all())
+    for permission_name, description in PERMISSIONS:
+        if db.scalar(select(Permission).where(Permission.permission_name == permission_name)) is not None:
+            continue
+        permission = Permission(permission_name=permission_name, description=description)
+        db.add(permission)
+        db.flush()
+        added["permissions"] += 1
+        for role_name, granted in ROLE_PERMISSIONS.items():
+            if permission_name in granted and role_name in role_ids:
+                db.execute(role_permissions.insert().values(
+                    role_id=role_ids[role_name], permission_id=permission.permission_id))
+                added["role_permissions"] += 1
 
     publishers = {}
     for publisher_name, name, slug in GAMES:

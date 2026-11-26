@@ -13,7 +13,8 @@ from core.audit import record_audit
 from core.brackets import get_bracket, tournament_completion_error
 from core.rosters import approved_teams_without_player
 from core.tournaments import get_managed_tournament, get_tournament_or_404, tournament_delete_blocker
-from middleware.auth import get_current_user, require_role
+from core.permissions import TOURNAMENT_CREATE
+from middleware.auth import get_current_user, require_permission
 from modules.catalog.models import CompetitionArea, Game
 from modules.identity.models import User
 from modules.teams.models import Team
@@ -162,7 +163,7 @@ def list_tournaments(
 @router.post("", response_model=TournamentRead, status_code=status.HTTP_201_CREATED)
 def create_tournament(
     data: TournamentCreate,
-    user: User = Depends(require_role("ADMIN", "ORGANIZER")),
+    user: User = Depends(require_permission(TOURNAMENT_CREATE)),
     db: Session = Depends(get_db),
 ):
     ensure_references(db, data.game_id, data.area_id)

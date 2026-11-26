@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from core.audit import record_audit
 from core.validation import ResourceId
-from middleware.auth import can_manage_organization, get_current_user, require_role
+from core.permissions import ORGANIZATION_CREATE
+from middleware.auth import can_manage_organization, get_current_user, require_permission
 from modules.identity.models import User
 from modules.teams.models import Organization, Team
 from routes.team import TeamRead
@@ -99,7 +100,7 @@ def organization_capabilities(organization_id: ResourceId, user: User = Depends(
 
 
 @router.post("", response_model=OrganizationRead, status_code=status.HTTP_201_CREATED,
-             dependencies=[Depends(require_role("ADMIN"))])
+             dependencies=[Depends(require_permission(ORGANIZATION_CREATE))])
 def create_organization(data: OrganizationInput, user: User = Depends(get_current_user),
                         db: Session = Depends(get_db)):
     ensure_name_free(db, data.name)
