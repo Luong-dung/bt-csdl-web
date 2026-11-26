@@ -35,7 +35,7 @@ try {
 .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_demo --reset
 ```
 
-`--reset` **xóa toàn bộ schema `public` của database demo** (`DROP SCHEMA public CASCADE`), tạo lại, migrate tới `head` rồi seed; chỉ chạy được với PostgreSQL và tên database đuôi `_demo`/`_test`, khác `DB_NAME` trong `.env`. Đo local 23/11/2026: khoảng 8–9 giây. `--base-only` chỉ tạo phần W43 (dùng cho Browser E2E/CI).
+`--reset` **xóa toàn bộ schema `public` của database demo** (`DROP SCHEMA public CASCADE`), tạo lại, migrate tới `head` rồi seed; chỉ chạy được với PostgreSQL và tên database đuôi `_demo`/`_test`, khác `DB_NAME` trong `.env`. Đo local 23/11/2026: khoảng 8–9 giây. `--base-only` chỉ tạo phần W43 (dùng cho Browser E2E/CI). Sau khi tạo lại, schema `public` được cấp `USAGE` cho mọi role (giống mặc định PostgreSQL 15+), nhưng bảng thuộc role đã chạy seed — **server demo phải kết nối bằng cùng role DB đó**. Lỗi (dữ liệu dở dang, tag bị chiếm…) in một dòng `Demo seed failed, nothing was written: …`, mã thoát khác 0 và không ghi gì.
 
 `--migrate` chạy Alembic tới `head` bằng connection trỏ vào đúng database chỉ định. Có thể bỏ tùy chọn này nếu database đó đã migrate. Migration và seed chạy trong một transaction PostgreSQL; lỗi sẽ rollback. Không ghi mật khẩu vào source, log hay tài liệu.
 
@@ -60,12 +60,14 @@ Bổ sung từ W48-01:
 
 | Giải (người tạo `demo_organizer`, VALORANT) | Trạng thái | Dùng để demo |
 |---|---|---|
-| `W48 Demo Cup` | COMPLETED | 4 đội, roster khóa, bracket đã đấu xong, standings FINAL, nhật ký audit đầy đủ |
-| `W48 Demo Open` | ONGOING | Bracket 4 đội, đã xong 1 bán kết; còn bán kết 2 và chung kết để nhập kết quả trực tiếp (organizer hoặc `demo_referee`), thử thu hồi trọng tài |
+| `W48 Demo Cup` | COMPLETED | Lịch 09:00/11:00/15:00 ngày seed (giờ VN); 4 đội, roster khóa, bracket đã đấu xong, standings FINAL, nhật ký audit đầy đủ |
+| `W48 Demo Open` | ONGOING | Bracket 4 đội, đã xong 1 bán kết (10:00 hôm seed); bán kết 2 lúc 19:00 và chung kết 21:00 **ngày hôm sau** (giờ VN); còn bán kết 2 và chung kết để nhập kết quả trực tiếp (organizer hoặc `demo_referee`), thử thu hồi trọng tài |
 | `W48 Demo League` | UPCOMING (+14 ngày) | 1 đơn APPROVED (DEMO43), 2 đơn PENDING (DEMO48B/C) để duyệt/từ chối, khóa roster |
 | `W48 Demo Draft` | UPCOMING (+30 ngày) | Chưa có dữ liệu thi đấu, xóa được (W47-04) |
 
-Mọi thao tác nghiệp vụ của kịch bản W48 (tạo đội, đăng ký, duyệt, roster, khóa, stage, bracket, cấp trọng tài, kết quả) đi qua API thật trong cùng transaction nên có audit đúng actor; ngày bắt đầu tính theo ngày chạy seed.
+Mọi thao tác nghiệp vụ của kịch bản W48 (tạo đội, đăng ký, duyệt, roster, khóa, stage, bracket, đặt lịch trận, cấp trọng tài, kết quả) đi qua API thật trong cùng transaction nên có audit đúng actor; ngày bắt đầu và lịch trận tính theo ngày chạy seed.
+
+**Lưu ý khi demo nhật ký audit:** toàn bộ seed chạy trong **một transaction PostgreSQL** (để lỗi thì rollback hết), mà `created_at` của audit lấy `now()` = thời điểm bắt đầu transaction, nên mọi dòng audit của lượt seed **cùng một giờ**; thứ tự vẫn đúng theo `log_id`. Các thao tác làm trực tiếp lúc demo sẽ có giờ riêng. Không sửa giờ audit bằng SQL vì đó là dữ liệu giả về lịch sử.
 
 Tài khoản mới dùng mật khẩu nhập tại bước 2; email có dạng `<username>@example.com`. Dữ liệu kèm theo: dữ liệu nền từ `seed.py`, tổ chức `W43 Demo Organization`, đội VALORANT `W43 Demo Team` với tag `DEMO43` và hai membership ACTIVE. Phần giải/roster/match/trọng tài do kịch bản W48 ở trên tạo.
 

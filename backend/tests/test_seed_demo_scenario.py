@@ -11,7 +11,7 @@ from modules.identity.models import AuditLog, RoleAssignment, User
 from modules.teams.models import Team
 from modules.tournaments.models import Match, Tournament, TournamentBracket, TournamentRegistration
 from seed import seed_reference_data
-from seed_demo import seed_demo_data
+from seed_demo import run_seed, seed_demo_data
 from seed_demo_scenario import CUP, DRAFT, LEAGUE, OPEN, ScenarioError, seed_demo_scenario
 
 PASSWORD = "Demo-test-password-2026"
@@ -60,6 +60,11 @@ def test_scenario_covers_every_tournament_state_through_the_api(connection):
             return db.scalar(select(func.count()).select_from(Match).where(
                 Match.tournament_id == tid, Match.status == state))
         assert (matches(cup, "COMPLETED"), matches(open_, "COMPLETED"), matches(open_, "PENDING")) == (3, 1, 2)
+        # Every bracket match has a schedule (set via PATCH while PENDING); Open's remaining ones are tomorrow.
+        assert db.scalar(select(func.count()).select_from(Match).where(Match.scheduled_at.is_(None))) == 0
+        pending = db.scalars(select(Match.scheduled_at).where(Match.tournament_id == open_, Match.status == "PENDING")).all()
+        assert len(pending) == 2 and all(at.date() >= date.today() for at in pending)
+        assert db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == "MATCH_UPDATED")) == 6
         regs = dict(db.execute(select(TournamentRegistration.status, func.count()).where(
             TournamentRegistration.tournament_id == status[LEAGUE].tournament_id).group_by(
             TournamentRegistration.status)).all())
@@ -108,3 +113,21 @@ def test_future_dates_are_relative_to_today(connection):
     with session(connection) as db:
         starts = dict(db.execute(select(Tournament.name, Tournament.start_date)).all())
         assert str(starts[LEAGUE]) == "2027-01-24" and str(starts[DRAFT]) == "2027-02-09"
+
+
+def test_run_seed_base_only_skips_scenario(connection):
+    with session(connection) as db:
+        seed_reference_data(db)
+        db.commit()
+    added = run_seed(connection, PASSWORD, base_only=True)
+    assert added["users"] == 6 and not any(k.startswith("scenario_") for k in added)
+    with session(connection) as db:
+        assert db.scalar(select(func.count()).select_from(Tournament)) == 0
+    assert run_seed(connection, PASSWORD)["scenario_tournaments"] == 4
+
+
+def test_reset_is_refused_outside_postgresql(request, connection):
+    if request.config.getoption("--postgres"):
+        pytest.skip("Never DROP SCHEMA public inside the shared PostgreSQL test database")
+    with pytest.raises(ValueError, match="only supports PostgreSQL"):
+        run_seed(connection, PASSWORD, reset=True)

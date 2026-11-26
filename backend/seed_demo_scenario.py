@@ -3,7 +3,7 @@
 Everything runs on one caller-owned connection; each request uses a SAVEPOINT, so a
 failure anywhere is rolled back by the caller together with the base demo seed.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -34,6 +34,7 @@ SCENARIO_TEAMS = (
     ("DEMO48C", "W48 Demo Charlie", "demo_manager_c", "demo_player_c"),
     ("DEMO48D", "W48 Demo Delta", "demo_manager_d", "demo_player_d"),
 )
+VN = timezone(timedelta(hours=7))
 CUP, OPEN, LEAGUE, DRAFT = ("W48 Demo Cup", "W48 Demo Open", "W48 Demo League", "W48 Demo Draft")
 TOURNAMENT_NAMES = (CUP, OPEN, LEAGUE, DRAFT)
 
@@ -86,15 +87,19 @@ def _ensure_users(db: Session, password: str) -> int:
 
 
 def _run_bracket(api: _Api, tid: int, stage_id: int, team_ids: list[int], results: int,
-                 referee_for_last: bool = False) -> None:
-    """Create a bracket, start the tournament and play the first `results` matches in order."""
+                 schedule: list[datetime], referee_for_last: bool = False) -> None:
+    """Create a bracket, schedule every match (PENDING only, via PATCH), start the tournament
+    and play the first `results` matches in order."""
     preview = api("POST", f"/tournaments/{tid}/bracket/preview", "demo_organizer",
                   {"stage_id": stage_id, "team_ids": team_ids})
     bracket = api("POST", f"/tournaments/{tid}/bracket", "demo_organizer",
                   {"stage_id": stage_id, "team_ids": team_ids, "preview_token": preview["preview_token"]},
                   expect=201)
-    api("POST", f"/tournaments/{tid}/status", "demo_organizer", {"status": "ONGOING"})
     order = sorted(bracket["matches"], key=lambda n: (n["round_index"], n["position"]))
+    for node, at in zip(order, schedule, strict=True):
+        api("PATCH", f"/tournaments/{tid}/matches/{node['match']['match_id']}", "demo_organizer",
+            {"scheduled_at": at.isoformat()})
+    api("POST", f"/tournaments/{tid}/status", "demo_organizer", {"status": "ONGOING"})
     for index, node in enumerate(order[:results]):
         mid = node["match"]["match_id"]
         actor = "demo_referee" if referee_for_last and index == results - 1 else "demo_organizer"
@@ -159,20 +164,26 @@ def seed_demo_scenario(connection: Connection, password: str, today: date | None
                     {"name": "Playoffs", "sequence_order": 1}, expect=201)
         return stage["stage_id"], team_ids
 
+    def at(day: date, hour: int) -> datetime:
+        return datetime.combine(day, time(hour), VN)
+
+    tomorrow = today + timedelta(days=1)
     all_managers = ("demo_manager", "demo_manager_b", "demo_manager_c", "demo_manager_d")
 
     # 1) Completed cup: full bracket, final entered by the granted referee, then COMPLETED.
     cup = tournament(CUP, today)
     stage, ids = ready(cup, all_managers)
     api("POST", f"/tournaments/{cup}/referees", "demo_organizer", {"user_id": users["demo_referee"]}, expect=201)
-    _run_bracket(api, cup, stage, ids, results=3, referee_for_last=True)
+    _run_bracket(api, cup, stage, ids, results=3,
+                 schedule=[at(today, 9), at(today, 11), at(today, 15)], referee_for_last=True)
     api("POST", f"/tournaments/{cup}/status", "demo_organizer", {"status": "COMPLETED"})
 
     # 2) Ongoing open: one semifinal played, the rest left for the live demo; referee active.
     open_ = tournament(OPEN, today)
     stage, ids = ready(open_, all_managers)
     api("POST", f"/tournaments/{open_}/referees", "demo_organizer", {"user_id": users["demo_referee"]}, expect=201)
-    _run_bracket(api, open_, stage, ids, results=1)
+    _run_bracket(api, open_, stage, ids, results=1,
+                 schedule=[at(today, 10), at(tomorrow, 19), at(tomorrow, 21)])
 
     # 3) Upcoming league: one approved team, the rest pending for the approval demo.
     league = tournament(LEAGUE, today + timedelta(days=14))
