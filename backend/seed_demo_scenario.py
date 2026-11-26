@@ -109,10 +109,16 @@ def _run_bracket(api: _Api, tid: int, stage_id: int, team_ids: list[int], result
             {"score_team1": score[0], "score_team2": score[1]})
 
 
-def seed_demo_scenario(connection: Connection, password: str, today: date | None = None) -> dict[str, int]:
+def seed_demo_scenario(connection: Connection, password: str, today: date | None = None,
+                       now: datetime | None = None) -> dict[str, int]:
     """Requires the base seed (`seed_demo_data`) on the same connection. Idempotent:
-    if all scenario tournaments exist nothing is written; a partial scenario is refused."""
-    today = today or date.today()
+    if all scenario tournaments exist nothing is written; a partial scenario is refused.
+
+    Played matches are scheduled a few hours before `now` (never before today 00:00 VN, since a
+    tournament cannot start in the past); unplayed ones tomorrow evening."""
+    if now is None:
+        now = datetime.combine(today, time(12), VN) if today else datetime.now(VN)
+    today = today or now.astimezone(VN).date()
     with Session(bind=connection, autoflush=False, join_transaction_mode="create_savepoint") as db:
         existing = set(db.scalars(select(Tournament.name).where(Tournament.name.in_(TOURNAMENT_NAMES))))
         if existing == set(TOURNAMENT_NAMES):
@@ -167,6 +173,11 @@ def seed_demo_scenario(connection: Connection, password: str, today: date | None
     def at(day: date, hour: int) -> datetime:
         return datetime.combine(day, time(hour), VN)
 
+    hour_floor = now.astimezone(VN).replace(minute=0, second=0, microsecond=0)
+
+    def played(hours_ago: int) -> datetime:
+        return max(hour_floor - timedelta(hours=hours_ago), at(today, 0))
+
     tomorrow = today + timedelta(days=1)
     all_managers = ("demo_manager", "demo_manager_b", "demo_manager_c", "demo_manager_d")
 
@@ -175,7 +186,7 @@ def seed_demo_scenario(connection: Connection, password: str, today: date | None
     stage, ids = ready(cup, all_managers)
     api("POST", f"/tournaments/{cup}/referees", "demo_organizer", {"user_id": users["demo_referee"]}, expect=201)
     _run_bracket(api, cup, stage, ids, results=3,
-                 schedule=[at(today, 9), at(today, 11), at(today, 15)], referee_for_last=True)
+                 schedule=[played(3), played(2), played(1)], referee_for_last=True)
     api("POST", f"/tournaments/{cup}/status", "demo_organizer", {"status": "COMPLETED"})
 
     # 2) Ongoing open: one semifinal played, the rest left for the live demo; referee active.
@@ -183,7 +194,7 @@ def seed_demo_scenario(connection: Connection, password: str, today: date | None
     stage, ids = ready(open_, all_managers)
     api("POST", f"/tournaments/{open_}/referees", "demo_organizer", {"user_id": users["demo_referee"]}, expect=201)
     _run_bracket(api, open_, stage, ids, results=1,
-                 schedule=[at(today, 10), at(tomorrow, 19), at(tomorrow, 21)])
+                 schedule=[played(1), at(tomorrow, 19), at(tomorrow, 21)])
 
     # 3) Upcoming league: one approved team, the rest pending for the approval demo.
     league = tournament(LEAGUE, today + timedelta(days=14))

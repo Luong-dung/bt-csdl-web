@@ -1,5 +1,5 @@
 """W48-01: full demo scenario seeded through the real API (SQLite by default, PostgreSQL with --postgres)."""
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine, event, func, select
@@ -39,12 +39,12 @@ def session(connection):
     return Session(bind=connection, autoflush=False, join_transaction_mode="create_savepoint")
 
 
-def seed_all(connection, today=None):
+def seed_all(connection, today=None, now=None):
     with session(connection) as db:
         seed_reference_data(db)
         seed_demo_data(db, PASSWORD)
         db.commit()
-    return seed_demo_scenario(connection, PASSWORD, today)
+    return seed_demo_scenario(connection, PASSWORD, today, now)
 
 
 def test_scenario_covers_every_tournament_state_through_the_api(connection):
@@ -62,8 +62,6 @@ def test_scenario_covers_every_tournament_state_through_the_api(connection):
         assert (matches(cup, "COMPLETED"), matches(open_, "COMPLETED"), matches(open_, "PENDING")) == (3, 1, 2)
         # Every bracket match has a schedule (set via PATCH while PENDING); Open's remaining ones are tomorrow.
         assert db.scalar(select(func.count()).select_from(Match).where(Match.scheduled_at.is_(None))) == 0
-        pending = db.scalars(select(Match.scheduled_at).where(Match.tournament_id == open_, Match.status == "PENDING")).all()
-        assert len(pending) == 2 and all(at.date() >= date.today() for at in pending)
         assert db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.action == "MATCH_UPDATED")) == 6
         regs = dict(db.execute(select(TournamentRegistration.status, func.count()).where(
             TournamentRegistration.tournament_id == status[LEAGUE].tournament_id).group_by(
@@ -131,3 +129,28 @@ def test_reset_is_refused_outside_postgresql(request, connection):
         pytest.skip("Never DROP SCHEMA public inside the shared PostgreSQL test database")
     with pytest.raises(ValueError, match="only supports PostgreSQL"):
         run_seed(connection, PASSWORD, reset=True)
+
+
+VN = timezone(timedelta(hours=7))
+
+
+def as_vn(value):
+    # SQLite returns naive UTC, PostgreSQL returns aware datetimes.
+    return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).astimezone(VN)
+
+
+@pytest.mark.parametrize("now, played", [
+    (datetime(2027, 1, 10, 8, 30, tzinfo=VN), ["05:00", "06:00", "07:00", "07:00"]),
+    # Seeding just after midnight: played matches clamp to today 00:00, never before the start date.
+    (datetime(2027, 1, 10, 1, 15, tzinfo=VN), ["00:00", "00:00", "00:00", "00:00"]),
+])
+def test_played_matches_are_in_the_past_and_pending_ones_tomorrow(connection, now, played):
+    seed_all(connection, today=date(2027, 1, 10), now=now)
+    with session(connection) as db:
+        rows = db.execute(select(Tournament.name, Match.status, Match.scheduled_at).join(
+            Tournament, Tournament.tournament_id == Match.tournament_id).order_by(Match.match_id)).all()
+    done = [as_vn(at) for _, status, at in rows if status == "COMPLETED"]
+    assert [d.strftime("%H:%M") for d in done] == played
+    assert all(d.date() == date(2027, 1, 10) and d <= now for d in done)
+    pending = sorted(as_vn(at) for name, status, at in rows if status == "PENDING")
+    assert pending == [datetime(2027, 1, 11, 19, tzinfo=VN), datetime(2027, 1, 11, 21, tzinfo=VN)]
