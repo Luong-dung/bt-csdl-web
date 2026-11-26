@@ -23,7 +23,7 @@ $credential = Get-Credential -UserName 'e2e' -Message 'Test-only demo password (
 $env:DEMO_PASSWORD = $credential.GetNetworkCredential().Password
 $env:E2E_DEMO_PASSWORD = $env:DEMO_PASSWORD
 try {
-    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_w44_08_e2e_test --migrate
+    .\.venv\Scripts\python.exe seed_demo.py --database esports_tournament_w44_08_e2e_test --migrate --base-only
     if ($LASTEXITCODE -ne 0) { throw 'Demo seed failed' }
 } finally {
     Remove-Item Env:DEMO_PASSWORD -ErrorAction SilentlyContinue
