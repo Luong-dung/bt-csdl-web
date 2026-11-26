@@ -235,3 +235,11 @@ CREATE TABLE bracket_matches (
     CONSTRAINT ck_bracket_match_position CHECK (round_count BETWEEN 1 AND 6 AND round_index BETWEEN 1 AND round_count AND position BETWEEN 1 AND (1 << (round_count-round_index))),
     CONSTRAINT ck_bracket_match_destination CHECK ((round_index = round_count AND next_round IS NULL AND next_position IS NULL AND next_slot IS NULL) OR (round_index < round_count AND next_round IS NOT NULL AND next_position IS NOT NULL AND next_slot IS NOT NULL AND next_round = round_index+1 AND next_position = (position+1)/2 AND next_slot = 1+((position-1)%2)))
 );
+
+-- Redundant single-column indexes on primary keys, created by the initial migration (model index=True).
+-- Mirrored here so the file matches `alembic upgrade head`; candidate for a cleanup migration.
+CREATE INDEX ix_roles_role_id ON roles (role_id);
+CREATE INDEX ix_permissions_permission_id ON permissions (permission_id);
+CREATE INDEX ix_users_user_id ON users (user_id);
+CREATE INDEX ix_role_assignments_assignment_id ON role_assignments (assignment_id);
+CREATE INDEX ix_audit_logs_log_id ON audit_logs (log_id);
