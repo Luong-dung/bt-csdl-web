@@ -1,9 +1,9 @@
-CREATE EXTENSION IF NOT EXISTS citext;
+-- Mirror of the schema produced by `alembic upgrade head` (source of truth: backend/alembic).
+-- Kept in sync by tests/test_schema_sql_sync.py (PostgreSQL); edit migrations first, then this file.
 
 CREATE TABLE roles (
     role_id SERIAL PRIMARY KEY,
-    role_name VARCHAR(50) NOT NULL UNIQUE,
-    description VARCHAR(255)
+    role_name VARCHAR(50) NOT NULL UNIQUE
 );
 CREATE TABLE permissions (
     permission_id SERIAL PRIMARY KEY,
@@ -20,18 +20,18 @@ CREATE INDEX ix_role_permissions_permission_id ON role_permissions(permission_id
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE RESTRICT,
-    username CITEXT NOT NULL UNIQUE,
-    email CITEXT NOT NULL UNIQUE,
+    username VARCHAR(50) NOT NULL UNIQUE,
+    email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    real_name VARCHAR(100) NOT NULL DEFAULT '',
+    real_name VARCHAR(100),
     avatar_url VARCHAR(255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE TABLE role_assignments (
     assignment_id SERIAL PRIMARY KEY,
     user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
-    scope_type VARCHAR(30) NOT NULL DEFAULT 'GLOBAL',
+    scope_type VARCHAR(30) NOT NULL,
     scope_id INT,
     -- W47-01: grant/revoke history; revoked rows stay, only revoked_at IS NULL grants anything.
     granted_by INT CONSTRAINT fk_role_assignments_granted_by REFERENCES users(user_id) ON DELETE SET NULL,
@@ -42,12 +42,12 @@ CREATE TABLE role_assignments (
 CREATE UNIQUE INDEX uq_role_assignments_active ON role_assignments
     (user_id, role_id, scope_type, coalesce(scope_id, 0)) WHERE revoked_at IS NULL;
 CREATE TABLE audit_logs (
-    log_id BIGSERIAL PRIMARY KEY,
+    log_id SERIAL PRIMARY KEY,
     user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
     action VARCHAR(100) NOT NULL,
     resource VARCHAR(100) NOT NULL,
-    details JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    details JSON NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now(),
     -- W47-02: derived from details by core.audit.record_audit; no FK so history survives deletes.
     tournament_id INT,
     resource_id INT
@@ -85,22 +85,22 @@ CREATE TABLE organizations (
 );
 CREATE TABLE teams (
     team_id SERIAL PRIMARY KEY,
-    organization_id INT REFERENCES organizations(organization_id) ON DELETE SET NULL,
+    organization_id INT REFERENCES organizations(organization_id),
     game_id INT NOT NULL REFERENCES games(game_id),
     name VARCHAR(100) NOT NULL,
     tag VARCHAR(10) NOT NULL UNIQUE,
     logo_url VARCHAR(255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL
 );
 CREATE TABLE team_memberships (
     membership_id SERIAL PRIMARY KEY,
     team_id INT NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    role_in_team VARCHAR(30) NOT NULL DEFAULT 'PLAYER',
-    joined_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    role_in_team VARCHAR(30) NOT NULL,
+    joined_date DATE NOT NULL,
     left_date DATE,
-    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
-    CHECK (status IN ('ACTIVE', 'TRANSFERRED', 'TERMINATED', 'RETIRED'))
+    status VARCHAR(20) NOT NULL,
+    UNIQUE (team_id, user_id, joined_date)
 );
 CREATE UNIQUE INDEX uq_one_active_team_per_user ON team_memberships(user_id) WHERE status = 'ACTIVE';
 CREATE TABLE tournaments (
@@ -108,20 +108,41 @@ CREATE TABLE tournaments (
     game_id INT NOT NULL REFERENCES games(game_id),
     area_id INT REFERENCES competition_areas(area_id),
     name VARCHAR(150) NOT NULL,
-    format VARCHAR(30) NOT NULL DEFAULT 'SINGLE_ELIM',
+    format VARCHAR(30) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE,
-    status VARCHAR(20) NOT NULL DEFAULT 'UPCOMING',
+    status VARCHAR(20) NOT NULL,
     description TEXT,
     created_by INT REFERENCES users(user_id) ON DELETE SET NULL,
     roster_locked_at TIMESTAMPTZ,
     roster_locked_by INT CONSTRAINT fk_tournaments_roster_locked_by REFERENCES users(user_id) ON DELETE SET NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL,
     CHECK (format IN ('SINGLE_ELIM', 'DOUBLE_ELIM', 'ROUND_ROBIN')),
     CONSTRAINT ck_tournaments_status CHECK (status IN ('UPCOMING', 'ONGOING', 'COMPLETED', 'CANCELLED')),
     CONSTRAINT ck_tournaments_dates CHECK (end_date IS NULL OR end_date >= start_date),
     CONSTRAINT ck_tournaments_roster_lock CHECK (roster_locked_at IS NOT NULL OR roster_locked_by IS NULL)
 );
+CREATE TABLE tournament_registrations (
+    registration_id SERIAL PRIMARY KEY,
+    tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
+    team_id INT NOT NULL REFERENCES teams(team_id) ON DELETE RESTRICT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    submitted_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+    submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    reviewed_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMPTZ,
+    rejection_reason VARCHAR(500),
+    cancelled_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+    cancelled_at TIMESTAMPTZ,
+    CONSTRAINT uq_registration_tournament_team UNIQUE (tournament_id, team_id),
+    CONSTRAINT ck_registration_status CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED')),
+    CONSTRAINT ck_registration_reason CHECK (status IN ('REJECTED', 'CANCELLED') OR rejection_reason IS NULL),
+    CONSTRAINT ck_registration_timestamps CHECK (
+        (status = 'PENDING' AND reviewed_at IS NULL AND cancelled_at IS NULL)
+        OR (status IN ('APPROVED', 'REJECTED') AND reviewed_at IS NOT NULL AND cancelled_at IS NULL)
+        OR (status = 'CANCELLED' AND cancelled_at IS NOT NULL))
+);
+CREATE INDEX ix_tournament_registrations_team_id ON tournament_registrations (team_id);
 CREATE TABLE stages (
     stage_id SERIAL PRIMARY KEY,
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
@@ -137,13 +158,13 @@ CREATE TABLE matches (
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
     stage_id INT NOT NULL CONSTRAINT fk_matches_stage REFERENCES stages(stage_id) ON DELETE RESTRICT,
     round_no INT NOT NULL,
-    team1_id INT REFERENCES teams(team_id) ON DELETE SET NULL,
-    team2_id INT REFERENCES teams(team_id) ON DELETE SET NULL,
-    winner_id INT REFERENCES teams(team_id) ON DELETE SET NULL,
-    score_team1 INT NOT NULL DEFAULT 0,
-    score_team2 INT NOT NULL DEFAULT 0,
-    next_match_id INT REFERENCES matches(match_id) ON DELETE SET NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    team1_id INT REFERENCES teams(team_id),
+    team2_id INT REFERENCES teams(team_id),
+    winner_id INT REFERENCES teams(team_id),
+    score_team1 INT NOT NULL,
+    score_team2 INT NOT NULL,
+    next_match_id INT REFERENCES matches(match_id),
+    status VARCHAR(20) NOT NULL,
     scheduled_at TIMESTAMPTZ,
     CONSTRAINT fk_matches_stage_tournament FOREIGN KEY (stage_id, tournament_id)
         REFERENCES stages(stage_id, tournament_id) ON DELETE RESTRICT,
@@ -163,7 +184,7 @@ CREATE TABLE tournament_rosters (
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
     team_id INT NOT NULL CONSTRAINT fk_rosters_team REFERENCES teams(team_id) ON DELETE RESTRICT,
     user_id INT NOT NULL CONSTRAINT fk_rosters_user REFERENCES users(user_id) ON DELETE RESTRICT,
-    role_in_team VARCHAR(30) NOT NULL DEFAULT 'PLAYER',
+    role_in_team VARCHAR(30) NOT NULL,
     display_name VARCHAR(100),
     CONSTRAINT uq_rosters_tournament_user UNIQUE (tournament_id, user_id),
     CONSTRAINT ck_rosters_role CHECK (role_in_team IN ('PLAYER', 'SUBSTITUTE')),
@@ -174,11 +195,11 @@ CREATE TABLE tournament_standings (
     tournament_id INT NOT NULL REFERENCES tournaments(tournament_id) ON DELETE CASCADE,
     team_id INT NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
     final_rank INT NOT NULL,
-    matches_played INT NOT NULL DEFAULT 0,
-    wins INT NOT NULL DEFAULT 0,
-    losses INT NOT NULL DEFAULT 0,
-    points INT NOT NULL DEFAULT 0,
-    prize_money NUMERIC(12,2) NOT NULL DEFAULT 0,
+    matches_played INT NOT NULL,
+    wins INT NOT NULL,
+    losses INT NOT NULL,
+    points INT NOT NULL,
+    prize_money NUMERIC(12,2) NOT NULL,
     PRIMARY KEY (tournament_id, team_id)
 );
 
@@ -221,3 +242,11 @@ CREATE TABLE bracket_matches (
     CONSTRAINT ck_bracket_match_position CHECK (round_count BETWEEN 1 AND 6 AND round_index BETWEEN 1 AND round_count AND position BETWEEN 1 AND (1 << (round_count-round_index))),
     CONSTRAINT ck_bracket_match_destination CHECK ((round_index = round_count AND next_round IS NULL AND next_position IS NULL AND next_slot IS NULL) OR (round_index < round_count AND next_round IS NOT NULL AND next_position IS NOT NULL AND next_slot IS NOT NULL AND next_round = round_index+1 AND next_position = (position+1)/2 AND next_slot = 1+((position-1)%2)))
 );
+
+-- Redundant single-column indexes on primary keys, created by the initial migration (model index=True).
+-- Mirrored here so the file matches `alembic upgrade head`; candidate for a cleanup migration.
+CREATE INDEX ix_roles_role_id ON roles (role_id);
+CREATE INDEX ix_permissions_permission_id ON permissions (permission_id);
+CREATE INDEX ix_users_user_id ON users (user_id);
+CREATE INDEX ix_role_assignments_assignment_id ON role_assignments (assignment_id);
+CREATE INDEX ix_audit_logs_log_id ON audit_logs (log_id);

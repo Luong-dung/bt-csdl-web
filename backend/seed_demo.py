@@ -6,7 +6,7 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,7 @@ from modules.catalog.models import Game
 from modules.identity.models import Role, User
 from modules.teams.models import Organization, Team, TeamMembership
 from seed import seed_reference_data
+from seed_demo_scenario import SCENARIO_ACCOUNTS, TOURNAMENT_NAMES, seed_demo_scenario
 
 
 ACCOUNTS = (
@@ -104,10 +105,37 @@ def demo_database_url(database: str):
     return make_url(settings.DATABASE_URL).set(database=database)
 
 
+def run_seed(connection, password: str, *, migrate: bool = False, reset: bool = False,
+             base_only: bool = False) -> dict[str, int]:
+    """Everything happens on the caller's transaction; any error rolls the whole run back."""
+    if reset:
+        if connection.dialect.name != "postgresql":
+            raise ValueError("--reset only supports PostgreSQL")
+        connection.execute(text("DROP SCHEMA public CASCADE"))
+        connection.execute(text("CREATE SCHEMA public"))
+        # Restore the PostgreSQL 15+ default (usage for everyone); tables stay owned by the seeding
+        # role, so the app must connect with that same role (see docs/DEMO_DATA.md).
+        connection.execute(text("GRANT USAGE ON SCHEMA public TO PUBLIC"))
+    if migrate or reset:
+        config = Config(str(Path(__file__).parent / "alembic.ini"))
+        config.set_main_option("script_location", str(Path(__file__).parent / "alembic"))
+        config.attributes["connection"] = connection
+        command.upgrade(config, "head")
+    with Session(bind=connection, autoflush=False) as db:
+        added = seed_demo_data(db, password)
+        db.flush()
+    if not base_only:
+        added.update({"scenario_" + k: v for k, v in seed_demo_scenario(connection, password).items()})
+    return added
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database", required=True, help="Separate existing PostgreSQL database ending in _demo/_test")
     parser.add_argument("--migrate", action="store_true", help="Run Alembic upgrade head on the demo target before seeding")
+    parser.add_argument("--reset", action="store_true",
+                        help="DROP and recreate schema public of the demo target, then migrate and seed (implies --migrate)")
+    parser.add_argument("--base-only", action="store_true", help="Only the W43 accounts/team, skip the W48 scenario")
     args = parser.parse_args()
     try:
         url = demo_database_url(args.database)
@@ -119,19 +147,18 @@ def main() -> None:
     engine = create_engine(url, connect_args={"connect_timeout": 5})
     try:
         with engine.begin() as connection:
-            if args.migrate:
-                config = Config(str(Path(__file__).parent / "alembic.ini"))
-                config.set_main_option("script_location", str(Path(__file__).parent / "alembic"))
-                config.attributes["connection"] = connection
-                command.upgrade(config, "head")
-            with Session(bind=connection, autoflush=False) as db:
-                added = seed_demo_data(db, password)
-                db.flush()
-        print("Demo seed completed in " + args.database + ": " + ", ".join(f"{k} +{v}" for k, v in added.items()))
-        print("Accounts: " + ", ".join(username for username, _ in ACCOUNTS))
-        print("Existing account passwords were preserved; DEMO_PASSWORD applies only to newly created accounts.")
+            added = run_seed(connection, password, migrate=args.migrate, reset=args.reset,
+                             base_only=args.base_only)
+    except ValueError as exc:  # includes ScenarioError; the transaction is already rolled back
+        raise SystemExit(f"Demo seed failed, nothing was written: {exc}") from None
     finally:
         engine.dispose()
+    print("Demo seed completed in " + args.database + ": " + ", ".join(f"{k} +{v}" for k, v in added.items()))
+    accounts = [u for u, _ in ACCOUNTS] + ([] if args.base_only else [u for u, _ in SCENARIO_ACCOUNTS])
+    print("Accounts: " + ", ".join(accounts))
+    if not args.base_only:
+        print("Tournaments: " + ", ".join(TOURNAMENT_NAMES))
+    print("Existing account passwords were preserved; DEMO_PASSWORD applies only to newly created accounts.")
 
 
 if __name__ == "__main__":
