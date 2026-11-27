@@ -245,3 +245,38 @@ def test_database_rejects_invalid_status_and_dates(session_factory, changes):
     with pytest.raises(IntegrityError):
         with session_factory.begin() as db:
             db.add(Tournament(**data))
+
+
+def tournament_updates(session_factory, tournament_id):
+    from sqlalchemy import func, select
+
+    from modules.identity.models import AuditLog
+    with session_factory() as db:
+        return db.scalar(select(func.count()).select_from(AuditLog).where(
+            AuditLog.action == "TOURNAMENT_UPDATED", AuditLog.tournament_id == tournament_id))
+
+
+def test_unchanged_values_are_not_audited(client, session_factory, tournament):
+    """W48-04 (review #33): a PATCH that changes nothing writes no audit row; only real changes are logged."""
+    tournament_id = tournament["tournament_id"]
+    path = f"{URL}/{tournament_id}"
+    same = client.patch(path, json={"name": tournament["name"], "format": tournament["format"],
+                                    "start_date": tournament["start_date"]})
+    assert same.status_code == 200 and same.json() == tournament
+    assert tournament_updates(session_factory, tournament_id) == 0
+    mixed = client.patch(path, json={"name": "Renamed cup", "format": tournament["format"]})
+    assert mixed.status_code == 200
+    from sqlalchemy import select
+
+    from modules.identity.models import AuditLog
+    with session_factory() as db:
+        [log] = db.scalars(select(AuditLog).where(AuditLog.action == "TOURNAMENT_UPDATED",
+                                                  AuditLog.tournament_id == tournament_id)).all()
+        assert log.details["before"] == {"name": tournament["name"]} and log.details["after"] == {"name": "Renamed cup"}
+    # ONGOING: re-sending an unchanged locked field (e.g. a full form) is not a forbidden edit.
+    set_status(client, tournament_id, "ONGOING")
+    resend = client.patch(path, json={"name": "Renamed cup", "start_date": tournament["start_date"],
+                                      "format": tournament["format"]})
+    assert resend.status_code == 200
+    assert tournament_updates(session_factory, tournament_id) == 1
+    assert client.patch(path, json={"start_date": day(11)}).status_code == 409
