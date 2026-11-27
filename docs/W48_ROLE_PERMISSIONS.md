@@ -24,10 +24,20 @@ Danh sách quyền nằm ở [`backend/core/permissions.py`](../backend/core/per
 - `require_permission(name)` là dependency trả 401 nếu chưa đăng nhập và 403 nếu thiếu quyền, giống `require_role`.
 - Quyền gắn với tài nguyên vẫn nằm trong checker riêng vì phụ thuộc quan hệ: quản lý giải (người tạo/ORGANIZER được gán), trọng tài của giải, quản lý đội/tổ chức. Những checker này giữ lối tắt `has_role("ADMIN")`.
 - Quyền toàn cục không còn ngoại lệ cho tên role: nếu xóa grant của ADMIN thì ADMIN cũng bị 403 ở các API trên.
+- **Khôi phục khi gỡ nhầm grant của ADMIN:** khi đã mất `ROLE_ASSIGNMENT_MANAGE` thì không còn API nào cấp lại, và `seed.py` cũng không khôi phục grant đã gỡ (xem mục 3). Cấp lại bằng SQL trên DB (mỗi quyền một lần, chạy lại vô hại):
+
+  ```sql
+  INSERT INTO role_permissions (role_id, permission_id)
+  SELECT r.role_id, p.permission_id FROM roles r, permissions p
+  WHERE r.role_name = 'ADMIN'
+    AND p.permission_name IN ('CATALOG_MANAGE', 'ORGANIZATION_CREATE', 'TOURNAMENT_CREATE',
+                              'AUDIT_LOG_VIEW_ALL', 'ROLE_ASSIGNMENT_MANAGE')
+  ON CONFLICT DO NOTHING;
+  ```
 
 ## 3. Migration và seed
 
-- Migration `g48a04b00001` tạo bảng nếu chưa có. Với DB đã có role ADMIN/ORGANIZER (DB đang chạy), migration ghi 5 quyền và 6 grant mặc định. Với DB rỗng, migration chỉ tạo bảng, còn `seed.py` tạo role rồi tạo quyền cùng grant. Downgrade xóa bảng nối và 5 quyền mặc định.
+- Migration `g48a04b00001` tạo bảng nếu chưa có. Với DB đã có role ADMIN/ORGANIZER (DB đang chạy), migration ghi 5 quyền và 6 grant mặc định. Với DB rỗng, migration chỉ tạo bảng, còn `seed.py` tạo role rồi tạo quyền cùng grant. Downgrade xóa bảng nối và xóa theo tên cả 5 quyền mặc định, **kể cả quyền cùng tên đã có từ trước** (upgrade thì bỏ qua quyền có sẵn). Chấp nhận vì trước W48 bảng `permissions` luôn rỗng; backup trước khi downgrade theo [OPERATIONS.md](OPERATIONS.md) mục 1.3.
 - `seed_reference_data` chỉ ghi grant mặc định **cùng lúc tạo quyền mới**. Grant mà người vận hành đã cố ý gỡ sẽ không bị seed khôi phục. Kết quả seed có thêm hai khóa `permissions`, `role_permissions`.
 - `database/schema_postgres.sql` có thêm `role_permissions`.
 
