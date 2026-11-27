@@ -12,6 +12,7 @@ from core.validation import DbId, INT_MAX, ResourceId
 from core.audit import record_audit
 from core.brackets import get_bracket, tournament_completion_error
 from core.rosters import approved_teams_without_player
+from core.standings import finalize_standings
 from core.tournaments import get_managed_tournament, get_tournament_or_404, tournament_delete_blocker
 from core.permissions import TOURNAMENT_CREATE
 from middleware.auth import get_current_user, require_permission
@@ -256,6 +257,9 @@ def change_tournament_status(
             raise HTTPException(409, detail=reason)
     before = {"status": tournament.status}
     tournament.status = data.status
+    if data.status == 'COMPLETED':
+        # W48-04: the final bracket table is written in the same transaction (own audit row).
+        finalize_standings(db, tournament, user)
     return commit_tournament(db, tournament, user, "TOURNAMENT_STATUS_CHANGED", before, {"status": data.status})
 
 

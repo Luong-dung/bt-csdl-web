@@ -1,4 +1,5 @@
-"""W46-03: preview and create the managed single-elimination bracket. W46-04: public tree and standings.
+"""W46-03: preview and create the managed single-elimination bracket. W46-04: public tree and standings
+(W48-04: COMPLETED tournaments read the stored final table).
 
 Preview validates live input without locks or writes and signs a short-lived token. Create
 locks the tournament, rechecks the actor, resolves an idempotent replay, then validates the
@@ -19,6 +20,7 @@ from core.audit import record_audit
 from core.brackets import (PREVIEW_TTL_SECONDS, bracket_plan, ensure_bracket_input, get_bracket,
                            issue_preview_token, lock_bracket_context, verify_preview_token)
 from core.matches import as_utc
+from core.standings import bracket_result_rows, derive_standings, standing_order, stored_standings
 from core.tournaments import get_tournament_or_404
 from core.validation import INT_MAX, ResourceId
 from middleware.auth import can_manage_tournament, get_current_user
@@ -152,52 +154,21 @@ def read_bracket(tournament_id: ResourceId, db: Session = Depends(get_db)):
         db.rollback()
 
 
-def derive_standings(bracket: TournamentBracket, rows) -> tuple[str, dict[int, dict]]:
-    """Only COMPLETED managed matches count, each once. A loser in round r (2^(R-r+1) teams left)
-    gets rank 2^(R-r)+1; the final's winner gets 1; nobody else is ranked yet. No 0-0 inference."""
-    stats = {tid: {'rank': None, 'matches_played': 0, 'wins': 0, 'losses': 0} for tid in bracket.team_order}
-    final_done = False
-    for row in rows:
-        if row.status != 'COMPLETED' or row.winner_id is None:
-            continue
-        loser = row.team2_id if row.winner_id == row.team1_id else row.team1_id
-        if row.winner_id not in (row.team1_id, row.team2_id) or row.winner_id not in stats or loser not in stats:
-            # The DB CHECK forbids this; never guess a loser from broken data.
-            logger.warning('Bỏ qua trận bracket %s có winner/đội không hợp lệ', bracket.bracket_id)
-            continue
-        for tid in (row.winner_id, loser):
-            stats[tid]['matches_played'] += 1
-        stats[row.winner_id]['wins'] += 1
-        stats[loser]['losses'] += 1
-        stats[loser]['rank'] = (1 << (bracket.round_count-row.round_index))+1
-        if row.round_index == bracket.round_count:
-            stats[row.winner_id]['rank'] = 1
-            final_done = True
-    cancelled = rows[0].tournament_status == 'CANCELLED' if rows else False
-    return ('CANCELLED' if cancelled else 'FINAL' if final_done else 'PROVISIONAL'), stats
-
-
-def standing_order(bracket: TournamentBracket, stats: dict[int, dict]) -> list[int]:
-    """Teams still alive (rank null) first, by wins desc; then eliminated teams by rank asc.
-    Ties keep the confirmed team_order."""
-    order = {tid: index for index, tid in enumerate(bracket.team_order)}
-    return sorted(stats, key=lambda tid: (stats[tid]['rank'] is not None, stats[tid]['rank'] or 0,
-                                          -stats[tid]['wins'], order[tid]))
-
-
 @router.get('/standings', response_model=BracketStandingsRead)
 def read_bracket_standings(tournament_id: ResourceId, response: Response, db: Session = Depends(get_db),
                            offset: Annotated[int, Query(ge=0, le=INT_MAX)] = 0,
                            limit: Annotated[int, Query(ge=1, le=100)] = 50):
-    """Public. Tournament status and every match result are read in a single SELECT (one snapshot)."""
+    """Public. Running tournaments: status and every result in one SELECT (one snapshot). COMPLETED:
+    the stored final table (``core.standings``), derived as before if it has no rows."""
     try:
         bracket = bracket_or_404(db, tournament_id)
-        rows = db.execute(select(Tournament.status.label('tournament_status'), BracketMatch.round_index,
-                                 Match.status, Match.team1_id, Match.team2_id, Match.winner_id)
-                          .join(Match, Match.match_id == BracketMatch.match_id)
-                          .join(Tournament, Tournament.tournament_id == BracketMatch.tournament_id)
-                          .where(BracketMatch.bracket_id == bracket.bracket_id)).all()
-        status, stats = derive_standings(bracket, rows)
+        # W48-04: a COMPLETED tournament is frozen, so its table is the snapshot written at completion.
+        stored = (stored_standings(db, bracket)
+                  if db.get(Tournament, tournament_id).status == 'COMPLETED' else None)
+        if stored is not None:
+            status, stats = 'FINAL', stored
+        else:
+            status, stats = derive_standings(bracket, bracket_result_rows(db, bracket))
         ranked = standing_order(bracket, stats)
         page = ranked[offset:offset+limit]
         names = dict(db.execute(select(Team.team_id, Team.name).where(Team.team_id.in_(page))).all()) if page else {}
