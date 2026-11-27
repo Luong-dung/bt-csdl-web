@@ -11,11 +11,42 @@ Nền tảng quản lý giải đấu esports đa game, được xây dựng the
 - **Identity:** JWT, mật khẩu băm Argon2, role assignment theo phạm vi và audit log.
 - **Domain:** publisher/game, competition area, organization/team, membership, tournament/stage/match, roster và standings.
 
+## Cài đặt cần có
+
+Đã kiểm từ clone sạch trên Windows 11 ngày 28/11/2026 (W48-03, [W48_README_CHECK.md](docs/W48_README_CHECK.md)):
+
+| Công cụ | Phiên bản | Ghi chú |
+|---|---|---|
+| Python | 3.12 (CI) hoặc 3.13 | `python --version` |
+| Node.js / npm | Node 24 (CI), npm 10+ | `node --version` |
+| PostgreSQL | 17 (CI); 15+ đều được | Cần biết user/mật khẩu; **không bắt buộc có `psql`** (xem bước 1) |
+| Git | bất kỳ | |
+
 ## Chạy backend trên Windows
+
+**1. Tạo database** (làm trước khi migrate, nếu không `alembic` báo `database "esports_tournament" does not exist`). Dùng pgAdmin (Query Tool trên database `postgres`) hoặc `psql`:
+
+```sql
+CREATE DATABASE esports_tournament;
+```
+
+Máy không có `psql`/pgAdmin thì sau bước 3 (đã có `.venv` và `.env`) có thể tạo bằng Python, trong thư mục `backend`:
+
+```powershell
+.\.venv\Scripts\python.exe -c "from sqlalchemy import create_engine, text; from sqlalchemy.engine import make_url; from config.settings import get_settings; s = get_settings(); e = create_engine(make_url(s.DATABASE_URL).set(database='postgres'), isolation_level='AUTOCOMMIT'); e.connect().execute(text('CREATE DATABASE ' + s.DB_NAME))"
+```
+
+**2. Cấu hình `.env`.** Sao chép rồi **sửa ít nhất `DB_PASSWORD`** (để trống thì kết nối PostgreSQL bị từ chối) và `JWT_SECRET` (chuỗi ngẫu nhiên dài). `DB_USER`/`DB_HOST`/`DB_PORT`/`DB_NAME` đổi nếu khác mặc định.
 
 ```powershell
 cd backend
 Copy-Item .env.example .env
+notepad .env
+```
+
+**3. Cài thư viện, migrate, seed, chạy API:**
+
+```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -24,15 +55,11 @@ python seed.py
 uvicorn main:app --reload
 ```
 
-API và Swagger: <http://127.0.0.1:8000/docs>. Health check: <http://127.0.0.1:8000/health>.
+API và Swagger: <http://127.0.0.1:8000/docs>. Health check: <http://127.0.0.1:8000/health> trả `{"status":"up"}`. Đo từ clone sạch: khoảng 1,5 phút (cài thư viện ~30 giây).
 
-Tạo database PostgreSQL trước khi migrate:
+**4. Tài khoản đăng nhập.** `seed.py` chỉ tạo dữ liệu nền (role, game, khu vực…), **không tạo tài khoản**. Có thể đăng ký tài khoản mới trên giao diện, nhưng tài khoản đó không có quyền ADMIN/ORGANIZER. Để có đủ tài khoản theo vai trò và dữ liệu giải mẫu, tạo **database demo riêng** bằng `seed_demo.py` theo [DEMO_DATA.md](docs/DEMO_DATA.md).
 
-```sql
-CREATE DATABASE esports_tournament;
-```
-
-Nếu cần cài đặt nhanh không dùng Alembic, chạy [schema_postgres.sql](database/schema_postgres.sql), sau đó chạy seed tương ứng.
+Nếu cần cài đặt nhanh không dùng Alembic, chạy [schema_postgres.sql](database/schema_postgres.sql), sau đó chạy seed tương ứng. Backup/restore, staging và downgrade: [OPERATIONS.md](docs/OPERATIONS.md).
 
 > Project đã được reset theo schema mới. Nếu database đang dùng schema cũ, hãy tạo database mới hoặc xóa database cũ rồi chạy lại migration; không chạy API trên schema cũ vì tên/cấu trúc bảng đã thay đổi.
 
@@ -135,9 +162,11 @@ Nếu không đặt `TEST_DATABASE_URL`, fixture fallback về `DATABASE_URL` đ
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
+
+`npm ci` cài đúng phiên bản trong `package-lock.json` (giống CI). npm 11 có thể in cảnh báo `allow-scripts` cho `esbuild`; build và dev server vẫn chạy bình thường (đã kiểm W48-03), không cần `npm approve-scripts`. Mở <http://127.0.0.1:5173>.
 
 Frontend mặc định gọi `http://127.0.0.1:8000/api/v1`. Có thể đổi bằng biến `VITE_API_URL`.
 
@@ -145,17 +174,7 @@ Frontend mặc định gọi `http://127.0.0.1:8000/api/v1`. Có thể đổi b�
 
 Playwright tests chạy qua giao diện thật cho auth, tạo đội, quản lý membership và catalog. Chỉ chạy trên PostgreSQL test riêng; hướng dẫn cài đặt, chạy và xem screenshot/trace khi lỗi ở [docs/BROWSER_TESTING.md](docs/BROWSER_TESTING.md).
 
-Khi backend và frontend đang chạy trên các cổng mặc định:
-
-```powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-cd ..\frontend
-$env:E2E_DEMO_PASSWORD = Read-Host 'Test-only demo password'
-npm run test:e2e
-Remove-Item Env:E2E_DEMO_PASSWORD
-deactivate
-```
+Đầy đủ các bước (cài Playwright/Chromium, tạo database `_test` riêng, seed, chạy backend + Vite, biến môi trường `E2E_*`) nằm trong [docs/BROWSER_TESTING.md](docs/BROWSER_TESTING.md); **làm theo tài liệu đó**, không chỉ chạy `npm run test:e2e`. Thiếu `E2E_DB_NAME`/`E2E_DATABASE_URL` thì các ca ghi dữ liệu trực tiếp vào DB test sẽ lỗi. Đo W48-03 từ clone sạch: cài thêm ~40 giây, cả bộ 46 ca ~8 phút.
 
 ## Quy ước phát triển
 
@@ -179,6 +198,6 @@ Nhật ký các yêu cầu đã gửi AI và phần code đã áp dụng đượ
 - Tạo đội: mọi user đã đăng nhập; người tạo trở thành `MANAGER` của đội mới.
 - Thêm thành viên: `ADMIN` toàn hệ thống, membership `MANAGER` đang `ACTIVE` chưa có ngày rời đội, hoặc assignment `TEAM_MANAGER` đúng `TEAM`/`ORGANIZATION` chứa đội. Role `TEAM_MANAGER` của user không tự cấp quyền trên mọi đội.
 - Thiếu JWT, JWT sai/hết hạn hoặc subject không hợp lệ: `401`; đăng nhập nhưng thiếu quyền: `403`. Các API đọc catalog, đội và giải vẫn công khai.
-- Helper `middleware.auth.has_role` hỗ trợ kiểm tra assignment theo giải cho các endpoint triển khai sau. Chưa có API cấp/thu hồi assignment; không thay schema.
+- Helper `middleware.auth.has_role` kiểm tra assignment theo phạm vi. Từ W47, ADMIN cấp/thu hồi assignment qua `/api/v1/admin/role-assignments` ([W47_ROLE_ASSIGNMENTS.md](docs/W47_ROLE_ASSIGNMENTS.md)); organizer cấp trọng tài cho giải của mình.
 
 Chạy từ thư mục `backend`: `.\.venv\Scripts\python.exe -m pytest -q`. Test quyền dùng JWT thật và SQLite riêng, không thay đổi database local. Fixture PostgreSQL dùng outer transaction và `join_transaction_mode="create_savepoint"` để giữ các lệnh commit của API bên trong transaction test; khi test kết thúc, transaction rollback và schema riêng được xác nhận đã dọn. Catalog CRUD smoke tests dùng ADMIN dependency giả lập, còn quyền API được kiểm tra riêng bằng JWT thật. Lệnh PostgreSQL thống nhất được ghi tại mục [Tournament integration and regression tests — W43-08](#tournament-integration-and-regression-tests--w43-08).
