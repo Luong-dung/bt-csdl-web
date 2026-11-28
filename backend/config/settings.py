@@ -1,3 +1,4 @@
+from urllib.parse import quote
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,8 +21,10 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        password = self.DB_PASSWORD.replace("@", "%40")
-        return f"postgresql+psycopg2://{self.DB_USER}:{password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        # Percent-encode every reserved character (not only "@"): "#", "%", ":", "/"… in a password
+        # would otherwise break the URL. make_url() decodes them back.
+        user, password = quote(self.DB_USER, safe=""), quote(self.DB_PASSWORD, safe="")
+        return f"postgresql+psycopg2://{user}:{password}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env", env_file_encoding="utf-8", extra="ignore"

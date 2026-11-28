@@ -15,7 +15,13 @@ npm ci
 cd ..
 ```
 
-Create a dedicated PostgreSQL database such as `esports_tournament_w44_08_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
+Create a dedicated PostgreSQL database such as `esports_tournament_w44_08_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Without `psql`/pgAdmin, create it with the backend's own `.env` credentials (from `backend`, after installing requirements):
+
+```powershell
+.\.venv\Scripts\python.exe -c "from sqlalchemy import create_engine, text; from sqlalchemy.engine import make_url; from config.settings import get_settings; e = create_engine(make_url(get_settings().DATABASE_URL).set(database='postgres'), isolation_level='AUTOCOMMIT'); e.connect().execute(text('CREATE DATABASE esports_tournament_w44_08_e2e_test'))"
+```
+
+ Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
 
 ```powershell
 cd backend
@@ -65,6 +71,8 @@ Remove-Item Env:E2E_BROWSER_PATH -ErrorAction SilentlyContinue
 Remove-Item Env:E2E_DB_NAME,Env:E2E_DATABASE_URL,Env:E2E_API_BASE_URL -ErrorAction SilentlyContinue
 deactivate
 ```
+
+`E2E_DATABASE_URL` is a URL: if the PostgreSQL password contains characters such as `@ : / # % ? &`, URL-encode it first (e.g. `python -c "import urllib.parse; print(urllib.parse.quote(input(), safe=''))"`), otherwise the four DB-backed tests fail with `password authentication failed` while the other tests pass (found in W48-03).
 
 The suite creates uniquely named browser-test accounts, teams, tournaments, registrations, and catalog records. The scoped-ORGANIZER fixture still uses guarded database setup; scoped REFEREE assignments use the real candidate-search and grant APIs. The large-pagination test seeds 51 approved teams and registrations plus a scoped manager's available team directly into the disposable E2E database, avoiding dozens of password hashes and HTTP setup calls while exercising the real UI and pagination API. Database helpers refuse to run unless the connected database exactly matches `E2E_DB_NAME` and that name ends in `_test`. Set `E2E_DATABASE_URL` to the same disposable database as the backend. The suite writes a JUnit report to `frontend/e2e-artifacts/junit.xml`; on failure it also saves a full-page screenshot and Playwright trace there. W47-08 saves desktop and 390px mobile screenshots on success as well. Artifacts are ignored by Git. To clean local test data, stop the servers and drop/recreate only `esports_tournament_w44_08_e2e_test`; do not drop the database from `.env`.
 

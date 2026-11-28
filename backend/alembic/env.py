@@ -27,7 +27,8 @@ from modules.teams.models import *
 from modules.tournaments.models import *
 
 settings = get_settings()
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# ConfigParser treats "%" as interpolation; the percent-encoded password needs "%%".
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
