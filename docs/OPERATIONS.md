@@ -46,6 +46,7 @@ File đã sửa để phản ánh **đúng DB thật**. Các điểm file cũ "t
 - `d47a01b00001` (W47-01) **từ chối downgrade** nếu đã có assignment bị thu hồi (nếu không, trọng tài đã thu hồi sẽ có quyền lại) và xóa `granted_by/at`, `revoked_by/at`.
 - `f47a04b00001` (W47-04) xóa `competition_areas.country_code` → **mất liên kết khu vực–quốc gia**; nâng lại không khôi phục.
 - `e47a02b00001` (W47-02) xóa `audit_logs.tournament_id/resource_id` (suy ra từ `details`).
+- `g48a04b00001` (W48-04) xóa `role_permissions` và xóa theo tên 5 quyền mặc định, kể cả quyền cùng tên có từ trước. Gỡ nhầm grant của ADMIN thì cấp lại bằng SQL trong [W48_ROLE_PERMISSIONS.md](W48_ROLE_PERMISSIONS.md) mục 2.
 - Quy tắc: **backup (mục 2) trước mọi downgrade** trên DB có dữ liệu; downgrade chỉ để thử/khắc phục sự cố, khôi phục bằng restore thay vì downgrade nếu có thể.
 
 ## 2. Backup và restore PostgreSQL

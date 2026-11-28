@@ -24,11 +24,12 @@ def db():
 
 def test_empty_database_and_repeat_run(db):
     assert seed_reference_data(db) == {
-        "roles": 6, "publishers": 2, "games": 5, "competition_areas": 31, "countries": 8,
+        "roles": 6, "permissions": 5, "role_permissions": 6,
+        "publishers": 2, "games": 5, "competition_areas": 31, "countries": 8,
     }
     db.commit()
     assert seed_reference_data(db) == dict.fromkeys(
-        ("roles", "publishers", "games", "competition_areas", "countries"), 0
+        ("roles", "permissions", "role_permissions", "publishers", "games", "competition_areas", "countries"), 0
     )
     assert set(db.scalars(select(Role.role_name))) == set(ROLE_NAMES)
     for model, count in ((Role, 6), (Publisher, 2), (Game, 5), (CompetitionArea, 31)):
@@ -56,7 +57,8 @@ def test_preserves_existing_records_and_uses_their_ids(db):
     db.commit()
     added = seed_reference_data(db)
     db.commit()
-    assert added == {"roles": 5, "publishers": 1, "games": 5, "competition_areas": 30, "countries": 8}
+    assert added == {"roles": 5, "permissions": 5, "role_permissions": 6,
+                     "publishers": 1, "games": 5, "competition_areas": 30, "countries": 8}
     assert db.scalar(select(Game).where(Game.slug == "valorant")).publisher_id == 42
     assert db.scalar(select(CompetitionArea).where(CompetitionArea.code == "APAC")).parent_id == 42
     assert db.get(CompetitionArea, 42).name == "Custom global"

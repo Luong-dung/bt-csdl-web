@@ -12,14 +12,15 @@ from config.database import get_db
 from core.role_assignments import grant, lock_assignment, revoke
 from core.tournaments import lock_tournament_as
 from core.validation import INT_MAX, ResourceId
-from middleware.auth import get_current_user, has_role, require_role
+from core.permissions import ROLE_ASSIGNMENT_MANAGE
+from middleware.auth import get_current_user, has_permission, require_permission
 from modules.identity.models import Role, RoleAssignment, User
 from modules.teams.models import Organization, Team
 from modules.tournaments.models import Tournament
 from routes.tournaments import TOTAL_COUNT_HEADER
 
 router = APIRouter(prefix='/api/v1/admin/role-assignments', tags=['Admin role assignments'],
-                   dependencies=[Depends(require_role('ADMIN'))])
+                   dependencies=[Depends(require_permission(ROLE_ASSIGNMENT_MANAGE))])
 
 RoleName = Literal['ADMIN', 'ORGANIZER', 'TEAM_MANAGER', 'REFEREE', 'VIEWER']
 ScopeType = Literal['GLOBAL', 'TOURNAMENT', 'TEAM', 'ORGANIZATION']
@@ -68,7 +69,7 @@ def ensure_admin(db: Session, user: User, tournament_id: int | None) -> User:
     else:
         user = db.get(User, user.user_id, populate_existing=True)
         db.expire(user, ['role', 'assignments'])
-    if not has_role(user, 'ADMIN'):
+    if not has_permission(user, ROLE_ASSIGNMENT_MANAGE):
         raise HTTPException(status_code=403, detail='Bạn không có quyền thực hiện thao tác này')
     return user
 

@@ -11,7 +11,8 @@ from sqlalchemy.orm import Session
 from config.database import get_db
 from core.tournaments import ensure_tournament_manager, get_tournament_or_404
 from core.validation import INT_MAX, ResourceId
-from middleware.auth import get_current_user, require_role
+from core.permissions import AUDIT_LOG_VIEW_ALL
+from middleware.auth import get_current_user, require_permission
 from modules.identity.models import AuditLog, User
 from routes.tournaments import TOTAL_COUNT_HEADER
 
@@ -103,7 +104,7 @@ def tournament_audit_logs(
 
 
 @router.get('/api/v1/admin/audit-logs', response_model=list[AuditLogRead],
-            dependencies=[Depends(require_role('ADMIN'))])
+            dependencies=[Depends(require_permission(AUDIT_LOG_VIEW_ALL))])
 def admin_audit_logs(
     response: Response,
     filters: Filters = Depends(),
