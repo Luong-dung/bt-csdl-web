@@ -63,7 +63,7 @@ Chỉ ADMIN (role toàn cục hoặc assignment ADMIN GLOBAL). Prefix `/api/v1/a
 
 ## 6. Giới hạn đã biết
 
-- Xung đột lợi ích chỉ kiểm tra **lúc cấp**. Nếu sau đó trọng tài vào đội đã đăng ký, đội của họ đăng ký giải hoặc roster khóa có họ, assignment vẫn hiệu lực. Bảo vệ thực tế vẫn có ở từng trận: `is_match_referee` chặn trọng tài thuộc hai đội của trận (W45). Kiểm tra lại toàn giải sau khi cấp chưa làm; W47-07/-08 không được giả định đã có.
+- Xung đột lợi ích chỉ kiểm tra **lúc cấp**. Nếu sau đó trọng tài vào đội đã đăng ký, đội của họ đăng ký giải hoặc roster khóa có họ, assignment vẫn hiệu lực. Bảo vệ thực tế vẫn có ở từng trận: `is_match_referee` chặn trọng tài thuộc hai đội của trận (W45); từ W48-04 kiểm tra này **cùng quy tắc với lúc cấp**: có trong roster, là thành viên ACTIVE, **hoặc có assignment TEAM_MANAGER phạm vi TEAM/ORGANIZATION** của một trong hai đội ([W48_REVIEW_BACKLOG.md](W48_REVIEW_BACKLOG.md)). Kiểm tra lại toàn giải sau khi cấp chưa làm; W47-07/-08 không được giả định đã có.
 - Thu hồi ADMIN scope GLOBAL không khóa hàng nào, hai ADMIN thu hồi chéo đồng thời đều thành công. Role toàn cục trên `users.role_id` không bị ảnh hưởng.
 
 ## 7. Kiểm thử (W47-01)

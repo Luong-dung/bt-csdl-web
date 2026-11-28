@@ -204,7 +204,9 @@ def update_tournament(
     db: Session = Depends(get_db),
 ):
     tournament = get_managed_tournament(db, tournament_id, user)
-    changes = data.model_dump(exclude_unset=True)
+    # W48-04: fields sent with their current value are not changes (no audit, not a forbidden edit).
+    changes = {field: value for field, value in data.model_dump(exclude_unset=True).items()
+               if getattr(tournament, field) != value}
     if changes.get("game_id", tournament.game_id) != tournament.game_id:
         registration = db.scalar(select(TournamentRegistration.registration_id).where(
             TournamentRegistration.tournament_id == tournament_id,
@@ -222,14 +224,18 @@ def update_tournament(
     end_date = changes.get("end_date", tournament.end_date)
     if end_date is not None and end_date < changes.get("start_date", tournament.start_date):
         raise HTTPException(status_code=422, detail="Ngày kết thúc không được trước ngày bắt đầu")
+    if not changes:
+        db.rollback()  # release the tournament lock; nothing to write
+        return tournament
     ensure_references(db, changes.get("game_id"), changes.get("area_id"))
     before = {}
     for field, value in changes.items():
         previous = getattr(tournament, field)
         before[field] = previous.isoformat() if isinstance(previous, date) else previous
         setattr(tournament, field, value)
+    after = data.model_dump(mode="json", exclude_unset=True)
     return commit_tournament(db, tournament, user, "TOURNAMENT_UPDATED", before,
-                             data.model_dump(mode="json", exclude_unset=True))
+                             {field: after[field] for field in changes})
 
 
 @router.post("/{tournament_id}/status", response_model=TournamentRead)
