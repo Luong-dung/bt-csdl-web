@@ -29,8 +29,11 @@ Không tính thời gian xử lý lỗi, backend + frontend chạy được sau 
 | 7 | E2E | Đoạn E2E trong README thiếu `E2E_DB_NAME`, `E2E_DATABASE_URL`, `E2E_API_BASE_URL` và bước cài Playwright → chạy theo README thì các ca ghi DB lỗi | README: trỏ hẳn sang [BROWSER_TESTING.md](BROWSER_TESTING.md), bỏ đoạn lệnh thiếu |
 | 8 | E2E | Mật khẩu PostgreSQL có ký tự đặc biệt mà ghép thẳng vào `E2E_DATABASE_URL` → 4 ca dùng DB lỗi `password authentication failed`, 42 ca còn lại đạt | BROWSER_TESTING: ghi phải URL-encode mật khẩu, kèm lệnh |
 | 9 | Tài liệu | Mục "Phân quyền API" còn ghi "chưa có API cấp/thu hồi assignment" (đã có từ W47) | README: trỏ `/api/v1/admin/role-assignments` và W47_ROLE_ASSIGNMENTS.md |
+| 10 | Thứ tự (DUONG nghiệm thu) | Bản sửa đầu vẫn để lệnh Python tạo DB "sau bước 3" trong khi khối bước 3 gộp luôn `alembic upgrade head` → chép nguyên khối vẫn lỗi `database does not exist` | README: tách 4 bước `.env` → `.venv` + `pip install` → tạo DB → migrate/seed/chạy; BROWSER_TESTING thêm lệnh Python tạo DB `_test` |
+| 11 | Frontend (DUONG) | Chạy Vite ở cổng khác 5173 thì mọi request API bị chặn CORS, README không nói | README: ghi `CORS_ORIGINS` trong `.env` (JSON), đã kiểm settings đọc được |
+| 12 | `.env` (DUONG) | `DATABASE_URL` chỉ đổi `@` thành `%40`: mật khẩu/user có `#`, `%`, `:`, `/`, `?`… làm hỏng URL; thêm vào đó `alembic/env.py` đưa URL qua ConfigParser nên **mọi** `%` (kể cả `%40` cũ) gây `ValueError: invalid interpolation syntax` | `config/settings.py` mã hóa user và mật khẩu bằng `quote(..., safe="")`; `alembic/env.py` nhân đôi `%`. Test `tests/test_settings_url.py` (8 mật khẩu đặc biệt + ConfigParser) fail trước khi sửa |
 
-Không phát hiện lỗi code: migrate, seed, API, build và E2E đều đạt khi môi trường đúng.
+Lỗi code duy nhất (mục 12, từ góp ý của DUONG) chỉ xảy ra khi mật khẩu DB có ký tự đặc biệt; còn lại migrate, seed, API, build và E2E đều đạt khi môi trường đúng.
 
 ## 3. Kết quả
 
@@ -41,3 +44,18 @@ Không phát hiện lỗi code: migrate, seed, API, build và E2E đều đạt 
 ## 4. Nghiệm thu
 
 Reviewer (DUONG) làm lại từ clone sạch **chỉ theo README đã sửa**, ghi thời gian và bước nào còn vướng vào PR. Không dùng `.env` hay database có sẵn.
+
+**Kết quả DUONG 28/11** (head `e428fea`, Windows 11, Python 3.13.15, PostgreSQL 17, Chrome, `.env` và 2 database tạm mới, đã dọn):
+
+| Bước | Thời gian |
+|---|---|
+| `git clone` | 2,3 giây |
+| `.venv` + `pip install` | 41,9 giây (có pip cache; chưa cache ~2 phút 40 giây) |
+| Tạo DB bằng lệnh Python trong README + `alembic upgrade head` + `seed.py` | 5,6 giây |
+| `uvicorn` + `/health` | 2,6 giây → backend tổng ~52 giây |
+| `npm ci` + `npm run build` | 12,8 giây |
+| Gói E2E + DB `_test` + `seed_demo.py --migrate --base-only` | 10,5 giây |
+| Browser E2E | **46/46 đạt**, 6 phút 18 giây |
+| **Toàn trình** | **7 phút 38 giây** |
+
+CI [46105548153](https://github.com/Luong-dung/bt-csdl-web/actions/runs/46105548153) đạt 3/3 job. Các điểm còn vướng DUONG nêu đã sửa ở mục 2 (dòng 10–12).

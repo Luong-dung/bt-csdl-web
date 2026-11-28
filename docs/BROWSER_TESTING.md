@@ -15,7 +15,13 @@ npm ci
 cd ..
 ```
 
-Create a dedicated PostgreSQL database such as `esports_tournament_w44_08_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
+Create a dedicated PostgreSQL database such as `esports_tournament_w44_08_e2e_test`. Do not reuse `DB_NAME` from `backend/.env`. Without `psql`/pgAdmin, create it with the backend's own `.env` credentials (from `backend`, after installing requirements):
+
+```powershell
+.\.venv\Scripts\python.exe -c "from sqlalchemy import create_engine, text; from sqlalchemy.engine import make_url; from config.settings import get_settings; e = create_engine(make_url(get_settings().DATABASE_URL).set(database='postgres'), isolation_level='AUTOCOMMIT'); e.connect().execute(text('CREATE DATABASE esports_tournament_w44_08_e2e_test'))"
+```
+
+ Seed it using a test-only password; `seed_demo.py` rejects a target equal to the configured application database:
 
 ```powershell
 cd backend

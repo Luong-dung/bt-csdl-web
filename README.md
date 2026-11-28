@@ -24,19 +24,9 @@ Nền tảng quản lý giải đấu esports đa game, được xây dựng the
 
 ## Chạy backend trên Windows
 
-**1. Tạo database** (làm trước khi migrate, nếu không `alembic` báo `database "esports_tournament" does not exist`). Dùng pgAdmin (Query Tool trên database `postgres`) hoặc `psql`:
+Làm **đúng thứ tự** 1 → 4 (tạo database phải trước `alembic upgrade head`, nếu không sẽ lỗi `database "esports_tournament" does not exist`).
 
-```sql
-CREATE DATABASE esports_tournament;
-```
-
-Máy không có `psql`/pgAdmin thì sau bước 3 (đã có `.venv` và `.env`) có thể tạo bằng Python, trong thư mục `backend`:
-
-```powershell
-.\.venv\Scripts\python.exe -c "from sqlalchemy import create_engine, text; from sqlalchemy.engine import make_url; from config.settings import get_settings; s = get_settings(); e = create_engine(make_url(s.DATABASE_URL).set(database='postgres'), isolation_level='AUTOCOMMIT'); e.connect().execute(text('CREATE DATABASE ' + s.DB_NAME))"
-```
-
-**2. Cấu hình `.env`.** Sao chép rồi **sửa ít nhất `DB_PASSWORD`** (để trống thì kết nối PostgreSQL bị từ chối) và `JWT_SECRET` (chuỗi ngẫu nhiên dài). `DB_USER`/`DB_HOST`/`DB_PORT`/`DB_NAME` đổi nếu khác mặc định.
+**1. Cấu hình `.env`.** Sao chép rồi **sửa ít nhất `DB_PASSWORD`** (để trống thì kết nối PostgreSQL bị từ chối) và `JWT_SECRET` (chuỗi ngẫu nhiên dài). `DB_USER`/`DB_HOST`/`DB_PORT`/`DB_NAME` đổi nếu khác mặc định.
 
 ```powershell
 cd backend
@@ -44,20 +34,37 @@ Copy-Item .env.example .env
 notepad .env
 ```
 
-**3. Cài thư viện, migrate, seed, chạy API:**
+**2. Tạo `.venv` và cài thư viện** (vẫn trong thư mục `backend`):
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+```
+
+**3. Tạo database** tên `DB_NAME` trong `.env`. Dùng pgAdmin (Query Tool trên database `postgres`) hoặc `psql`:
+
+```sql
+CREATE DATABASE esports_tournament;
+```
+
+Máy không có `psql`/pgAdmin thì chạy lệnh Python sau (dùng chính `.env`, cần bước 1–2 xong):
+
+```powershell
+.\.venv\Scripts\python.exe -c "from sqlalchemy import create_engine, text; from sqlalchemy.engine import make_url; from config.settings import get_settings; s = get_settings(); e = create_engine(make_url(s.DATABASE_URL).set(database='postgres'), isolation_level='AUTOCOMMIT'); e.connect().execute(text('CREATE DATABASE ' + s.DB_NAME))"
+```
+
+**4. Migrate, seed, chạy API:**
+
+```powershell
 alembic upgrade head
 python seed.py
 uvicorn main:app --reload
 ```
 
-API và Swagger: <http://127.0.0.1:8000/docs>. Health check: <http://127.0.0.1:8000/health> trả `{"status":"up"}`. Đo từ clone sạch: khoảng 1,5 phút (cài thư viện ~30 giây).
+API và Swagger: <http://127.0.0.1:8000/docs>. Health check: <http://127.0.0.1:8000/health> trả `{"status":"up"}`. Đo từ clone sạch: khoảng 1–1,5 phút (cài thư viện 30–40 giây khi có pip cache, ~2 phút 40 giây khi chưa có).
 
-**4. Tài khoản đăng nhập.** `seed.py` chỉ tạo dữ liệu nền (role, game, khu vực…), **không tạo tài khoản**. Có thể đăng ký tài khoản mới trên giao diện, nhưng tài khoản đó không có quyền ADMIN/ORGANIZER. Để có đủ tài khoản theo vai trò và dữ liệu giải mẫu, tạo **database demo riêng** bằng `seed_demo.py` theo [DEMO_DATA.md](docs/DEMO_DATA.md).
+**5. Tài khoản đăng nhập.** `seed.py` chỉ tạo dữ liệu nền (role, game, khu vực…), **không tạo tài khoản**. Có thể đăng ký tài khoản mới trên giao diện, nhưng tài khoản đó không có quyền ADMIN/ORGANIZER. Để có đủ tài khoản theo vai trò và dữ liệu giải mẫu, tạo **database demo riêng** bằng `seed_demo.py` theo [DEMO_DATA.md](docs/DEMO_DATA.md).
 
 Nếu cần cài đặt nhanh không dùng Alembic, chạy [schema_postgres.sql](database/schema_postgres.sql), sau đó chạy seed tương ứng. Backup/restore, staging và downgrade: [OPERATIONS.md](docs/OPERATIONS.md).
 
@@ -166,7 +173,7 @@ npm ci
 npm run dev
 ```
 
-`npm ci` cài đúng phiên bản trong `package-lock.json` (giống CI). npm 11 có thể in cảnh báo `allow-scripts` cho `esbuild`; build và dev server vẫn chạy bình thường (đã kiểm W48-03), không cần `npm approve-scripts`. Mở <http://127.0.0.1:5173>.
+`npm ci` cài đúng phiên bản trong `package-lock.json` (giống CI). Backend chỉ cho phép CORS từ `http://localhost:5173` và `http://127.0.0.1:5173`; chạy Vite ở cổng khác thì thêm origin đó vào `CORS_ORIGINS` trong `backend/.env` (dạng JSON, ví dụ `CORS_ORIGINS=["http://127.0.0.1:5174"]`) rồi khởi động lại API, nếu không mọi request API bị trình duyệt chặn. npm 11 có thể in cảnh báo `allow-scripts` cho `esbuild`; build và dev server vẫn chạy bình thường (đã kiểm W48-03), không cần `npm approve-scripts`. Mở <http://127.0.0.1:5173>.
 
 Frontend mặc định gọi `http://127.0.0.1:8000/api/v1`. Có thể đổi bằng biến `VITE_API_URL`.
 
