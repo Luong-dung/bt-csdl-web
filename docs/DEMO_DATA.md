@@ -60,7 +60,7 @@ Bổ sung từ W48-01:
 
 | Giải (người tạo `demo_organizer`, VALORANT) | Trạng thái | Dùng để demo |
 |---|---|---|
-| `W48 Demo Cup` | COMPLETED | 3 trận xếp lịch 3, 2 và 1 giờ trước lúc seed (giờ VN, không sớm hơn 00:00 ngày seed); 4 đội, roster khóa, bracket đã đấu xong, standings FINAL, nhật ký audit đầy đủ |
+| `W48 Demo Cup` | COMPLETED | 3 trận xếp lịch 3, 2 và 1 giờ trước lúc seed (giờ VN, không sớm hơn 00:00 ngày seed); 4 đội, roster khóa, bracket đã đấu xong, standings FINAL lưu trong `tournament_standings` (hạng 1/2/3/3, W48-04), nhật ký audit đầy đủ |
 | `W48 Demo Open` | ONGOING | Bracket 4 đội, đã xong 1 bán kết (1 giờ trước lúc seed); bán kết 2 lúc 19:00 và chung kết 21:00 **ngày hôm sau** (giờ VN); còn bán kết 2 và chung kết để nhập kết quả trực tiếp (organizer hoặc `demo_referee`), thử thu hồi trọng tài |
 | `W48 Demo League` | UPCOMING (+14 ngày) | 1 đơn APPROVED (DEMO43), 2 đơn PENDING (DEMO48B/C) để duyệt/từ chối, khóa roster |
 | `W48 Demo Draft` | UPCOMING (+30 ngày) | Chưa có dữ liệu thi đấu, xóa được (W47-04) |
