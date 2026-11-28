@@ -88,7 +88,8 @@ class BracketStandingRead(BaseModel):
 
 
 class BracketStandingsRead(BaseModel):
-    """Derived on read from COMPLETED managed matches; tournament_standings is not used in W46."""
+    """Derived on read from COMPLETED managed matches; a COMPLETED tournament reads the final table
+    stored in tournament_standings (W48-04), with the same shape and values."""
     bracket_id: int
     status: Literal['PROVISIONAL', 'FINAL', 'CANCELLED']
     items: list[BracketStandingRead]

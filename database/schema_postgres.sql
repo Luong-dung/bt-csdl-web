@@ -10,6 +10,13 @@ CREATE TABLE permissions (
     permission_name VARCHAR(100) NOT NULL UNIQUE,
     description VARCHAR(255)
 );
+-- W48-04: global permissions granted per role (read by has_permission).
+CREATE TABLE role_permissions (
+    role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE CASCADE,
+    permission_id INT NOT NULL REFERENCES permissions(permission_id) ON DELETE CASCADE,
+    PRIMARY KEY (role_id, permission_id)
+);
+CREATE INDEX ix_role_permissions_permission_id ON role_permissions(permission_id);
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     role_id INT NOT NULL REFERENCES roles(role_id) ON DELETE RESTRICT,

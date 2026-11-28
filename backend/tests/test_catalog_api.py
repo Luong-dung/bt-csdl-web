@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from config.database import get_db
+from core.permissions import ROLE_PERMISSIONS
 from main import create_app
 from middleware.auth import get_current_user
 from modules.teams.models import Team
@@ -30,7 +31,10 @@ def make_client(session_factory, logged_in=True):
 
     app.dependency_overrides[get_db] = override_db
     if logged_in:
-        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id=None, role=SimpleNamespace(role_name="ADMIN"), assignments=[])
+        # W48-04: global checks read the role's permissions (role_permissions).
+        admin_role = SimpleNamespace(role_name="ADMIN", permissions=[
+            SimpleNamespace(permission_name=name) for name in ROLE_PERMISSIONS["ADMIN"]])
+        app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(user_id=None, role=admin_role, assignments=[])
     return TestClient(app)
 
 

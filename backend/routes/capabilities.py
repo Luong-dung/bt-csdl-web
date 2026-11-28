@@ -7,13 +7,14 @@ from sqlalchemy.orm import Session
 
 from config.database import get_db
 from core.matches import matches_writable
+from core.permissions import AUDIT_LOG_VIEW_ALL, CATALOG_MANAGE, ORGANIZATION_CREATE, TOURNAMENT_CREATE
 from core.role_assignments import referees_grantable
 from core.brackets import can_create_bracket, get_bracket
 from core.tournament_policy import registration_resolution_open, registrations_open, stages_editable
 from core.tournaments import tournament_delete_blocker
 from core.validation import ResourceId
 from middleware.auth import (
-    can_manage_tournament, get_current_user, has_role, managed_teams_query,
+    can_manage_tournament, get_current_user, has_permission, managed_teams_query,
 )
 from modules.identity.models import User
 from modules.teams.models import Team
@@ -62,10 +63,10 @@ class TournamentCapabilities(BaseModel):
 @router.get("/api/v1/auth/capabilities", response_model=GlobalCapabilities)
 def global_capabilities(user: User = Depends(get_current_user)):
     return GlobalCapabilities(
-        can_manage_catalog=has_role(user, "ADMIN"),
-        can_create_tournament=has_role(user, "ADMIN", "ORGANIZER"),
-        can_view_audit=has_role(user, "ADMIN"),
-        can_create_organization=has_role(user, "ADMIN"),
+        can_manage_catalog=has_permission(user, CATALOG_MANAGE),
+        can_create_tournament=has_permission(user, TOURNAMENT_CREATE),
+        can_view_audit=has_permission(user, AUDIT_LOG_VIEW_ALL),
+        can_create_organization=has_permission(user, ORGANIZATION_CREATE),
     )
 
 

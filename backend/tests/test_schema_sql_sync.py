@@ -78,7 +78,7 @@ def test_schema_sql_matches_migration_head(connection):
         assert sorted(expected[part] - actual[part]) == [] and sorted(actual[part] - expected[part]) == [], (
             f'{part}: only in migrations {sorted(expected[part] - actual[part])}; '
             f'only in schema_postgres.sql {sorted(actual[part] - expected[part])}')
-    assert len({row[0] for row in actual['columns']}) == 20  # business tables (alembic_version excluded)
+    assert len({row[0] for row in actual['columns']}) == 21  # business tables (alembic_version excluded); W48-04 added role_permissions
 
 
 def test_w47_migrations_downgrade_and_upgrade_cleanly(connection):
