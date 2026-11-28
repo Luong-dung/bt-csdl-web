@@ -37,17 +37,32 @@ def can_manage_matches(tournament: Tournament, user: User) -> bool:
     return can_manage_tournament(tournament, user)
 
 
+def manages_team(user: User, team_ids: list[int], organization_ids: set[int]) -> bool:
+    """Active scoped TEAM_MANAGER of one of these teams (TEAM) or of their organization (ORGANIZATION)."""
+    return any(
+        a.role.role_name == 'TEAM_MANAGER' and getattr(a, 'revoked_at', None) is None
+        and ((a.scope_type == 'TEAM' and a.scope_id in team_ids)
+             or (a.scope_type == 'ORGANIZATION' and a.scope_id in organization_ids))
+        for a in user.assignments
+    )
+
+
 def plays_in_match(db: Session, match: Match | None, user: User) -> bool:
-    """User is in the tournament roster snapshot or an active member of either team of the match."""
+    """Conflict of interest, same rule as granting (``core.role_assignments.plays_in_tournament``):
+    in the roster snapshot, an active member, or a scoped TEAM_MANAGER of either team of the match."""
     team_ids = [t for t in (getattr(match, 'team1_id', None), getattr(match, 'team2_id', None)) if t is not None]
     if not team_ids:
         return False
     in_roster = db.scalar(select(TournamentRoster.roster_id).where(
         TournamentRoster.tournament_id == match.tournament_id, TournamentRoster.team_id.in_(team_ids),
         TournamentRoster.user_id == user.user_id).limit(1)) is not None
-    return in_roster or db.scalar(select(TeamMembership.membership_id).where(
-        TeamMembership.team_id.in_(team_ids), TeamMembership.user_id == user.user_id,
-        TeamMembership.status == 'ACTIVE', TeamMembership.left_date.is_(None)).limit(1)) is not None
+    if in_roster or db.scalar(select(TeamMembership.membership_id).where(
+            TeamMembership.team_id.in_(team_ids), TeamMembership.user_id == user.user_id,
+            TeamMembership.status == 'ACTIVE', TeamMembership.left_date.is_(None)).limit(1)) is not None:
+        return True
+    organization_ids = set(db.scalars(select(Team.organization_id).where(
+        Team.team_id.in_(team_ids), Team.organization_id.is_not(None))))
+    return manages_team(user, team_ids, organization_ids)
 
 
 def is_match_referee(db: Session, tournament: Tournament, match: Match | None, user: User) -> bool:

@@ -18,6 +18,10 @@ def registration_timestamp(db: Session):
 
 def ensure_registration_open(tournament: Tournament) -> None:
     if not registrations_open(tournament.status, tournament.roster_locked_at):
+        if tournament.status == 'UPCOMING':
+            # W48-04 (review #57): still UPCOMING, so the only reason is the roster lock.
+            raise HTTPException(status_code=409,
+                                detail="Giải đã khóa đội hình, không thể đăng ký hoặc duyệt thêm đội")
         raise HTTPException(status_code=409, detail="Giải đấu đã đóng đăng ký")
 
 

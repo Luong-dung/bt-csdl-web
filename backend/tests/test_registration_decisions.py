@@ -278,3 +278,15 @@ def test_audit_before_is_snapshot_of_stored_registration(access, session_factory
     log = registration_logs(session_factory)[0]
     assert log.details['before']['reviewed_by'] == users['admin']
     assert log.details['after']['reviewed_by'] == users['organizer']
+
+
+def test_approve_after_roster_lock_says_the_roster_is_locked(access, session_factory, pending):
+    """W48-04 (review #57): the 409 names the real reason; reject still works after the lock."""
+    client, headers, *_ = access
+    with session_factory.begin() as db:
+        db.get(Tournament, pending[0]).roster_locked_at = datetime.now(timezone.utc)
+    response = client.post(path(pending), json={'status': 'APPROVED'}, headers=headers('organizer'))
+    assert response.status_code == 409
+    assert 'khóa đội hình' in response.json()['detail']
+    assert registration_logs(session_factory) == []
+    assert client.post(path(pending), json={'status': 'REJECTED'}, headers=headers('organizer')).status_code == 200

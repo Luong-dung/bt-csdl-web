@@ -148,3 +148,53 @@ def test_audit_failure_rolls_back_match(access, session_factory, ongoing, monkey
                    json={'score_team1': 1, 'score_team2': 0})
     assert stored(session_factory, ongoing['match']) == ('ONGOING', 0, 0, None)
     assert result_logs(session_factory) == []
+
+
+@pytest.mark.parametrize('scope', ['TEAM', 'ORGANIZATION'])
+def test_referee_who_later_manages_a_playing_team_cannot_start_or_submit(access, session_factory, match_case, scope):
+    """W48-04 (review #101): the per-match guard must match the grant-time one. A referee granted
+    first and given a scoped TEAM_MANAGER assignment of a playing team afterwards is in conflict."""
+    from modules.identity.models import RoleAssignment
+    from modules.teams.models import Team
+    client, headers, users, teams, roles = access
+    assert grant_referee(client, headers, match_case['tid'], users['referee']).status_code == 201
+    with session_factory.begin() as db:
+        alpha = db.get(Team, teams['Alpha'])
+        db.add(RoleAssignment(user_id=users['referee'], role_id=roles['TEAM_MANAGER'], scope_type=scope,
+                              scope_id=alpha.team_id if scope == 'TEAM' else alpha.organization_id))
+    base = f"/api/v1/tournaments/{match_case['tid']}/matches/{match_case['match']}"
+    caps = client.get(base + '/capabilities', headers=headers('referee'))
+    assert caps.status_code == 200 and caps.json()['can_start'] is False
+    assert client.post(base + '/status', headers=headers('referee'), json={'status': 'ONGOING'}).status_code == 403
+    with session_factory.begin() as db:
+        db.get(Match, match_case['match']).status = 'ONGOING'
+    response = client.put(url(match_case['tid'], match_case['match']), headers=headers('referee'),
+                          json={'score_team1': 1, 'score_team2': 0})
+    assert response.status_code == 403
+    assert client.get(base + '/capabilities', headers=headers('referee')).json()['can_submit_result'] is False
+    assert stored(session_factory, match_case['match'])[0] == 'ONGOING'
+    assert result_logs(session_factory) == []
+
+
+def test_revoking_the_team_manager_assignment_restores_the_referee(access, session_factory, match_case):
+    """W48-04 (review #123): the conflict follows the live assignment; once revoked the referee may act again."""
+    from datetime import datetime, timezone
+
+    from modules.identity.models import RoleAssignment
+    client, headers, users, teams, roles = access
+    assert grant_referee(client, headers, match_case['tid'], users['referee']).status_code == 201
+    with session_factory.begin() as db:
+        manager = RoleAssignment(user_id=users['referee'], role_id=roles['TEAM_MANAGER'], scope_type='TEAM',
+                                 scope_id=teams['Alpha'])
+        db.add(manager)
+        db.flush()
+        assignment_id = manager.assignment_id
+    base = f"/api/v1/tournaments/{match_case['tid']}/matches/{match_case['match']}"
+    assert client.post(base + '/status', headers=headers('referee'), json={'status': 'ONGOING'}).status_code == 403
+    with session_factory.begin() as db:
+        db.get(RoleAssignment, assignment_id).revoked_at = datetime.now(timezone.utc)
+    assert client.get(base + '/capabilities', headers=headers('referee')).json()['can_start'] is True
+    assert client.post(base + '/status', headers=headers('referee'), json={'status': 'ONGOING'}).status_code == 200
+    response = client.put(url(match_case['tid'], match_case['match']), headers=headers('referee'),
+                          json={'score_team1': 1, 'score_team2': 0})
+    assert response.status_code == 200, response.text
