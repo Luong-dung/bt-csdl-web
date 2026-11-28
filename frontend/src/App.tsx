@@ -1,6 +1,11 @@
 import { LangCode, LANGUAGES, TRANSLATIONS, getLocalizedGameName, getLocalizedRegionCountry, getLocalizedAreaDesc, getLocalizedNews } from "./i18n";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { AuditLogSection } from "./AuditLogSection";
+import {
+  AdminCapabilities,
+  AdminDashboardSection,
+  AdminRoleAssignmentsSection,
+} from "./AdminDashboardSection";
 import "./styles.css";
 
 type User = { id: number; username: string; email?: string; role: string };
@@ -799,6 +804,8 @@ export default function App() {
   }, [areas, createFormActiveGame]);
   const [globalCapabilities, setGlobalCapabilities] = useState<GlobalCapabilities | null>(null);
   const [globalCapabilityError, setGlobalCapabilityError] = useState("");
+  const [adminCapabilities, setAdminCapabilities] = useState<AdminCapabilities | null>(null);
+  const [adminRefreshSignal, setAdminRefreshSignal] = useState(0);
   const [memberLoading, setMemberLoading] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogReloadError, setCatalogReloadError] = useState("");
@@ -1109,6 +1116,7 @@ export default function App() {
     setTeamCapabilityError("");
     setGlobalCapabilities(null);
     setGlobalCapabilityError("");
+    setAdminCapabilities(null);
     setTournamentCapabilities(null);
     setCapabilityError("");
     setRegistrations([]);
@@ -1362,8 +1370,29 @@ export default function App() {
     }
   };
 
+  const loadAdminCapabilities = async (authToken = token) => {
+    const sessionV = sessionVersion.current;
+    if (!authToken) {
+      setAdminCapabilities(null);
+      return;
+    }
+    try {
+      const caps = await request<AdminCapabilities>("/admin/capabilities", {}, authToken);
+      if (sessionVersion.current !== sessionV) return;
+      setAdminCapabilities(caps);
+    } catch (reason) {
+      if (sessionVersion.current !== sessionV) return;
+      if (reason instanceof RequestError && reason.status === 401) {
+        handleAuthExpired();
+        return;
+      }
+      setAdminCapabilities(null);
+    }
+  };
+
   useEffect(() => {
     void loadGlobalCapabilities();
+    void loadAdminCapabilities(token);
   }, [token]);
 
   const submitAuth = async (event: FormEvent<HTMLFormElement>) => {
@@ -1416,6 +1445,7 @@ export default function App() {
     setTeamCapabilityError("");
     setGlobalCapabilities(null);
     setGlobalCapabilityError("");
+    setAdminCapabilities(null);
     setTournamentCapabilities(null);
     setCapabilityError("");
     setRegistrations([]);
@@ -5581,6 +5611,40 @@ export default function App() {
                     <span className="dropdown-role">{user.role}</span>
                     {user.email && <span className="dropdown-email">{user.email}</span>}
                   </div>
+                  {adminCapabilities?.can_view_dashboard && (
+                    <>
+                      <hr className="dropdown-divider" />
+                      <button
+                        type="button"
+                        className="dropdown-logout-btn dropdown-admin-btn"
+                        data-testid="dropdown-admin-dashboard-btn"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          const el = document.getElementById("admin-dashboard");
+                          if (el) el.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        📊 Bảng điều khiển Quản trị
+                      </button>
+                    </>
+                  )}
+                  {adminCapabilities?.can_manage_roles && (
+                    <>
+                      <hr className="dropdown-divider" />
+                      <button
+                        type="button"
+                        className="dropdown-logout-btn dropdown-admin-btn"
+                        data-testid="dropdown-admin-roles-btn"
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          const el = document.getElementById("admin-roles");
+                          if (el) el.scrollIntoView({ behavior: "smooth" });
+                        }}
+                      >
+                        🔑 Phân quyền hệ thống
+                      </button>
+                    </>
+                  )}
                   {globalCapabilities?.can_manage_catalog && (
                     <>
                       <hr className="dropdown-divider" />
@@ -8922,6 +8986,43 @@ export default function App() {
       </div>
     </section>
 
+    {user && (
+      <AdminDashboardSection
+        apiBase={API}
+        token={token}
+        canView={Boolean(token && adminCapabilities?.can_view_dashboard)}
+        capabilities={adminCapabilities}
+        onAuthExpired={handleAuthExpired}
+        onPermissionDenied={() => {
+          void loadGlobalCapabilities();
+          void loadAdminCapabilities(token);
+        }}
+        onNavigateSection={(sectionId) => {
+          const el = document.getElementById(sectionId);
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+        }}
+        onFilterTournamentsByStatus={(status) => {
+          setSelectedGameId(null);
+          setTournamentGameFilter("");
+          setTournamentAreaFilter("");
+          setTournamentStatusFilter(status);
+          setTournamentPage(0);
+          const el = document.getElementById("tournaments");
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+        }}
+        onOpenTournament={(tid) => {
+          void viewTournament(tid);
+          setTimeout(() => {
+            const detailEl =
+              document.querySelector(".tournament-detail") ??
+              document.getElementById("tournaments");
+            if (detailEl) detailEl.scrollIntoView({ behavior: "smooth" });
+          }, 80);
+        }}
+        refreshSignal={adminRefreshSignal}
+      />
+    )}
+
     {user && <section className="panel catalog-panel" id="catalog">
       <div className="panel-title"><h2>{t.catalogTitle}</h2></div>
       {globalCapabilityError && <div className="error-banner"><span>{globalCapabilityError}</span><button className="button secondary" onClick={() => void loadGlobalCapabilities()}>{t.retry}</button></div>}
@@ -8983,6 +9084,23 @@ export default function App() {
       </>}
     </section>}
     {user && (
+      <AdminRoleAssignmentsSection
+        apiBase={API}
+        token={token}
+        canManageRoles={Boolean(token && adminCapabilities?.can_manage_roles)}
+        onAuthExpired={handleAuthExpired}
+        onPermissionDenied={() => {
+          void loadGlobalCapabilities();
+          void loadAdminCapabilities(token);
+        }}
+        onRolesChanged={() => {
+          setAdminRefreshSignal((prev) => prev + 1);
+          void loadGlobalCapabilities();
+          void loadAdminCapabilities(token);
+        }}
+      />
+    )}
+    {user && (
       <AuditLogSection
         apiBase={API}
         mode="admin"
@@ -8994,7 +9112,9 @@ export default function App() {
         onAuthExpired={handleAuthExpired}
         onPermissionDenied={() => {
           void loadGlobalCapabilities();
+          void loadAdminCapabilities(token);
         }}
+        refreshSignal={adminRefreshSignal}
       />
     )}
     <section className="panel teams-panel" id="teams">
