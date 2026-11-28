@@ -49,6 +49,26 @@ def has_role(user: User, *role_names: str, scope_type: str = "GLOBAL", scope_id:
     )
 
 
+def has_permission(user: User, permission_name: str) -> bool:
+    """W48-04: role-wide right read from ``role_permissions``.
+
+    Granted by the account role or by an active GLOBAL assignment, like global roles in ``has_role``;
+    scoped assignments never grant a global permission.
+    """
+    roles = [user.role] if user.role else []
+    roles += [a.role for a in user.assignments if a.scope_type == "GLOBAL" and a.scope_id is None]
+    return any(p.permission_name == permission_name for role in roles for p in role.permissions)
+
+
+def require_permission(permission_name: str):
+    def checker(user: User = Depends(get_current_user)) -> User:
+        if not has_permission(user, permission_name):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền thực hiện thao tác này")
+        return user
+
+    return checker
+
+
 def require_role(*role_names: str):
     def checker(user: User = Depends(get_current_user)) -> User:
         if not has_role(user, *role_names):

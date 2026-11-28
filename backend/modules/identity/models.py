@@ -1,7 +1,15 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, Index, func as sa_func, text
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, JSON, Index, Table, func as sa_func, text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from config.database import Base
+
+# W48-04: which global permissions a role grants; read by middleware.auth.has_permission.
+role_permissions = Table(
+    "role_permissions", Base.metadata,
+    Column("role_id", Integer, ForeignKey("roles.role_id", ondelete="CASCADE"), primary_key=True),
+    Column("permission_id", Integer, ForeignKey("permissions.permission_id", ondelete="CASCADE"), primary_key=True),
+    Index("ix_role_permissions_permission_id", "permission_id"),
+)
 
 class Role(Base):
     __tablename__ = "roles"
@@ -10,6 +18,7 @@ class Role(Base):
     role_name = Column(String(50), nullable=False, unique=True)
     
     users = relationship("User", back_populates="role")
+    permissions = relationship("Permission", secondary=role_permissions, viewonly=True)
 
 class User(Base):
     __tablename__ = "users"
